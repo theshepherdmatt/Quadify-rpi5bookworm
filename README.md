@@ -23,7 +23,6 @@ git clone https://github.com/theshepherdmatt/Quadify.git
 ```
 
 * then
-```bash
 cd Quadify
 ```
 sudo bash install.sh
