@@ -1,5 +1,8 @@
+#!/usr/bin/env python3
 # src/main.py
+
 import RPi.GPIO as GPIO
+GPIO.setwarnings(False)
 import time
 import threading
 import logging
@@ -8,28 +11,22 @@ import os
 import sys
 from PIL import Image, ImageSequence
 
-# Importing components from the src directory
-from display.display_manager import DisplayManager
-from display.clock import Clock
-from display.playback_manager import PlaybackManager
-from display.radioplayback_manager import RadioPlaybackManager
-from display.detailed_playback_manager import DetailedPlaybackManager
-from managers.mode_manager import ModeManager
-from managers.menu_manager import MenuManager
-from managers.playlist_manager import PlaylistManager
-from managers.radio_manager import RadioManager
-from managers.tidal_manager import TidalManager
-from managers.qobuz_manager import QobuzManager
-from managers.spotify_manager import SpotifyManager
-from managers.library_manager import LibraryManager
-from managers.usb_library_manager import USBLibraryManager
-from controls.rotary_control import RotaryControl
-from network.volumio_listener import VolumioListener
+from display.screens.clock import Clock
 from hardware.buttonsleds import ButtonsLEDController
-from handlers.state_handler import StateHandler
-from display.screen_manager import ScreenManager
-#from display.volume_overlay_manager import VolumeOverlayManager
-
+from display.screens.original_screen import OriginalScreen
+from display.screens.modern_screen import ModernScreen
+from display.screens.system_info_screen import SystemInfoScreen
+from display.screensavers.snake_screensaver import SnakeScreensaver
+from display.screensavers.starfield_screensaver import StarfieldScreensaver
+from display.screensavers.bouncing_text_screensaver import BouncingTextScreensaver
+from display.display_manager import DisplayManager
+from display.screens.clock import Clock
+from managers.menu_manager import MenuManager
+from managers.mode_manager import ModeManager
+from managers.manager_factory import ManagerFactory
+from controls.rotary_control import RotaryControl
+from hardware.buttonsleds import ButtonsLEDController
+from network.volumio_listener import VolumioListener
 
 def load_config(config_path='/config.yaml'):
     abs_path = os.path.abspath(config_path)
@@ -48,308 +45,280 @@ def load_config(config_path='/config.yaml'):
     return config
 
 def main():
-    # 1. Set up logging
+    # 1) Set up logging
     logging.basicConfig(
-        level=logging.INFO,  # Set to DEBUG for detailed logs
+        level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[logging.StreamHandler(sys.stdout)]
     )
     logger = logging.getLogger("Main")
 
-    # 2. Load configuration
+    # 2) Load configuration
     script_dir = os.path.dirname(os.path.abspath(__file__))
     config_path = os.path.join(script_dir, '..', 'config.yaml')
     config = load_config(config_path)
 
-    # 3. Initialize DisplayManager
+    # 3) Initialize DisplayManager
     display_config = config.get('display', {})
     display_manager = DisplayManager(display_config)
 
-    # 4. Display logo for 5 seconds
+    # 4) Display a startup logo for 5 seconds
     logger.info("Displaying startup logo...")
     display_manager.show_logo()
     logger.info("Startup logo displayed for 5 seconds.")
-    time.sleep(5)  # Wait for 5 seconds to ensure the logo is visible
-
-    # **A. Clear the Screen After Logo Display**
+    time.sleep(5)
     display_manager.clear_screen()
     logger.info("Screen cleared after logo display.")
 
-    # 5. Define events to signal when Volumio is ready and minimum loading duration has elapsed
+    # 5) Setup readiness events
     volumio_ready_event = threading.Event()
     min_loading_event = threading.Event()
-    min_loading_duration = 5  # seconds
+    MIN_LOADING_DURATION = 5  # seconds
 
-    # 6. Define a function to set the minimum loading duration
     def set_min_loading_event():
-        time.sleep(min_loading_duration)
+        time.sleep(MIN_LOADING_DURATION)
         min_loading_event.set()
         logger.info("Minimum loading duration has elapsed.")
 
-    # Start the timer thread
-    timer_thread = threading.Thread(target=set_min_loading_event, daemon=True)
-    timer_thread.start()
+    threading.Thread(target=set_min_loading_event, daemon=True).start()
 
-    # 7. Define a function to show loading GIF until both events are set
     def show_loading():
-        loading_gif_path = config['display'].get('loading_gif_path', 'loading.gif')
+        loading_gif_path = display_config.get('loading_gif_path', 'loading.gif')
         try:
             image = Image.open(loading_gif_path)
             if not getattr(image, "is_animated", False):
-                logger.warning(f"The loading GIF at '{loading_gif_path}' is not animated.")
+                logger.warning(f"Loading GIF '{loading_gif_path}' is not animated.")
                 return
         except IOError:
             logger.error(f"Failed to load loading GIF '{loading_gif_path}'.")
             return
 
-        logger.info("Displaying loading GIF...")
-
-        # Ensure the screen is cleared before starting the GIF
+        logger.info("Displaying loading GIF during startup.")
         display_manager.clear_screen()
-        time.sleep(0.1)  # Allow the screen to refresh
-        logger.info("Screen cleared before displaying GIF.")
+        time.sleep(0.1)
 
-        # Loop through GIF frames until Volumio is ready and minimum duration has elapsed
         while not (volumio_ready_event.is_set() and min_loading_event.is_set()):
             for frame in ImageSequence.Iterator(image):
                 if volumio_ready_event.is_set() and min_loading_event.is_set():
-                    logger.info("Volumio is ready and minimum loading duration has elapsed.")
-                    return  # Exit the loop
-
-                # Display the current frame
+                    logger.info("Volumio ready & min load done, stopping loading GIF.")
+                    return
                 display_manager.oled.display(frame.convert(display_manager.oled.mode))
-                logger.debug("Displayed a frame of the loading GIF.")
-
-                # Pause for the frame duration
-                frame_duration = frame.info.get('duration', 100) / 1000.0  # Convert ms to seconds
+                frame_duration = frame.info.get('duration', 100) / 1000.0
                 time.sleep(frame_duration)
 
-        logger.info("Loading GIF display thread exiting.")
+        logger.info("Exiting loading GIF display thread.")
 
-    # 8. Start the loading GIF in a separate daemon thread
-    loading_thread = threading.Thread(target=show_loading, daemon=True)
-    loading_thread.start()
+    threading.Thread(target=show_loading, daemon=True).start()
 
-    # 9. Initialize VolumioListener
-    volumio_config = config.get('volumio', {})
-    volumio_host = volumio_config.get('host', 'localhost')
-    volumio_port = volumio_config.get('port', 3000)
+    # 6) Initialize VolumioListener
+    volumio_cfg = config.get('volumio', {})
+    volumio_host = volumio_cfg.get('host', 'localhost')
+    volumio_port = volumio_cfg.get('port', 3000)
     volumio_listener = VolumioListener(host=volumio_host, port=volumio_port)
 
-    # 10. Define a callback for state_changed signal
     def on_state_changed(sender, state):
         logger.info(f"Volumio state changed: {state}")
-        # Define readiness criteria based on your requirements
-        if state.get('status') in ['play', 'stop', 'pause']:
-            logger.info("Volumio is ready.")
+        if state.get('status') in ['play', 'stop', 'pause', 'unknown']:
+            logger.info("Volumio is considered ready now.")
             volumio_ready_event.set()
-            # Optionally, disconnect the callback to prevent further triggers
+            # Optionally disconnect the callback
             volumio_listener.state_changed.disconnect(on_state_changed)
-            logger.info("ModeManager: Disconnected from state_changed signal.")
 
-    # 11. Connect the callback to the state_changed signal
     volumio_listener.state_changed.connect(on_state_changed)
 
-    # 12. Wait until both events are set
-    logger.info("Waiting for Volumio to be ready and minimum loading duration to pass...")
+    # 7) Wait for both events
+    logger.info("Waiting for Volumio readiness & min load time.")
     volumio_ready_event.wait()
     min_loading_event.wait()
-    logger.info("Both Volumio is ready and minimum loading duration has passed. Proceeding with initialization.")
+    logger.info("Volumio is ready & min loading time passed, proceeding...")
 
-    # 13. Initialize Clock
+    # 8) Initialize Clock
     clock_config = config.get('clock', {})
     clock = Clock(display_manager, clock_config)
     clock.logger = logging.getLogger("Clock")
     clock.logger.setLevel(logging.INFO)
 
-    # 14. Initialize ModeManager
+    # 9) Initialize ModeManager (Quadify style)
     mode_manager = ModeManager(
-        display_manager=display_manager,
-        clock=clock,
-        volumio_listener=volumio_listener
+        display_manager   = display_manager,
+        clock             = clock,
+        volumio_listener  = volumio_listener,
+        preference_file_path="../preference.json",  # or your chosen path
+        config            = config
     )
 
-    # 15. Initialize DetailedPlaybackManager first (without VolumeOverlayManager)
-    detailed_playback_manager = DetailedPlaybackManager(
-        display_manager=display_manager,
-        volumio_listener=volumio_listener,
-        mode_manager=mode_manager,
+    # 10) Create ManagerFactory & set up managers/screens
+    manager_factory = ManagerFactory(
+        display_manager   = display_manager,
+        volumio_listener  = volumio_listener,
+        mode_manager      = mode_manager,
+        config            = config
     )
+    manager_factory.setup_mode_manager()
 
-    # 18. Initialize other managers, passing in mode_manager
-    playback_manager = PlaybackManager(display_manager, volumio_listener, mode_manager)
-    radioplayback_manager = RadioPlaybackManager(display_manager, volumio_listener, mode_manager)
-    menu_manager = MenuManager(display_manager, volumio_listener, mode_manager)
-    playlist_manager = PlaylistManager(display_manager, volumio_listener, mode_manager)
-    radio_manager = RadioManager(display_manager, volumio_listener, mode_manager)
-    tidal_manager = TidalManager(display_manager, volumio_listener, mode_manager)
-    qobuz_manager = QobuzManager(display_manager, volumio_listener, mode_manager)
-    spotify_manager = SpotifyManager(display_manager, volumio_listener, mode_manager)
-    library_manager = LibraryManager(display_manager, config.get('volumio', {}), mode_manager)
-    usb_library_manager = USBLibraryManager(display_manager, volumio_listener, mode_manager)
-    screen_manager = ScreenManager(playback_manager, detailed_playback_manager)
-    logging.info(f"Main: ScreenManager initialized with current screen: {screen_manager.get_current_screen()}")
 
-    # 19. Set the managers in mode_manager
-    mode_manager.set_playback_manager(playback_manager)
-    mode_manager.set_radioplayback_manager(radioplayback_manager)
-    mode_manager.set_menu_manager(menu_manager)
-    mode_manager.set_playlist_manager(playlist_manager)
-    mode_manager.set_radio_manager(radio_manager)
-    mode_manager.set_tidal_manager(tidal_manager)
-    mode_manager.set_qobuz_manager(qobuz_manager)
-    mode_manager.set_spotify_manager(spotify_manager)
-    mode_manager.set_library_manager(library_manager)
-    mode_manager.set_usb_library_manager(usb_library_manager)
-    mode_manager.set_detailed_playback_manager(detailed_playback_manager)
-    mode_manager.screen_manager = screen_manager
+    # Similarly for clock_menu, display_menu, system_info_screen, screensaver_menu, screensaver
+    # if you want direct references. Or you can just rely on mode_manager.* if it’s set.
 
-    # 20. Assign mode_manager to volumio_listener
+    # 11) Assign the ModeManager to volumio_listener
     volumio_listener.mode_manager = mode_manager
 
-    # 21. Initialize ButtonsLEDController
-    buttons_leds = ButtonsLEDController(volumio_listener=volumio_listener, config_path=config_path)
+    mode_manager.to_clock()
+    logger.info("Forced system into 'clock' mode after all initialization.")
+
+    # 12) ButtonsLEDs
+    buttons_leds = ButtonsLEDController(config_path=config_path)
     buttons_leds.start()
 
-    # 22. Define RotaryControl callbacks
+    # 13) Define RotaryControl callbacks
     def on_rotate(direction):
         current_mode = mode_manager.get_mode()
 
-        if current_mode == 'playback':
-            # Adjust volume in PlaybackManager based on direction
-            volume_change = 10 if direction == 1 else -10
-            playback_manager.adjust_volume(volume_change)
-            
-        if current_mode == 'detailed_playback':
-            # Adjust volume in PlaybackManager based on direction
-            volume_change = 10 if direction == 1 else -10
-            detailed_playback_manager.adjust_volume(volume_change)
-            logger.debug(f"PlaybackManager: Adjusted volume in playback mode by direction: {volume_change}")
+        # For Original + Modern => adjust volume
         
-        elif current_mode == 'radioplayback':
-            # Adjust volume in RadioPlaybackManager based on direction
-            volume_change = 10 if direction == 1 else -10
-            radioplayback_manager.adjust_volume(volume_change)  # Assuming `radioplayback_manager` is an instance of `RadioPlaybackManager`
-            logger.debug(f"RadioPlaybackManager: Adjusted volume in radioplayback mode by direction: {volume_change}")
+        if current_mode == 'original':
+            volume_change = 40 if direction == 1 else -40
+            mode_manager.original_screen.adjust_volume(volume_change)
 
-        elif current_mode == 'menu':
-            # Only allow scrolling when explicitly in menu mode, prevent unintended menu activation
-            menu_manager.scroll_selection(direction)
-            logger.debug(f"Scrolled menu in mode: {current_mode} with direction: {direction}")
-
-        elif current_mode == 'tidal':
-            tidal_manager.scroll_selection(direction)
-            logger.debug(f"Scrolled Tidal menu in mode: {current_mode} with direction: {direction}")
-
-        elif current_mode == 'qobuz':
-            qobuz_manager.scroll_selection(direction)
-            logger.debug(f"Scrolled Qobuz menu in mode: {current_mode} with direction: {direction}")
-
-        elif current_mode == 'spotify':
-            spotify_manager.scroll_selection(direction)
-            logger.debug(f"Scrolled Spotify menu in mode: {current_mode} with direction: {direction}")
-
-        elif current_mode == 'playlists':
-            playlist_manager.scroll_selection(direction)
-            logger.debug(f"Scrolled Playlist menu in mode: {current_mode} with direction: {direction}")
+        elif current_mode == 'modern':
+            volume_change = 10 if direction == 1 else -20
+            mode_manager.modern_screen.adjust_volume(volume_change)
+            logger.debug(f"ModernScreen: Adjusted volume by {volume_change}")
 
         elif current_mode == 'webradio':
-            radio_manager.scroll_selection(direction)
-            logger.debug(f"Scrolled Radio menu in mode: {current_mode} with direction: {direction}")
+            volume_change = 10 if direction == 1 else -20
+            mode_manager.webradio_screen.adjust_volume(volume_change)
+            logger.debug(f"WebRadioScreen: Adjusted volume by {volume_change}")
+
+        elif current_mode == 'menu':
+            mode_manager.menu_manager.scroll_selection(direction)
+            logger.debug(f"Scrolled menu with direction: {direction}")
+
+        elif current_mode == 'configmenu':
+            mode_manager.config_menu.scroll_selection(direction)
+
+        # If we're in screensaver mode, exit on any rotation
+        elif current_mode == 'screensaver':
+            mode_manager.exit_screensaver()
+
+        elif current_mode == 'clockmenu':
+            mode_manager.clock_menu.scroll_selection(direction)
+
+        elif current_mode == 'screensavermenu':
+            mode_manager.screensaver_menu.scroll_selection(direction)
+
+        elif current_mode == 'displaymenu':
+            mode_manager.display_menu.scroll_selection(direction)
+
+        elif current_mode == 'tidal':
+            mode_manager.tidal_manager.scroll_selection(direction)
+
+        elif current_mode == 'qobuz':
+            mode_manager.qobuz_manager.scroll_selection(direction)
+
+        elif current_mode == 'spotify':
+            mode_manager.spotify_manager.scroll_selection(direction)
+
+        elif current_mode == 'playlists':
+            mode_manager.playlist_manager.scroll_selection(direction)
+
+        elif current_mode == 'radiomanager':
+            mode_manager.radio_manager.scroll_selection(direction)
 
         elif current_mode == 'library':
-            library_manager.scroll_selection(direction)
-            logger.debug(f"Scrolled Library menu in mode: {current_mode} with direction: {direction}")
+            mode_manager.library_manager.scroll_selection(direction)
 
         elif current_mode == 'usblibrary':
-            usb_library_manager.scroll_selection(direction)
-            logger.debug(f"Scrolled USB Library menu in mode: {current_mode} with direction: {direction}")
-
+            mode_manager.usb_library_manager.scroll_selection(direction)
         else:
-            logger.warning(f"Unhandled mode: {current_mode}. No rotary action performed.")
+            logger.warning(f"Unhandled mode: {current_mode}; no rotary action performed.")
+
 
 
     def on_button_press_inner():
         current_mode = mode_manager.get_mode()
 
         if current_mode == 'clock':
-            # Switch from clock mode to menu mode
             mode_manager.to_menu()
+
         elif current_mode == 'menu':
-            # Select the currently highlighted menu item
-            menu_manager.select_item()
-        elif current_mode in ['fm4', 'modern']:
-            # Toggle screens if button pressed in FM4 or Modern mode
-            screen_manager.switch_screen()
-            logger.info(f"Toggled to {screen_manager.get_current_screen()} screen in {current_mode} mode.")
-        elif current_mode == 'playback':
-            # Toggle play/pause in playback mode
-            playback_manager.toggle_play_pause()
-        elif current_mode == 'radioplayback':
-            # Toggle play/pause in radioplayback mode
-            radioplayback_manager.toggle_play_pause()  # Assuming `radioplayback_manager` is an instance of `RadioPlaybackManager`
-            logger.debug("RadioPlaybackManager: Toggled play/pause in radioplayback mode.")
-        elif current_mode == 'tidal':
-            # Select the currently highlighted item in the Tidal menu
-            tidal_manager.select_item()
-            logger.debug(f"Button pressed in tidal mode: selected item {tidal_manager.current_selection_index}")
-        elif current_mode == 'qobuz':
-            # Select the currently highlighted item in the Qobuz menu
-            qobuz_manager.select_item()
-            logger.debug(f"Button pressed in qobuz mode: selected item {qobuz_manager.current_selection_index}")
-        elif current_mode == 'spotify':
-            # Select the currently highlighted item in the Spotify menu
-            spotify_manager.select_item()
-            logger.debug(f"Button pressed in spotify mode: selected item {spotify_manager.current_selection_index}")
-        elif current_mode == 'webradio':
-            # Handle item selection in Webradio mode
-            radio_manager.select_item()
-            logger.debug(f"Button pressed in webradio mode: selected item {radio_manager.current_selection_index}")
-        elif current_mode == 'library':
-            # Handle item selection in Library mode
-            library_manager.select_item()
-            logger.debug(f"Button pressed in library mode: selected item {library_manager.current_selection_index}")
-        elif current_mode == 'usblibrary':
-            # Handle item selection in Library mode
-            usb_library_manager.select_item()
-            logger.debug(f"Button pressed in usblibrary mode: selected item {usb_library_manager.current_selection_index}")
+            mode_manager.menu_manager.select_item()
+
+        elif current_mode == 'configmenu':
+            mode_manager.config_menu.select_item()
+
+        elif current_mode == 'screensavermenu':
+            mode_manager.screensaver_menu.select_item()
+
+        elif current_mode == 'displaymenu':
+            mode_manager.display_menu.select_item()
+
+        elif current_mode == 'clockmenu':
+            mode_manager.clock_menu.select_item()
+
+        elif current_mode in ['original', 'modern']:
+            logger.info(f"Button pressed in {current_mode} mode; consider toggling playback or screen switch.")
+
         elif current_mode == 'playlists':
-            # Handle item selection in Playlists mode
-            playlist_manager.select_item()
-            logger.debug(f"Button pressed in playlists mode: selected item {playlist_manager.current_selection_index}")
+            mode_manager.playlist_manager.select_item()
+
+        elif current_mode == 'tidal':
+            mode_manager.tidal_manager.select_item()
+
+        elif current_mode == 'qobuz':
+            mode_manager.mode_manager.qobuz_manager.select_item()
+
+        elif current_mode == 'spotify':
+            mode_manager.spotify_manager.select_item()
+
+        elif current_mode == 'webradio':
+            mode_manager.radio_manager.select_item()
+
+        elif current_mode == 'library':
+            mode_manager.library_manager.select_item()
+
+        elif current_mode == 'radiomanager':
+            mode_manager.radio_manager.select_item()
+
+        elif current_mode == 'usblibrary':
+            mode_manager.usb_library_manager.select_item()
+
+        elif current_mode == 'screensaver':
+            # Pressing button in screensaver => exit screensaver
+            mode_manager.exit_screensaver()
+
         else:
-            logger.warning(f"Unhandled mode: {current_mode}. No button action performed.")
+            logger.warning(f"Unhandled mode: {current_mode}; no button action performed.")
 
     def on_long_press():
-        logger.info("Long button press detected")
-        # Example action for long press: return to clock mode
+        logger.info("Long button press detected.")
         current_mode = mode_manager.get_mode()
+        # Example: go back to clock if not already
         if current_mode != 'clock':
             mode_manager.to_clock()
 
-    # 23. Initialize RotaryControl
+    # 14) Initialize RotaryControl
     rotary_control = RotaryControl(
-        rotation_callback=on_rotate,
-        button_callback=on_button_press_inner,
-        long_press_callback=on_long_press,
-        long_press_threshold=2.5
+        rotation_callback     = on_rotate,
+        button_callback       = on_button_press_inner,
+        long_press_callback   = on_long_press,
+        long_press_threshold  = 2.5
     )
+    rotary_control.start()
 
-    rotary_control.start()  # Start listening to rotary events
-
-    # 24. Run the Main Application Loop
+    # 15) Main application loop
     try:
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        logger.info("Shutting down Quadify...")
+        logger.info("Shutting down Quadify via KeyboardInterrupt.")
     finally:
         buttons_leds.stop()
         rotary_control.stop()
         volumio_listener.stop_listener()
         clock.stop()
         display_manager.clear_screen()
-        logger.info("Quadify has been shut down gracefully.")
+        logger.info("Quadify shut down gracefully.")
 
 if __name__ == "__main__":
     main()

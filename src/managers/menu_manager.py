@@ -19,10 +19,10 @@ class MenuManager:
 
         # Menu initialization
         self.menu_stack = []
-        self.current_menu_items = ["Stream", "Library", "Radio", "Playlists", "Display"]  # Added Display menu
+        self.current_menu_items = ["Stream", "Library", "Radio", "Playlists", "Display", "Config"]
         self.stream_menu_items = ["Tidal", "Qobuz", "Spotify"]
         self.library_menu_items = ["NAS", "USB"]
-        self.display_menu_items = ["FM4", "Modern"]  # New Display sub-menu
+        self.display_menu_items = ["Display", "Screensavers", "Clock", "Contrast"]
         self.icons = {
             "Stream": self.display_manager.icons.get("stream"),
             "Library": self.display_manager.icons.get("library"),
@@ -33,9 +33,9 @@ class MenuManager:
             "Spotify": self.display_manager.icons.get("spop"),
             "NAS": self.display_manager.icons.get("nas"), 
             "USB": self.display_manager.icons.get("usb"),
-            "Display": self.display_manager.icons.get("display"),  # Icon for Display menu
-            "FM4": self.display_manager.icons.get("displayfm4"),  # Icon for FM4
-            "Modern": self.display_manager.icons.get("displaymodern")  # Icon for Modern
+            "Config": self.display_manager.icons.get("config"),
+            "Original": self.display_manager.icons.get("display"),
+            "Modern": self.display_manager.icons.get("display")
         }
         self.current_selection_index = 0
         self.is_active = False
@@ -61,7 +61,7 @@ class MenuManager:
     def start_mode(self):
         self.is_active = True
         # Reset to top-level menu items
-        self.current_menu_items = ["Stream", "Library", "Radio", "Playlists", "Display"]
+        self.current_menu_items = ["Stream", "Library", "Radio", "Playlists", "Config"]
         self.current_selection_index = 0
         self.window_start_index = 0
         # Schedule display_menu without blocking
@@ -121,23 +121,18 @@ class MenuManager:
                 x = x_offset + i * (icon_size + spacing)
 
                 # Adjust position of the selected item to "pop out" slightly
-                if actual_index == self.current_selection_index:
-                    y_adjustment = -5  # Move the selected icon up slightly
-                else:
-                    y_adjustment = 0  # Keep other icons at the normal position
-
-                # Paste the icon onto the base image
+                y_adjustment = -5 if actual_index == self.current_selection_index else 0
                 base_image.paste(icon, (x, y_position + y_adjustment))
 
                 # Draw labels below icons
                 label = item
-                font = self.display_manager.fonts.get(self.font_key, ImageFont.load_default())
-                text_color = "white" if actual_index == self.current_selection_index else "gray"
+                font = self.display_manager.fonts.get(self.bold_font_key if actual_index == self.current_selection_index else self.font_key, ImageFont.load_default())
+                text_color = "white" if actual_index == self.current_selection_index else "black"
 
                 # Calculate text size
                 text_width, text_height = draw_obj.textsize(label, font=font)
                 text_x = x + (icon_size - text_width) // 2
-                text_y = y_position + icon_size + 3  # Position text slightly below the icon
+                text_y = y_position + icon_size + 5  # Position text slightly below the icon
 
                 # Draw the label
                 draw_obj.text((text_x, text_y), label, font=font, fill=text_color)
@@ -148,7 +143,14 @@ class MenuManager:
             self.logger.info("MenuManager: Icon row menu displayed with scrolling effect.")
 
 
-
+    def config_menu(self):
+        self.logger.info("MenuManager: Entering Config menu.")
+        # Add the logic to handle the Config menu here.
+        # For example, displaying the Config options or switching to another mode.
+        self.current_menu_items = ["Option 1", "Option 2", "Back"]
+        self.current_selection_index = 0
+        self.window_start_index = 0
+        self.display_menu()
 
     def get_visible_window(self, items, window_size):
         # Calculate half window size
@@ -200,9 +202,11 @@ class MenuManager:
         time.sleep(0.2)
 
         if selected_item == "Radio":
-            self.mode_manager.to_webradio()
+            self.mode_manager.to_radiomanager()
+
         elif selected_item == "Playlists":
             self.mode_manager.to_playlists()
+
         elif selected_item == "Stream":
             # Navigate into Stream menu
             self.menu_stack.append(self.current_menu_items)
@@ -210,6 +214,7 @@ class MenuManager:
             self.current_selection_index = 0
             self.window_start_index = 0
             self.display_menu()
+
         elif selected_item == "Library":
             # Navigate into Library menu (with NAS and USB options)
             self.menu_stack.append(self.current_menu_items)
@@ -217,30 +222,41 @@ class MenuManager:
             self.current_selection_index = 0
             self.window_start_index = 0
             self.display_menu()
-        elif selected_item == "Display":
+
+        elif selected_item == "Config":
             # Navigate into Display menu (with FM4 and Modern options)
             self.menu_stack.append(self.current_menu_items)
             self.current_menu_items = self.display_menu_items
             self.current_selection_index = 0
             self.window_start_index = 0
-            self.display_menu()
-        if selected_item == "FM4":
-            self.mode_manager.to_fm4()
+            self.config_menu()
+
+        if selected_item == "Original":
+            self.mode_manager.to_original()
             self.logger.info("MenuManager: Switching to FM4 screen.")
             self.mode_manager.to_menu()  # Return to menu after selection
+
         elif selected_item == "Modern":
             self.mode_manager.to_modern()
             self.logger.info("MenuManager: Switching to Modern screen.")
             self.mode_manager.to_menu()  # Return to menu after selection
+
         elif selected_item == "NAS":
             self.mode_manager.to_library(start_uri="music-library/NAS")
             self.logger.info("Library Manager for NAS activated.")
+
         elif selected_item == "USB":
             self.mode_manager.to_library(start_uri="music-library/USB")
             self.logger.info("USB Library Manager activated.")
+
         elif selected_item == "Tidal":
             self.mode_manager.to_tidal()
+
         elif selected_item == "Qobuz":
             self.mode_manager.to_qobuz()
+
         elif selected_item == "Spotify":
             self.mode_manager.to_spotify()
+
+        elif selected_item == "Config":
+            self.mode_manager.to_configmenu() 

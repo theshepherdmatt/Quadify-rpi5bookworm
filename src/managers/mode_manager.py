@@ -1,124 +1,238 @@
-
-# src/managers/mode_manager.py
-
 import logging
-from transitions import Machine
+import os
+import json
 import threading
+from transitions import Machine
 
 class ModeManager:
+    """
+    A unified ModeManager for Quadify that includes:
+      - Display-mode persistence (original/modern)
+      - Screensaver & idle logic
+      - Additional states for Tidal/Qobuz/Radio/Playlists
+      - Possibly a 'boot' or 'systeminfo' state if desired
+    """
+
     states = [
-        {'name': 'clock', 'on_enter': 'enter_clock'},
-        {'name': 'playback', 'on_enter': 'enter_playback'},
-        {'name': 'radioplayback', 'on_enter': 'enter_radioplayback'},        
-        {'name': 'menu', 'on_enter': 'enter_menu'},
-        {'name': 'webradio', 'on_enter': 'enter_webradio'},
-        {'name': 'playlists', 'on_enter': 'enter_playlists'},
-        {'name': 'tidal', 'on_enter': 'enter_tidal'},
-        {'name': 'qobuz', 'on_enter': 'enter_qobuz'},
-        {'name': 'library', 'on_enter': 'enter_library'},
-        {'name': 'usblibrary', 'on_enter': 'enter_usb_library'},
-        {'name': 'spotify', 'on_enter': 'enter_spotify'},
-        {'name': 'fm4', 'on_enter': 'enter_fm4'},
-        {'name': 'modern', 'on_enter': 'enter_modern'},
+        {'name': 'boot',            'on_enter': 'enter_boot'},
+        {'name': 'clock',           'on_enter': 'enter_clock'},
+        {'name': 'screensaver',     'on_enter': 'enter_screensaver'},
+        {'name': 'screensavermenu', 'on_enter': 'enter_screensavermenu'},
+        {'name': 'displaymenu',     'on_enter': 'enter_displaymenu'},
+        {'name': 'clockmenu',       'on_enter': 'enter_clockmenu'},
+        {'name': 'original',        'on_enter': 'enter_original'},
+        {'name': 'modern',          'on_enter': 'enter_modern'},
+        {'name': 'systeminfo',      'on_enter': 'enter_systeminfo'},
+        {'name': 'configmenu',      'on_enter': 'enter_configmenu'},
+
+        {'name': 'radiomanager',    'on_enter': 'enter_radiomanager'},
+        {'name': 'menu',            'on_enter': 'enter_menu'},
+        {'name': 'playlists',       'on_enter': 'enter_playlists'},
+        {'name': 'tidal',           'on_enter': 'enter_tidal'},
+        {'name': 'qobuz',           'on_enter': 'enter_qobuz'},
+        {'name': 'library',         'on_enter': 'enter_library'},
+        {'name': 'usblibrary',      'on_enter': 'enter_usb_library'},
+        {'name': 'spotify',         'on_enter': 'enter_spotify'},
+        {'name': 'webradio',        'on_enter': 'enter_webradio'},
     ]
 
     def __init__(
         self,
         display_manager,
         clock,
-        volumio_listener
+        volumio_listener,           # The Volumio (or Moode) listener
+        preference_file_path="../preference.json",
+        config=None
     ):
-        self.display_manager = display_manager
-        self.clock = clock
-        self.volumio_listener = volumio_listener
-
-        # Managers will be set later
-        self.playback_manager = None
-        self.menu_manager = None
-        self.playlist_manager = None
-        self.radio_manager = None
-        self.radioplayback_manager = None
-        self.tidal_manager = None
-        self.qobuz_manager = None
-        self.library_manager = None
-        self.usb_library_manager = None
-        self.spotify_manager = None
-        self.detailed_playback_manager = None  
-
-
-        # Initialize logger
+        """
+        :param display_manager:   Manages the OLED display
+        :param clock:             Clock instance
+        :param volumio_listener:  Object that fires state_changed signals from Volumio
+        :param preference_file_path: JSON file to store user preferences
+        :param config:            Combined config loaded from YAML, etc.
+        """
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.logger.setLevel(logging.DEBUG)  # Set to DEBUG level for detailed logs
-        self.logger.debug("ModeManager initialized.")
+        self.logger.setLevel(logging.DEBUG)
+        self.logger.debug("ModeManager: Initializing...")
 
-        # Initialize state machine
+        self.display_manager   = display_manager
+        self.clock             = clock
+        self.volumio_listener  = volumio_listener
+        self.config            = config or {}
+
+        # Preferences path
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        self.preference_file_path = os.path.join(script_dir, preference_file_path)
+
+        preferences = self._load_preferences()
+        for key in (
+            "display_mode",
+            "clock_font_key",
+            "show_seconds",
+            "show_date",
+            "screensaver_enabled",
+            "screensaver_type",
+            "screensaver_timeout",
+            "oled_brightness"
+        ):
+            self.config[key] = preferences[key]
+
+
+        # References to managers or screens (set via a ManagerFactory or manually)
+        self.menu_manager           = None
+        self.config_menu            = None
+        self.playlist_manager       = None
+        self.radio_manager          = None
+        self.tidal_manager          = None
+        self.qobuz_manager          = None
+        self.spotify_manager        = None
+        self.library_manager        = None
+        self.usb_library_manager    = None
+        self.original_screen        = None
+        self.modern_screen          = None
+        self.webradio_screen        = None
+        self.screensaver            = None
+        self.screensaver_menu       = None
+        self.display_menu           = None
+        self.clock_menu             = None
+        self.system_info_screen     = None
+
+        # Screensaver / idle logic
+        self.idle_timer       = None
+        self.idle_timeout     = self.config.get("screensaver_timeout", 360)
+
+        self.suppress_state_changes = False  # For transitions
+        self.is_track_changing      = False
+        self.track_change_in_progress = False
+        self.current_status         = None
+        self.previous_status        = None
+        self.pause_stop_timer       = None
+        self.pause_stop_delay       = 0.5  # e.g. half-second
+
+        self.logger.debug(f"ModeManager: idle_timeout={self.idle_timeout}, display_mode={self.config.get('display_mode')}")
+
+        # Set up the state machine
         self.machine = Machine(
             model=self,
             states=ModeManager.states,
-            initial='clock',
+            initial='clock',  # or 'boot' if you prefer
             send_event=True
         )
+        self._define_transitions()  # define transitions from * to any state
 
-        # Define transitions
-        self.machine.add_transition(trigger='to_playback', source='*', dest='playback')
-        self.machine.add_transition(trigger='to_radioplayback', source='*', dest='radioplayback')
-        self.machine.add_transition(trigger='to_menu', source='*', dest='menu')
-        self.machine.add_transition(trigger='to_webradio', source='*', dest='webradio')
-        self.machine.add_transition(trigger='to_playlists', source='*', dest='playlists')
-        self.machine.add_transition(trigger='to_tidal', source='*', dest='tidal')
-        self.machine.add_transition(trigger='to_qobuz', source='*', dest='qobuz')
-        self.machine.add_transition(trigger='to_library', source='*', dest='library')
-        self.machine.add_transition(trigger='to_usb_library', source='*', dest='usblibrary')
-        self.machine.add_transition(trigger='to_clock', source='*', dest='clock')
-        self.machine.add_transition(trigger='to_spotify', source='*', dest='spotify')
-        self.machine.add_transition(trigger='to_fm4', source='*', dest='fm4')
-        self.machine.add_transition(trigger='to_modern', source='*', dest='modern')
-
-        # Callback handling
-        self.on_mode_change_callbacks = []
-        self.lock = threading.Lock()  # Added lock for thread safety
-
-        # Suppression mechanism
-        self.suppress_state_changes = False  # Added suppression flag
-
-        # Connect to VolumioListener's state_changed signal
+        # If volumio_listener is present, connect it
         if self.volumio_listener is not None:
             self.volumio_listener.state_changed.connect(self.process_state_change)
-            self.logger.debug("ModeManager: Connected to VolumioListener's state_changed signal.")
+            self.logger.debug("ModeManager: Connected to volumio_listener.state_changed signal.")
         else:
-            self.logger.warning("ModeManager: VolumioListener is None, cannot connect to state_changed signal.")
+            self.logger.warning("ModeManager: volumio_listener is None, no state_changed signal linked.")
 
-        # Explicitly call enter_clock to initialize the clock mode
-        self.enter_clock(None)
+        self.lock = threading.Lock()
 
-        # Initialize state tracking variables
-        self.is_track_changing = False
-        self.track_change_in_progress = False
-        self.current_status = None
-        self.previous_status = None
-        self.pause_stop_timer = None
-        self.pause_stop_delay = 0.5  # Delay in seconds before switching to clock mode
+    # ------------------------------------------------------------------
+    #  Preferences load/save for display mode, brightness, etc.
+    # ------------------------------------------------------------------
+    def _load_screen_preference(self):
+        """Load 'display_mode' from JSON or fallback to 'original'."""
+        if os.path.exists(self.preference_file_path):
+            try:
+                with open(self.preference_file_path, "r") as f:
+                    data = json.load(f)
+                    mode = data.get("display_mode", "original")
+                    self.logger.info(f"Loaded display mode preference: {mode}")
+                    return mode
+            except (json.JSONDecodeError, IOError) as e:
+                self.logger.warning(f"Failed to load preference; defaulting to 'original'. Error: {e}")
+        else:
+            self.logger.info(f"No preference file at {self.preference_file_path}, using 'original'.")
+        return "original"
 
-    # Add setter methods for the managers
+    def save_preferences(self):
+        """Write the updated self.config entries to preference.json."""
+        if not self.preference_file_path:
+            return
+        
+        # 1) Load existing JSON if it exists
+        if os.path.exists(self.preference_file_path):
+            with open(self.preference_file_path, "r") as f:
+                try:
+                    data = json.load(f)
+                except (json.JSONDecodeError, IOError):
+                    data = {}
+        else:
+            data = {}
 
-    def get_active_manager(self):
-        """Return the name of the currently active manager."""
-        if self.playback_manager and self.playback_manager.is_active:
-            return 'playback'
-        elif self.radioplayback_manager and self.radioplayback_manager.is_active:
-            return 'radioplayback'
-        # Add other managers as needed
-        return None
+        # 2) Copy updated fields from self.config to data
+        for key in (
+            "display_mode",
+            "clock_font_key",
+            "show_seconds",
+            "show_date",
+            "screensaver_enabled",
+            "screensaver_type",
+            "screensaver_timeout",
+            "oled_brightness"
+        ):
+            # If it’s in our config, put it in data
+            if key in self.config:
+                data[key] = self.config[key]
+
+        # 3) Write out to JSON
+        try:
+            with open(self.preference_file_path, "w") as f:
+                json.dump(data, f, indent=2)
+            self.logger.info(f"ModeManager: Preferences saved to {self.preference_file_path}.")
+        except IOError as e:
+            self.logger.warning(f"ModeManager: Could not write to {self.preference_file_path}. Error: {e}")
 
 
-    def set_playback_manager(self, playback_manager):
-        self.playback_manager = playback_manager
+    def set_display_mode(self, mode_name):
+        if mode_name in ("original", "modern"):
+            self.config["display_mode"] = mode_name
+            self.logger.info(f"ModeManager: Display mode set to '{mode_name}'.")
+            self.save_preferences()
+        else:
+            self.logger.warning(f"Unknown display mode '{mode_name}'.")
 
-    def set_radioplayback_manager(self, radioplayback_manager):
-        self.radioplayback_manager = radioplayback_manager
 
+    def _load_preferences(self):
+        """Load all preferences from the preference.json file or use defaults."""
+        # Default preferences
+        default_preferences = {
+            "display_mode": "original",
+            "clock_font_key": "default",
+            "show_seconds": True,
+            "show_date": True,
+            "screensaver_enabled": False,
+            "screensaver_type": "none",
+            "screensaver_timeout": 120,
+            "oled_brightness": 100,
+        }
+
+        # Load preferences from file if it exists
+        if os.path.exists(self.preference_file_path):
+            try:
+                with open(self.preference_file_path, "r") as f:
+                    file_preferences = json.load(f)
+                    # Merge loaded preferences with defaults
+                    default_preferences.update(file_preferences)
+                    self.logger.info(f"Loaded preferences: {default_preferences}")
+            except (json.JSONDecodeError, IOError) as e:
+                self.logger.warning(f"Failed to load preferences. Using defaults. Error: {e}")
+        else:
+            self.logger.info(f"No preference file found at {self.preference_file_path}. Using defaults.")
+
+        return default_preferences
+
+
+    # ------------------------------------------------------------------
+    #  Setting references for managers & screens (via ManagerFactory)
+    # ------------------------------------------------------------------
     def set_menu_manager(self, menu_manager):
         self.menu_manager = menu_manager
+
+    def set_config_menu(self, config_menu):
+        self.config_menu = config_menu
 
     def set_playlist_manager(self, playlist_manager):
         self.playlist_manager = playlist_manager
@@ -132,444 +246,789 @@ class ModeManager:
     def set_qobuz_manager(self, qobuz_manager):
         self.qobuz_manager = qobuz_manager
 
+    def set_spotify_manager(self, spotify_manager):
+        self.spotify_manager = spotify_manager
+
     def set_library_manager(self, library_manager):
         self.library_manager = library_manager
 
     def set_usb_library_manager(self, usb_library_manager):
         self.usb_library_manager = usb_library_manager
 
-    def set_spotify_manager(self, spotify_manager):
-        self.spotify_manager = spotify_manager
+    def set_original_screen(self, original_screen):
+        self.original_screen = original_screen
 
-    def set_detailed_playback_manager(self, detailed_playback_manager):
-        self.detailed_playback_manager = detailed_playback_manager
+    def set_modern_screen(self, modern_screen):
+        self.modern_screen = modern_screen
 
+    def set_webradio_screen(self, webradio_screen):
+        self.webradio_screen = webradio_screen
 
-    def get_mode(self):
-        return self.state
+    def set_clock_menu(self, clock_menu):
+        self.clock_menu = clock_menu
 
-    def enter_clock(self, event):
-        self.logger.info("ModeManager: Entering clock mode.")
-        
-        # Stop other active modes except playback and clock
-        if self.menu_manager and self.menu_manager.is_active:
-            self.menu_manager.stop_mode()
-            self.logger.info("ModeManager: Stopped menu mode.")
-        if self.radio_manager and self.radio_manager.is_active:
-            self.radio_manager.stop_mode()
-            self.logger.info("ModeManager: Stopped webradio mode.")
-        if self.playlist_manager and self.playlist_manager.is_active:
-            self.playlist_manager.stop_mode()
-            self.logger.info("ModeManager: Stopped playlist mode.")
-        if self.tidal_manager and self.tidal_manager.is_active:
-            self.tidal_manager.stop_mode()
-            self.logger.info("ModeManager: Stopped Tidal mode.")
-        if self.qobuz_manager and self.qobuz_manager.is_active:
-            self.qobuz_manager.stop_mode()
-            self.logger.info("ModeManager: Stopped Qobuz mode.")
-        if self.spotify_manager and self.spotify_manager.is_active:
-            self.spotify_manager.stop_mode()
-            self.logger.info("ModeManager: Stopped Spotify mode.")
-        if self.library_manager and self.library_manager.is_active:
-            self.library_manager.stop_mode()
-            self.logger.info("ModeManager: Stopped Library mode.")
-        if self.usb_library_manager and self.usb_library_manager.is_active:
-            self.usb_library_manager.stop_mode()
-            self.logger.info("ModeManager: Stopped USBLibrary mode.")
-        if self.detailed_playback_manager and self.detailed_playback_manager.is_active:
-            self.detailed_playback_manager.stop_mode()
-            self.logger.info("ModeManager: Stopped Detailed Playback mode.")
+    def set_display_menu(self, display_menu):
+        self.display_menu = display_menu
 
-        # Ensure playback manager remains active if it is already playing or paused
-        if self.playback_manager and self.playback_manager.is_active:
-            self.logger.info("ModeManager: Retaining playback manager state in clock mode.")
-        else:
-            self.logger.info("ModeManager: Playback manager is not active.")
+    def set_screensaver(self, screensaver):
+        self.screensaver = screensaver
 
-        # Start the clock display
-        if self.clock:
-            self.clock.start()
-            self.logger.info("ModeManager: Clock started.")
-        else:
-            self.logger.error("ModeManager: Clock instance is not set.")
+    def set_screensaver_menu(self, screensaver_menu):
+        self.screensaver_menu = screensaver_menu
 
+    def set_system_info_screen(self, system_info_screen):
+        self.system_info_screen = system_info_screen
 
-    def enter_playback(self, event):
-        self.logger.info("ModeManager: Entering playback mode.")
-        # Stop clock
-        if self.clock:
-            self.clock.stop()
-            self.logger.info("ModeManager: Clock stopped.")
-        else:
-            self.logger.error("ModeManager: Clock instance is not set.")
-
-        # Delegate screen handling to ScreenManager
-        if self.screen_manager:
-            self.screen_manager.handle_state_change("play", None)  # Passing 'play' to trigger screen activation
-        else:
-            self.logger.error("ModeManager: ScreenManager is not set.")
-
-
-    def enter_radioplayback(self, event):
-        self.logger.info("ModeManager: Entering radioplayback mode.")
-        # Stop clock
-        if self.clock:
-            self.clock.stop()
-            self.logger.info("ModeManager: Clock stopped.")
-        else:
-            self.logger.error("ModeManager: Clock instance is not set.")
-        
-        # Stop PlaybackManager if it's active
-        if self.playback_manager and self.playback_manager.is_active:
-            self.playback_manager.stop_mode()
-            self.logger.info("ModeManager: Stopped playback mode.")
-        
-        # Start radioplayback display
-        if self.radioplayback_manager:
-            self.radioplayback_manager.start_mode()
-            self.logger.info("ModeManager: RadioPlayback mode started.")
-        else:
-            self.logger.error("ModeManager: radioplayback_manager is not set.")
-
-
-    def enter_menu(self, event):
-        self.logger.info("ModeManager: Entering menu mode.")
-        # Stop clock, playback, and radioplayback
-        if self.clock:
-            self.clock.stop()
-            self.logger.info("ModeManager: Clock stopped.")
-        else:
-            self.logger.error("ModeManager: Clock instance is not set.")
-        
-        if self.playback_manager and self.playback_manager.is_active:
-            self.playback_manager.stop_mode()
-            self.logger.info("ModeManager: Stopped playback mode.")
-        
-        if self.radioplayback_manager and self.radioplayback_manager.is_active:
-            self.radioplayback_manager.stop_mode()
-            self.logger.info("ModeManager: Stopped radioplayback mode.")
-        
-        # Start menu
-        if self.menu_manager:
-            self.menu_manager.start_mode()
-            self.logger.info("ModeManager: Menu mode started.")
-        else:
-            self.logger.error("ModeManager: menu_manager is not set.")
-
-
-    def enter_webradio(self, event):
-        self.logger.info("ModeManager: Entering webradio mode.")
-        # Stop other modes
-        if self.clock:
-            self.clock.stop()
-            self.logger.info("ModeManager: Clock stopped.")
-        else:
-            self.logger.error("ModeManager: Clock instance is not set.")
-        if self.menu_manager and self.menu_manager.is_active:
-            self.menu_manager.stop_mode()
-            self.logger.info("ModeManager: Stopped menu mode.")
-        if self.radio_manager and self.radio_manager.is_active:
-            self.radio_manager.stop_mode()
-            self.logger.info("ModeManager: Stopped Webradio mode.")
-        # Start webradio
-        if self.radio_manager:
-            self.radio_manager.start_mode()
-            self.logger.info("ModeManager: Webradio mode started.")
-        else:
-            self.logger.error("ModeManager: radio_manager is not set.")
-
-    def enter_playlists(self, event):
-        self.logger.info("ModeManager: Entering playlist mode.")
-        # Stop other modes
-        if self.clock:
-            self.clock.stop()
-            self.logger.info("ModeManager: Clock stopped.")
-        else:
-            self.logger.error("ModeManager: Clock instance is not set.")
-        if self.menu_manager and self.menu_manager.is_active:
-            self.menu_manager.stop_mode()
-            self.logger.info("ModeManager: Stopped menu mode.")
-        # Start playlist
-        if self.playlist_manager:
-            self.playlist_manager.start_mode()
-            self.logger.info("ModeManager: Playlist mode started.")
-        else:
-            self.logger.error("ModeManager: playlist_manager is not set.")
-
-    def enter_tidal(self, event):
-        self.logger.info("ModeManager: Entering Tidal mode.")
-        # Stop other modes
-        if self.clock:
-            self.clock.stop()
-            self.logger.info("ModeManager: Clock stopped.")
-        else:
-            self.logger.error("ModeManager: Clock instance is not set.")
-        if self.menu_manager and self.menu_manager.is_active:
-            self.menu_manager.stop_mode()
-            self.logger.info("ModeManager: Stopped menu mode.")
-        # Start Tidal
-        if self.tidal_manager:
-            self.tidal_manager.start_mode()
-            self.logger.info("ModeManager: Tidal mode started.")
-        else:
-            self.logger.error("ModeManager: tidal_manager is not set.")
-
-    def enter_qobuz(self, event):
-        self.logger.info("ModeManager: Entering Qobuz mode.")
-        # Stop other modes
-        if self.clock:
-            self.clock.stop()
-            self.logger.info("ModeManager: Clock stopped.")
-        else:
-            self.logger.error("ModeManager: Clock instance is not set.")
-        if self.menu_manager and self.menu_manager.is_active:
-            self.menu_manager.stop_mode()
-            self.logger.info("ModeManager: Stopped menu mode.")
-        # Start Qobuz
-        if self.qobuz_manager:
-            self.qobuz_manager.start_mode()
-            self.logger.info("ModeManager: Qobuz mode started.")
-        else:
-            self.logger.error("ModeManager: qobuz_manager is not set.")
-
-    def enter_library(self, event):
-        start_uri = event.kwargs.get('start_uri', None)
-        self.logger.info(f"ModeManager: Entering Library mode with start_uri: {start_uri}")
-        # Stop other modes
-        if self.clock:
-            self.clock.stop()
-            self.logger.info("ModeManager: Clock stopped.")
-        else:
-            self.logger.error("ModeManager: Clock instance is not set.")
-        if self.menu_manager and self.menu_manager.is_active:
-            self.menu_manager.stop_mode()
-            self.logger.info("ModeManager: Stopped menu mode.")
-        # Start Library
-        if self.library_manager:
-            self.library_manager.start_mode(start_uri=start_uri)
-            self.logger.info("ModeManager: Library mode started.")
-        else:
-            self.logger.error("ModeManager: library_manager is not set.")
-
-    def enter_usb_library(self, event):
-        start_uri = event.kwargs.get('start_uri', None)
-        self.logger.info(f"ModeManager: Entering USB Library mode with start_uri: {start_uri}")
-        # Stop other modes
-        if self.clock:
-            self.clock.stop()
-            self.logger.info("ModeManager: Clock stopped.")
-        else:
-            self.logger.error("ModeManager: Clock instance is not set.")
-        if self.menu_manager and self.menu_manager.is_active:
-            self.menu_manager.stop_mode()
-            self.logger.info("ModeManager: Stopped menu mode.")
-        # Start USB Library
-        if self.usb_library_manager:
-            self.usb_library_manager.start_mode(start_uri=start_uri)
-            self.logger.info("ModeManager: USB Library mode started.")
-        else:
-            self.logger.error("ModeManager: usb_library_manager is not set.")
-
-    def enter_spotify(self, event):
-        self.logger.info("ModeManager: Entering Spotify mode.")
-        # Stop other modes
-        if self.clock:
-            self.clock.stop()
-            self.logger.info("ModeManager: Clock stopped.")
-        else:
-            self.logger.error("ModeManager: Clock instance is not set.")
-        if self.menu_manager and self.menu_manager.is_active:
-            self.menu_manager.stop_mode()
-            self.logger.info("ModeManager: Stopped menu mode.")
-        # Start Spotify
-        if self.spotify_manager:
-            self.spotify_manager.start_mode()
-            self.logger.info("ModeManager: Spotify mode started.")
-        else:
-            self.logger.error("ModeManager: spotify_manager is not set.")
-
-    def enter_fm4(self, event):
-        self.logger.info("ModeManager: Entering FM4 mode.")
-
-        # Stop clock
-        if self.clock:
-            self.clock.stop()
-            self.logger.info("ModeManager: Clock stopped.")
-        else:
-            self.logger.error("ModeManager: Clock instance is not set.")
-
-        # Stop menu mode if active
-        if self.menu_manager and self.menu_manager.is_active:
-            self.menu_manager.stop_mode()
-            self.logger.info("ModeManager: Stopped menu mode.")
-
-        # Delegate screen handling to ScreenManager
-        if self.screen_manager:
-            self.screen_manager.set_current_screen("playback")  # Activates FM4 playback screen
-            self.logger.info("ModeManager: ScreenManager handled FM4 screen activation.")
-        else:
-            self.logger.error("ModeManager: ScreenManager is not set. Cannot activate FM4 screen.")
-
-
-    def enter_modern(self, event):
-        self.logger.info("ModeManager: Entering Modern mode.")
-
-        # Stop clock
-        if self.clock:
-            self.clock.stop()
-            self.logger.info("ModeManager: Clock stopped.")
-        else:
-            self.logger.error("ModeManager: Clock instance is not set.")
-
-        # Stop menu mode if active
-        if self.menu_manager and self.menu_manager.is_active:
-            self.menu_manager.stop_mode()
-            self.logger.info("ModeManager: Stopped menu mode.")
-
-        # Delegate screen handling to ScreenManager
-        if self.screen_manager:
-            self.screen_manager.set_current_screen("detailed_playback")  # Activates Modern screen
-            self.logger.info("ModeManager: ScreenManager handled Modern screen activation.")
-        else:
-            self.logger.error("ModeManager: ScreenManager is not set. Cannot activate Modern screen.")
-
-
-    # Adjusted methods to avoid conflicts with triggers
-    def switch_to_library_mode(self, start_uri=None):
-        self.logger.info(f"ModeManager: Switching to Library mode with start_uri: {start_uri}")
-        self.machine.trigger('to_library', start_uri=start_uri)
-
-    def switch_to_usb_library_mode(self, start_uri=None):
-        self.logger.info(f"ModeManager: Switching to USB Library mode with start_uri: {start_uri}")
-        self.machine.trigger('to_usb_library', start_uri=start_uri)
-
+    # ------------------------------------------------------------------
+    #  State-suppression logic (if we want to temporarily block transitions)
+    # ------------------------------------------------------------------
     def suppress_state_change(self):
-        """Suppress state changes temporarily."""
         with self.lock:
             self.suppress_state_changes = True
-            self.logger.debug("ModeManager: State changes are now suppressed.")
+            self.logger.debug("ModeManager: State changes suppressed.")
 
     def allow_state_change(self):
-        """Allow state changes."""
         with self.lock:
             self.suppress_state_changes = False
-            self.logger.debug("ModeManager: State changes are now allowed.")
+            self.logger.debug("ModeManager: State changes allowed.")
 
     def is_state_change_suppressed(self):
         return self.suppress_state_changes
 
+    # ------------------------------------------------------------------
+    #  IDLE / Screensaver
+    # ------------------------------------------------------------------
+    def reset_idle_timer(self):
+        screensaver_enabled = self.config.get("screensaver_enabled", True)
+        if not screensaver_enabled:
+            self._cancel_idle_timer()
+            return
+        self._cancel_idle_timer()
+        self._start_idle_timer()
+
+    def _start_idle_timer(self):
+        if self.idle_timeout <= 0:
+            return
+        self.idle_timer = threading.Timer(self.idle_timeout, self._idle_timeout_reached)
+        self.idle_timer.start()
+        self.logger.debug(f"ModeManager: Idle timer started for {self.idle_timeout}s.")
+
+    def _cancel_idle_timer(self):
+        if self.idle_timer:
+            self.idle_timer.cancel()
+            self.idle_timer = None
+            self.logger.debug("ModeManager: Idle timer canceled.")
+
+    def _idle_timeout_reached(self):
+        with self.lock:
+            current_mode = self.get_mode()
+            if current_mode == "clock":
+                self.logger.debug("ModeManager: Idle timeout => to_screensaver.")
+                self.to_screensaver()
+            else:
+                self.logger.debug(
+                    f"ModeManager: Idle in '{current_mode}', not going to screensaver."
+                )
+
+
+    # ------------------------------------------------------------------
+    #  Transitions definition
+    # ------------------------------------------------------------------
+    def _define_transitions(self):
+        # Quoode-style
+        self.machine.add_transition('to_boot',         source='*', dest='boot')
+        self.machine.add_transition('to_clock',        source='*', dest='clock')
+        self.machine.add_transition('to_screensaver',  source='*', dest='screensaver')
+        self.machine.add_transition('to_screensavermenu', source='*', dest='screensavermenu')
+        self.machine.add_transition('to_displaymenu',  source='*', dest='displaymenu')
+        self.machine.add_transition('to_clockmenu',    source='*', dest='clockmenu')
+        self.machine.add_transition('to_configmenu',    source='*', dest='configmenu')
+        self.machine.add_transition('to_original',     source='*', dest='original')
+        self.machine.add_transition('to_modern',       source='*', dest='modern')
+        self.machine.add_transition('to_systeminfo',   source='*', dest='systeminfo')
+
+        # Quadify-like
+        self.machine.add_transition('to_radiomanager',   source='*', dest='radiomanager')        
+        self.machine.add_transition('to_menu',         source='*', dest='menu')
+        self.machine.add_transition('to_playlists',    source='*', dest='playlists')
+        self.machine.add_transition('to_tidal',        source='*', dest='tidal')
+        self.machine.add_transition('to_qobuz',        source='*', dest='qobuz')
+        self.machine.add_transition('to_library',      source='*', dest='library')
+        self.machine.add_transition('to_usb_library',  source='*', dest='usblibrary')
+        self.machine.add_transition('to_spotify',      source='*', dest='spotify')
+        self.machine.add_transition('to_webradio',     source='*', dest='webradio')
+
+    # ------------------------------------------------------------------
+    #  Expose the transitions
+    # ------------------------------------------------------------------
+    def trigger(self, event_name, **kwargs):
+        self.machine.trigger(event_name, **kwargs)
+
+    # ------------------------------------------------------------------
+    #  Helpers
+    # ------------------------------------------------------------------
+    def get_mode(self):
+        return self.state
+
+    # ------------------------------------------------------------------
+    #  State Entry Methods
+    # ------------------------------------------------------------------
+    def enter_boot(self, event):
+        self.logger.info("ModeManager: Entering 'boot' state. Do any boot-time tasks here...")
+
+    def enter_clock(self, event):
+        self.logger.info("ModeManager: Entering 'clock' mode.")
+        # Stop other managers or screens
+        if self.menu_manager and self.menu_manager.is_active:
+            self.menu_manager.stop_mode()
+        if self.config_menu and self.config_menu.is_active:
+            self.config_menu.stop_mode()
+        if self.radio_manager and self.radio_manager.is_active:
+            self.radio_manager.stop_mode()
+        if self.clock_menu and self.clock_menu.is_active:
+            self.clock_menu.stop_mode()
+        if self.display_menu and self.display_menu.is_active:
+            self.display_menu.stop_mode()
+        if self.screensaver_menu and self.screensaver_menu.is_active:
+            self.screensaver_menu.stop_mode()
+        if self.system_info_screen and self.system_info_screen.is_active:
+            self.system_info_screen.stop_mode()
+        if self.modern_screen and self.modern_screen.is_active:
+            self.modern_screen.stop_mode()
+        if self.original_screen and self.original_screen.is_active:
+            self.original_screen.stop_mode()
+        if self.screensaver:
+            self.screensaver.stop_screensaver()
+
+        # Start clock
+        if self.clock:
+            self.clock.config = self.config
+            self.clock.start()
+            self.logger.info("ModeManager: Clock started.")
+        else:
+            self.logger.warning("ModeManager: No Clock instance.")
+
+        self.reset_idle_timer()
+
+    def enter_radiomanager(self, event):
+        self.logger.info("ModeManager: Entering 'radiomanager' state.")
+        if self.clock:
+            self.clock.stop()
+        if self.original_screen and self.original_screen.is_active:
+            self.original_screen.stop_mode()
+        if self.modern_screen and self.modern_screen.is_active:
+            self.modern_screen.stop_mode()
+        if self.menu_manager and self.menu_manager.is_active:
+            self.menu_manager.stop_mode()
+        if self.clock_menu and self.clock_menu.is_active:
+            self.clock_menu.stop_mode()
+        if self.display_menu and self.display_menu.is_active:
+            self.display_menu.stop_mode()
+        if self.screensaver_menu and self.screensaver_menu.is_active:
+            self.screensaver_menu.stop_mode()
+        if self.system_info_screen and self.system_info_screen.is_active:
+            self.system_info_screen.stop_mode()
+        if self.screensaver:
+            self.screensaver.stop_screensaver()
+
+        if self.radio_manager:
+            self.radio_manager.start_mode()
+            self.logger.info("ModeManager: RadioManager started.")
+        else:
+            self.logger.warning("ModeManager: No radio_manager set.")
+
+        self.reset_idle_timer()
+
+    def enter_screensaver(self, event):
+        self.logger.info("ModeManager: Entering 'screensaver' state.")
+        # Stop others
+        if self.clock:
+            self.clock.stop()
+        if self.menu_manager and self.menu_manager.is_active:
+            self.menu_manager.stop_mode()
+        if self.config_menu and self.config_menu.is_active:
+            self.config_menu.stop_mode()
+        if self.clock_menu and self.clock_menu.is_active:
+            self.clock_menu.stop_mode()
+        if self.radio_manager and self.radio_manager.is_active:
+            self.radio_manager.stop_mode()
+        if self.display_menu and self.display_menu.is_active:
+            self.display_menu.stop_mode()
+        if self.screensaver_menu and self.screensaver_menu.is_active:
+            self.screensaver_menu.stop_mode()
+        if self.system_info_screen and self.system_info_screen.is_active:
+            self.system_info_screen.stop_mode()
+        if self.original_screen and self.original_screen.is_active:
+            self.original_screen.stop_mode()
+        if self.modern_screen and self.modern_screen.is_active:
+            self.modern_screen.stop_mode()
+
+        if self.screensaver:
+            self.screensaver.start_screensaver()
+            self.logger.info("ModeManager: Screensaver started.")
+        else:
+            self.logger.warning("ModeManager: screensaver is None.")
+
+    def enter_screensavermenu(self, event):
+        self.logger.info("ModeManager: Entering 'screensavermenu' state.")
+        if self.clock:
+            self.clock.stop()
+        if self.menu_manager and self.menu_manager.is_active:
+            self.menu_manager.stop_mode()
+        if self.config_menu and self.config_menu.is_active:
+            self.config_menu.stop_mode()
+        if self.clock_menu and self.clock_menu.is_active:
+            self.clock_menu.stop_mode()
+        if self.radio_manager and self.radio_manager.is_active:
+            self.radio_manager.stop_mode()
+        if self.display_menu and self.display_menu.is_active:
+            self.display_menu.stop_mode()
+        if self.system_info_screen and self.system_info_screen.is_active:
+            self.system_info_screen.stop_mode()
+        if self.original_screen and self.original_screen.is_active:
+            self.original_screen.stop_mode()
+        if self.modern_screen and self.modern_screen.is_active:
+            self.modern_screen.stop_mode()
+        if self.screensaver:
+            self.screensaver.stop_screensaver()
+
+        if self.screensaver_menu:
+            self.screensaver_menu.start_mode()
+            self.logger.info("ModeManager: Screensaver menu started.")
+        else:
+            self.logger.warning("ModeManager: No screensaver_menu set.")
+
+    def enter_displaymenu(self, event):
+        self.logger.info("ModeManager: Entering 'displaymenu' state.")
+        if self.clock:
+            self.clock.stop()
+        if self.menu_manager and self.menu_manager.is_active:
+            self.menu_manager.stop_mode()
+        if self.config_menu and self.config_menu.is_active:
+            self.config_menu.stop_mode()
+        if self.clock_menu and self.clock_menu.is_active:
+            self.clock_menu.stop_mode()
+        if self.radio_manager and self.radio_manager.is_active:
+            self.radio_manager.stop_mode()
+        if self.screensaver_menu and self.screensaver_menu.is_active:
+            self.screensaver_menu.stop_mode()
+        if self.system_info_screen and self.system_info_screen.is_active:
+            self.system_info_screen.stop_mode()
+        if self.original_screen and self.original_screen.is_active:
+            self.original_screen.stop_mode()
+        if self.modern_screen and self.modern_screen.is_active:
+            self.modern_screen.stop_mode()
+        if self.screensaver:
+            self.screensaver.stop_screensaver()
+
+        if self.display_menu:
+            self.display_menu.start_mode()
+            self.logger.info("ModeManager: Display menu started.")
+        else:
+            self.logger.warning("ModeManager: No display_menu set.")
+
+        self.reset_idle_timer()
+
+    def enter_clockmenu(self, event):
+        self.logger.info("ModeManager: Entering 'clockmenu' state.")
+        if self.clock:
+            self.clock.stop()
+        if self.menu_manager and self.menu_manager.is_active:
+            self.menu_manager.stop_mode()
+        if self.config_menu and self.config_menu.is_active:
+            self.config_menu.stop_mode()
+        if self.display_menu and self.display_menu.is_active:
+            self.display_menu.stop_mode()
+        if self.radio_manager and self.radio_manager.is_active:
+            self.radio_manager.stop_mode()
+        if self.screensaver_menu and self.screensaver_menu.is_active:
+            self.screensaver_menu.stop_mode()
+        if self.system_info_screen and self.system_info_screen.is_active:
+            self.system_info_screen.stop_mode()
+        if self.original_screen and self.original_screen.is_active:
+            self.original_screen.stop_mode()
+        if self.modern_screen and self.modern_screen.is_active:
+            self.modern_screen.stop_mode()
+        if self.screensaver:
+            self.screensaver.stop_screensaver()
+
+        if self.clock_menu:
+            self.clock_menu.start_mode()
+            self.logger.info("ModeManager: Clock menu started.")
+        else:
+            self.logger.warning("ModeManager: No clock_menu set.")
+
+        self.reset_idle_timer()
+
+    def enter_original(self, event):
+        self.logger.info("ModeManager: Entering 'original' playback mode.")
+        if self.clock:
+            self.clock.stop()
+        if self.menu_manager and self.menu_manager.is_active:
+            self.menu_manager.stop_mode()
+        if self.config_menu and self.config_menu.is_active:
+            self.config_menu.stop_mode()
+        if self.clock_menu and self.clock_menu.is_active:
+            self.clock_menu.stop_mode()
+        if self.radio_manager and self.radio_manager.is_active:
+            self.radio_manager.stop_mode()
+        if self.display_menu and self.display_menu.is_active:
+            self.display_menu.stop_mode()
+        if self.screensaver_menu and self.screensaver_menu.is_active:
+            self.screensaver_menu.stop_mode()
+        if self.system_info_screen and self.system_info_screen.is_active:
+            self.system_info_screen.stop_mode()
+        if self.modern_screen and self.modern_screen.is_active:
+            self.modern_screen.stop_mode()
+        if self.screensaver:
+            self.screensaver.stop_screensaver()
+
+        if self.original_screen:
+            self.original_screen.start_mode()
+            self.logger.info("ModeManager: Original screen started.")
+        else:
+            self.logger.warning("ModeManager: No original_screen set.")
+
+        self.reset_idle_timer()
+
+    def enter_modern(self, event):
+        self.logger.info("ModeManager: Entering 'modern' playback mode.")
+        if self.clock:
+            self.clock.stop()
+        if self.menu_manager and self.menu_manager.is_active:
+            self.menu_manager.stop_mode()
+        if self.config_menu and self.config_menu.is_active:
+            self.config_menu.stop_mode()
+        if self.clock_menu and self.clock_menu.is_active:
+            self.clock_menu.stop_mode()
+        if self.radio_manager and self.radio_manager.is_active:
+            self.radio_manager.stop_mode()
+        if self.display_menu and self.display_menu.is_active:
+            self.display_menu.stop_mode()
+        if self.screensaver_menu and self.screensaver_menu.is_active:
+            self.screensaver_menu.stop_mode()
+        if self.system_info_screen and self.system_info_screen.is_active:
+            self.system_info_screen.stop_mode()
+        if self.original_screen and self.original_screen.is_active:
+            self.original_screen.stop_mode()
+        if self.screensaver:
+            self.screensaver.stop_screensaver()
+
+        if self.modern_screen:
+            self.modern_screen.start_mode()
+            self.logger.info("ModeManager: Modern screen started.")
+        else:
+            self.logger.warning("ModeManager: No modern_screen set.")
+
+        self.reset_idle_timer()
+
+    def enter_systeminfo(self, event):
+        self.logger.info("ModeManager: Entering 'systeminfo' mode.")
+        if self.clock:
+            self.clock.stop()
+        if self.menu_manager and self.menu_manager.is_active:
+            self.menu_manager.stop_mode()
+        if self.config_menu and self.config_menu.is_active:
+            self.config_menu.stop_mode()
+        if self.clock_menu and self.clock_menu.is_active:
+            self.clock_menu.stop_mode()
+        if self.radio_manager and self.radio_manager.is_active:
+            self.radio_manager.stop_mode()
+        if self.display_menu and self.display_menu.is_active:
+            self.display_menu.stop_mode()
+        if self.screensaver_menu and self.screensaver_menu.is_active:
+            self.screensaver_menu.stop_mode()
+        if self.original_screen and self.original_screen.is_active:
+            self.original_screen.stop_mode()
+        if self.modern_screen and self.modern_screen.is_active:
+            self.modern_screen.stop_mode()
+        if self.screensaver:
+            self.screensaver.stop_screensaver()
+
+        if self.system_info_screen:
+            self.system_info_screen.start_mode()
+            self.logger.info("ModeManager: SystemInfoScreen started.")
+        else:
+            self.logger.warning("ModeManager: No system_info_screen set.")
+
+        self.reset_idle_timer()
+
+    def enter_menu(self, event):
+        self.logger.info("ModeManager: Entering 'menu' state.")
+        if self.clock:
+            self.clock.stop()
+        if self.original_screen and self.original_screen.is_active:
+            self.original_screen.stop_mode()
+        if self.modern_screen and self.modern_screen.is_active:
+            self.modern_screen.stop_mode()
+        if self.system_info_screen and self.system_info_screen.is_active:
+            self.system_info_screen.stop_mode()
+        if self.radio_manager and self.radio_manager.is_active:
+            self.radio_manager.stop_mode()
+        if self.clock_menu and self.clock_menu.is_active:
+            self.clock_menu.stop_mode()
+        if self.display_menu and self.display_menu.is_active:
+            self.display_menu.stop_mode()
+        if self.screensaver_menu and self.screensaver_menu.is_active:
+            self.screensaver_menu.stop_mode()
+        if self.screensaver:
+            self.screensaver.stop_screensaver()
+
+        if self.menu_manager:
+            self.menu_manager.start_mode()
+            self.logger.info("ModeManager: MenuManager started.")
+        else:
+            self.logger.warning("ModeManager: No menu_manager set.")
+
+        self.reset_idle_timer()
+
+    def enter_playlists(self, event):
+        self.logger.info("ModeManager: Entering 'playlists' state.")
+        if self.clock:
+            self.clock.stop()
+        if self.original_screen and self.original_screen.is_active:
+            self.original_screen.stop_mode()
+        if self.modern_screen and self.modern_screen.is_active:
+            self.modern_screen.stop_mode()
+        if self.menu_manager and self.menu_manager.is_active:
+            self.menu_manager.stop_mode()
+        if self.config_menu and self.config_menu.is_active:
+            self.config_menu.stop_mode()
+        if self.radio_manager and self.radio_manager.is_active:
+            self.radio_manager.stop_mode()
+        if self.clock_menu and self.clock_menu.is_active:
+            self.clock_menu.stop_mode()
+        if self.display_menu and self.display_menu.is_active:
+            self.display_menu.stop_mode()
+        if self.screensaver_menu and self.screensaver_menu.is_active:
+            self.screensaver_menu.stop_mode()
+        if self.system_info_screen and self.system_info_screen.is_active:
+            self.system_info_screen.stop_mode()
+        if self.screensaver:
+            self.screensaver.stop_screensaver()
+
+        if self.playlist_manager:
+            self.playlist_manager.start_mode()
+            self.logger.info("ModeManager: PlaylistManager started.")
+        else:
+            self.logger.warning("ModeManager: No playlist_manager set.")
+
+        self.reset_idle_timer()
+
+    def enter_tidal(self, event):
+        self.logger.info("ModeManager: Entering 'tidal' state.")
+        if self.clock:
+            self.clock.stop()
+        if self.original_screen and self.original_screen.is_active:
+            self.original_screen.stop_mode()
+        if self.modern_screen and self.modern_screen.is_active:
+            self.modern_screen.stop_mode()
+        if self.menu_manager and self.menu_manager.is_active:
+            self.menu_manager.stop_mode()
+        if self.config_menu and self.config_menu.is_active:
+            self.config_menu.stop_mode()
+        if self.radio_manager and self.radio_manager.is_active:
+            self.radio_manager.stop_mode()
+        if self.clock_menu and self.clock_menu.is_active:
+            self.clock_menu.stop_mode()
+        if self.display_menu and self.display_menu.is_active:
+            self.display_menu.stop_mode()
+        if self.screensaver_menu and self.screensaver_menu.is_active:
+            self.screensaver_menu.stop_mode()
+        if self.system_info_screen and self.system_info_screen.is_active:
+            self.system_info_screen.stop_mode()
+        if self.screensaver:
+            self.screensaver.stop_screensaver()
+
+        if self.tidal_manager:
+            self.tidal_manager.start_mode()
+            self.logger.info("ModeManager: TidalManager started.")
+        else:
+            self.logger.warning("ModeManager: No tidal_manager set.")
+
+        self.reset_idle_timer()
+
+    def enter_qobuz(self, event):
+        self.logger.info("ModeManager: Entering 'qobuz' state.")
+        if self.clock:
+            self.clock.stop()
+        if self.original_screen and self.original_screen.is_active:
+            self.original_screen.stop_mode()
+        if self.modern_screen and self.modern_screen.is_active:
+            self.modern_screen.stop_mode()
+        if self.menu_manager and self.menu_manager.is_active:
+            self.menu_manager.stop_mode()
+        if self.config_menu and self.config_menu.is_active:
+            self.config_menu.stop_mode()
+        if self.radio_manager and self.radio_manager.is_active:
+            self.radio_manager.stop_mode()
+        if self.clock_menu and self.clock_menu.is_active:
+            self.clock_menu.stop_mode()
+        if self.display_menu and self.display_menu.is_active:
+            self.display_menu.stop_mode()
+        if self.screensaver_menu and self.screensaver_menu.is_active:
+            self.screensaver_menu.stop_mode()
+        if self.system_info_screen and self.system_info_screen.is_active:
+            self.system_info_screen.stop_mode()
+        if self.screensaver:
+            self.screensaver.stop_screensaver()
+
+        if self.qobuz_manager:
+            self.qobuz_manager.start_mode()
+            self.logger.info("ModeManager: QobuzManager started.")
+        else:
+            self.logger.warning("ModeManager: No qobuz_manager set.")
+
+        self.reset_idle_timer()
+
+    def enter_library(self, event):
+        self.logger.info("ModeManager: Entering 'library' state.")
+        if self.clock:
+            self.clock.stop()
+        if self.original_screen and self.original_screen.is_active:
+            self.original_screen.stop_mode()
+        if self.modern_screen and self.modern_screen.is_active:
+            self.modern_screen.stop_mode()
+        if self.menu_manager and self.menu_manager.is_active:
+            self.menu_manager.stop_mode()
+        if self.config_menu and self.config_menu.is_active:
+            self.config_menu.stop_mode()
+        if self.radio_manager and self.radio_manager.is_active:
+            self.radio_manager.stop_mode()
+        if self.clock_menu and self.clock_menu.is_active:
+            self.clock_menu.stop_mode()
+        if self.display_menu and self.display_menu.is_active:
+            self.display_menu.stop_mode()
+        if self.screensaver_menu and self.screensaver_menu.is_active:
+            self.screensaver_menu.stop_mode()
+        if self.system_info_screen and self.system_info_screen.is_active:
+            self.system_info_screen.stop_mode()
+        if self.screensaver:
+            self.screensaver.stop_screensaver()
+
+        if self.library_manager:
+            start_uri = event.kwargs.get('start_uri')
+            self.library_manager.start_mode(start_uri=start_uri)
+            self.logger.info("ModeManager: LibraryManager started.")
+        else:
+            self.logger.warning("ModeManager: No library_manager set.")
+
+        self.reset_idle_timer()
+
+    def enter_usb_library(self, event):
+        self.logger.info("ModeManager: Entering 'usblibrary' state.")
+        if self.clock:
+            self.clock.stop()
+        if self.original_screen and self.original_screen.is_active:
+            self.original_screen.stop_mode()
+        if self.modern_screen and self.modern_screen.is_active:
+            self.modern_screen.stop_mode()
+        if self.menu_manager and self.menu_manager.is_active:
+            self.menu_manager.stop_mode()
+        if self.config_menu and self.config_menu.is_active:
+            self.config_menu.stop_mode()
+        if self.radio_manager and self.radio_manager.is_active:
+            self.radio_manager.stop_mode()
+        if self.clock_menu and self.clock_menu.is_active:
+            self.clock_menu.stop_mode()
+        if self.display_menu and self.display_menu.is_active:
+            self.display_menu.stop_mode()
+        if self.screensaver_menu and self.screensaver_menu.is_active:
+            self.screensaver_menu.stop_mode()
+        if self.system_info_screen and self.system_info_screen.is_active:
+            self.system_info_screen.stop_mode()
+        if self.screensaver:
+            self.screensaver.stop_screensaver()
+
+        if self.usb_library_manager:
+            start_uri = event.kwargs.get('start_uri')
+            self.usb_library_manager.start_mode(start_uri=start_uri)
+            self.logger.info("ModeManager: USBLibraryManager started.")
+        else:
+            self.logger.warning("ModeManager: No usb_library_manager set.")
+
+        self.reset_idle_timer()
+
+    def enter_spotify(self, event):
+        self.logger.info("ModeManager: Entering 'spotify' state.")
+        if self.clock:
+            self.clock.stop()
+        if self.original_screen and self.original_screen.is_active:
+            self.original_screen.stop_mode()
+        if self.modern_screen and self.modern_screen.is_active:
+            self.modern_screen.stop_mode()
+        if self.menu_manager and self.menu_manager.is_active:
+            self.menu_manager.stop_mode()
+        if self.config_menu and self.config_menu.is_active:
+            self.config_menu.stop_mode()
+        if self.radio_manager and self.radio_manager.is_active:
+            self.radio_manager.stop_mode()
+        if self.clock_menu and self.clock_menu.is_active:
+            self.clock_menu.stop_mode()
+        if self.display_menu and self.display_menu.is_active:
+            self.display_menu.stop_mode()
+        if self.screensaver_menu and self.screensaver_menu.is_active:
+            self.screensaver_menu.stop_mode()
+        if self.system_info_screen and self.system_info_screen.is_active:
+            self.system_info_screen.stop_mode()
+        if self.screensaver:
+            self.screensaver.stop_screensaver()
+
+        if self.spotify_manager:
+            self.spotify_manager.start_mode()
+            self.logger.info("ModeManager: SpotifyManager started.")
+        else:
+            self.logger.warning("ModeManager: No spotify_manager set.")
+
+        self.reset_idle_timer()
+
+    def enter_webradio(self, event):
+        self.logger.info("ModeManager: Entering 'webradio' state.")
+        if self.clock:
+            self.clock.stop()
+        if self.original_screen and self.original_screen.is_active:
+            self.original_screen.stop_mode()
+        if self.modern_screen and self.modern_screen.is_active:
+            self.modern_screen.stop_mode()
+        if self.menu_manager and self.menu_manager.is_active:
+            self.menu_manager.stop_mode()
+        if self.radio_manager and self.radio_manager.is_active:
+            self.radio_manager.stop_mode()
+        if self.clock_menu and self.clock_menu.is_active:
+            self.clock_menu.stop_mode()
+        if self.display_menu and self.display_menu.is_active:
+            self.display_menu.stop_mode()
+        if self.screensaver_menu and self.screensaver_menu.is_active:
+            self.screensaver_menu.stop_mode()
+        if self.system_info_screen and self.system_info_screen.is_active:
+            self.system_info_screen.stop_mode()
+        if self.screensaver:
+            self.screensaver.stop_screensaver()
+
+        if self.webradio_screen:
+            self.webradio_screen.start_mode()
+            self.logger.info("ModeManager: WebRadioScreen started.")
+        else:
+            self.logger.warning("ModeManager: No webradio_screen set.")
+
+        self.reset_idle_timer()
+
+    def enter_configmenu(self, event):
+            self.logger.info("Entering 'configmenu'.")
+            # Stop other screens
+            if self.clock:
+                self.clock.stop()
+            if self.radio_manager and self.radio_manager.is_active:
+                self.radio_manager.stop_mode()
+            # Start a config_menu manager if you like:
+            if self.config_menu:
+                self.config_menu.start_mode()
+
+    def exit_screensaver(self):
+        self.logger.info("ModeManager: Exiting screensaver mode.")
+        if self.screensaver:
+            self.screensaver.stop_screensaver()
+        self.to_clock()
+
+    # ------------------------------------------------------------------
+    #  Playback / Volumio state handling
+    # ------------------------------------------------------------------
     def process_state_change(self, sender, state, **kwargs):
-        """Process playback state changes from Volumio."""
         with self.lock:
             if self.suppress_state_changes:
-                self.logger.debug("ModeManager: State change suppressed.")
+                self.logger.debug("ModeManager: State changes suppressed.")
                 return
 
-            # Extract current status and service
-            status = state.get("status", "").lower()
-            service = state.get("service", "").lower()
-            self.logger.debug(f"ModeManager: Processing state change, Volumio status: {status}, service: {service}")
+            self.logger.debug(f"ModeManager: process_state_change => {state}")
+            status  = state.get('status', '').lower()
+            service = state.get('service', '').lower()
 
-            # Update status tracking
             self.previous_status = self.current_status
-            self.current_status = status
-            self.logger.debug(f"ModeManager: Updated current_status from {self.previous_status} to {self.current_status}")
+            self.current_status  = status
 
-            # Delegate screen activation to ScreenManager
-            if self.screen_manager:
-                self.screen_manager.handle_state_change(status, service)
-            else:
-                self.logger.error("ModeManager: ScreenManager is not set.")
-
-            # Handle transitions for specific status changes
+            # Identify track change from play->stop or stop->play
             if self.previous_status == "play" and self.current_status == "stop":
                 self._handle_track_change()
             elif self.previous_status == "stop" and self.current_status == "play":
                 self._handle_track_resumed()
 
-            # Handle global playback states
+            # Now handle logic for 'play', 'pause', 'stop' in one place
             self._handle_playback_states(status, service)
 
-        self.logger.debug("ModeManager: Completed state change processing.")
+            self.logger.debug("ModeManager: Completed process_state_change.")
 
 
     def _handle_track_change(self):
-        """Handle logic for track change when transitioning from play to stop."""
+        """
+        Possibly the track ended or user pressed stop. 
+        Start a short timer to see if user restarts or if we stay stopped.
+        """
         self.is_track_changing = True
         self.track_change_in_progress = True
-        self.logger.debug("ModeManager: Possible track change detected.")
 
         if not self.pause_stop_timer:
             self.pause_stop_timer = threading.Timer(
-                self.pause_stop_delay, self.switch_to_clock_if_still_stopped_or_paused
+                self.pause_stop_delay,
+                self.switch_to_clock_if_still_stopped_or_paused
             )
             self.pause_stop_timer.start()
             self.logger.debug("ModeManager: Started stop verification timer.")
 
-    def _handle_track_resumed(self):
-        """Handle logic for track resumed when transitioning from stop to play."""
-        self.is_track_changing = False
-        self.track_change_in_progress = False
-        self.logger.debug("ModeManager: Track change completed.")
-
-        if self.pause_stop_timer:
-            self.pause_stop_timer.cancel()
-            self.logger.debug("ModeManager: Canceled stop verification timer.")
-            self.pause_stop_timer = None
 
     def _handle_playback_states(self, status, service):
-        """Handle general playback states like play, pause, or stop."""
         if status == "play":
-            self._cancel_pause_timer()
-            self.is_track_changing = False
-            self.track_change_in_progress = False
-
-            if service == "webradio":
-                self.to_radioplayback()
+            # Go to original/modern
+            if self.config.get("display_mode") == "modern":
+                self.to_modern()
             else:
-                self.to_playback()
+                self.to_original()
+            self.reset_idle_timer()
 
         elif status == "pause":
+            # Optionally wait a short timer to see if user resumes
             self._start_pause_timer()
 
-        elif status == "stop" and not self.track_change_in_progress:
-            self.logger.debug("ModeManager: Playback stopped; switching to clock mode.")
+        elif status == "stop":
+            # User or track ended => revert to clock
+            self.logger.debug("ModeManager: 'stop' => going to clock.")
             self._cancel_pause_timer()
             self.to_clock()
 
-    def _cancel_pause_timer(self):
-        """Cancel the pause/stop timer if running."""
-        if self.pause_stop_timer:
-            self.pause_stop_timer.cancel()
-            self.logger.debug("ModeManager: Canceled existing pause/stop timer.")
-            self.pause_stop_timer = None
+
 
     def _start_pause_timer(self):
-        """Start a timer to switch to clock mode after a delay if not already running."""
+        """If we paused, revert to clock after self.pause_stop_delay unless user resumes."""
         if not self.pause_stop_timer:
             self.pause_stop_timer = threading.Timer(
-                self.pause_stop_delay, self.switch_to_clock_if_still_stopped_or_paused
+                self.pause_stop_delay,  
+                self.switch_to_clock_if_still_stopped_or_paused
             )
             self.pause_stop_timer.start()
             self.logger.debug("ModeManager: Started pause timer.")
         else:
-            self.logger.debug("ModeManager: Pause timer is already running.")
+            self.logger.debug("ModeManager: Pause timer already running.")
+
+
+    def _cancel_pause_timer(self):
+        """Stop the pause/stop timer if it’s active."""
+        if self.pause_stop_timer:
+            self.pause_stop_timer.cancel()
+            self.pause_stop_timer = None
+            self.logger.debug("ModeManager: Canceled pause/stop timer.")
 
 
     def switch_to_clock_if_still_stopped_or_paused(self):
-        """Switch to clock mode if the state is still paused or stopped after a delay."""
+        """
+        After the timer, if we remain paused or stopped, go to clock.
+        Otherwise (if user resumed), do nothing.
+        """
         with self.lock:
-            self.logger.debug(f"ModeManager: Timer expired, current_status is '{self.current_status}'")
             if self.current_status in ["pause", "stop"]:
-                # Only switch to clock if it is still in stop or pause
                 self.to_clock()
-                self.logger.debug("ModeManager: Switched to clock mode after delay.")
+                self.logger.debug("ModeManager: Reverted to clock after pause/stop timer.")
             else:
-                # If playback resumed or state changed, do not switch to clock
-                self.logger.debug("ModeManager: Playback resumed or status changed; staying in current mode.")
+                self.logger.debug("ModeManager: Playback resumed or changed; staying in current mode.")
             self.pause_stop_timer = None
 
 
-    def trigger(self, event_name, **kwargs):
-        """Trigger a state transition using the state machine."""
-        self.machine.trigger(event_name, **kwargs)
+
