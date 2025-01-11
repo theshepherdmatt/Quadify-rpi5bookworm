@@ -1,4 +1,3 @@
-
 # src/managers/menus/display_menu.py
 
 import logging
@@ -11,8 +10,8 @@ class DisplayMenu(BaseManager):
     A text-list menu for picking which display style to use:
       - Modern
       - Original
-      - Contrast
-      - Brightness (added)
+      - Brightness
+      Optionally: A sub-menu for "Modern" to toggle "Spectrum" on/off.
     """
 
     def __init__(
@@ -23,13 +22,6 @@ class DisplayMenu(BaseManager):
         y_offset=2,
         line_spacing=15
     ):
-        """
-        :param display_manager: The DisplayManager controlling the OLED.
-        :param mode_manager:    The ModeManager (for transitions, config, etc.).
-        :param window_size:     Number of text lines visible at once.
-        :param y_offset:        Vertical offset for the first line.
-        :param line_spacing:    Pixels between lines of text.
-        """
         super().__init__(display_manager, None, mode_manager)
 
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -43,7 +35,7 @@ class DisplayMenu(BaseManager):
         self.font_key = "menu_font"
         self.font = self.display_manager.fonts.get(self.font_key) or ImageFont.load_default()
 
-        # Main display menu items (now includes "Brightness")
+        # Main display menu items
         self.display_items = ["Modern", "Original", "Brightness"]
         self.current_index = 0
 
@@ -56,9 +48,10 @@ class DisplayMenu(BaseManager):
         self.last_action_time   = 0
         self.debounce_interval = 0.3
 
-        # If you want sub-menu "stack" logic:
+        # Menu stack if you want sub-sub-menus
         self.menu_stack = []
         self.submenu_active = False
+        self.current_submenu_name = None  # track which submenu we're in
 
     # -------------------------------------------------------
     # Activation / Deactivation
@@ -109,7 +102,7 @@ class DisplayMenu(BaseManager):
 
         old_index = self.current_index
         self.current_index += direction
-        # Clamp
+        # Clamp to valid range
         self.current_index = max(0, min(self.current_index, len(self.display_items) - 1))
 
         if old_index != self.current_index:
@@ -133,7 +126,6 @@ class DisplayMenu(BaseManager):
         selected_name = self.display_items[self.current_index]
         self.logger.info(f"DisplayMenu: Selected => {selected_name}")
 
-        # Main logic
         if not self.submenu_active:
             # ----- Normal top-level selection -----
             if selected_name == "Original":
@@ -146,13 +138,9 @@ class DisplayMenu(BaseManager):
                 self.mode_manager.to_clock()
 
             elif selected_name == "Modern":
-                self.logger.debug("DisplayMenu: Transition to modern screen.")
-                self.mode_manager.config["display_mode"] = "modern"
-                self.mode_manager.set_display_mode("modern")
-                self.mode_manager.save_preferences()
-                self.stop_mode()
-                self.mode_manager.to_clock()
-
+                # Instead of instantly switching,
+                # open a sub-menu to let user pick spectrum on/off.
+                self._open_modern_submenu()
 
             elif selected_name == "Brightness":
                 self.logger.info("DisplayMenu: Opening Brightness sub-menu.")
@@ -163,24 +151,83 @@ class DisplayMenu(BaseManager):
                 self.logger.warning(f"DisplayMenu: Unrecognized option: {selected_name}")
 
         else:
-            # ----- If currently in brightness sub-menu -----
-            # 1) Apply brightness
-            self._handle_brightness_selection(selected_name)
-            # 2) Immediately return user to the clock
-            self.stop_mode()        # Stop this sub-menu
-            self.mode_manager.to_clock()  # Switch to clock
+            # If we're in a sub-menu (e.g. brightness or modern-spectrum),
+            # handle those selections
+            if self.current_submenu_name == "brightness":
+                self._handle_brightness_selection(selected_name)
+                self.stop_mode()
+                self.mode_manager.to_clock()
+
+            elif self.current_submenu_name == "modern_spectrum":
+                # The user is choosing "Spectrum: On" or "Spectrum: Off"
+                self._handle_modern_spectrum_selection(selected_name)
+                # Then we do the actual "modern" transition
+                self.stop_mode()
+                self.mode_manager.to_clock()
+
+    # -------------------------------------------------------
+    #  Modern Sub-Menu (Spectrum On/Off)
+    # -------------------------------------------------------
+    def _open_modern_submenu(self):
+        """
+        After picking 'Modern', ask the user if they want the spectrum
+        (CAVA) On or Off. Then we set 'display_mode' to 'modern'
+        plus set 'cava_enabled' (or your chosen config key).
+        """
+        # Save the current main list
+        self.menu_stack.append((list(self.display_items), self.current_index))
+
+        self.submenu_active = True
+        self.current_submenu_name = "modern_spectrum"
+
+        # We show two options: "Spectrum: Off" / "Spectrum: On"
+        self.display_items = ["Spectrum: Off", "Spectrum: On"]
+        self.current_index = 0
+        self.show_items_list()
+
+    def _handle_modern_spectrum_selection(self, selected_name):
+        """
+        If "Spectrum: On", set config["cava_enabled"] = True
+        If "Spectrum: Off", set config["cava_enabled"] = False
+        Also set 'display_mode' to 'modern'.
+        """
+        self.logger.debug(f"DisplayMenu: modern_spectrum => {selected_name}")
+        # 1) Set display mode = modern
+        self.mode_manager.config["display_mode"] = "modern"
+        self.mode_manager.set_display_mode("modern")
+
+        # 2) Turn CAVA / Spectrum on/off
+        if selected_name == "Spectrum: On":
+            self.mode_manager.config["cava_enabled"] = True
+            self.logger.info("DisplayMenu: Spectrum enabled in modern mode.")
+        else:
+            self.mode_manager.config["cava_enabled"] = False
+            self.logger.info("DisplayMenu: Spectrum disabled in modern mode.")
+
+        # Save
+        self.mode_manager.save_preferences()
+
+        # Optionally re-start or stop the CAVA service here, or do it in the
+        # modern screen's on_enter logic. For example:
+        """
+        import subprocess
+        if self.mode_manager.config["cava_enabled"]:
+            subprocess.run(["sudo", "systemctl", "start", "cava"])
+        else:
+            subprocess.run(["sudo", "systemctl", "stop", "cava"])
+        """
+
+        # Return to main list or exit
+        self._close_submenu_and_return()
 
     # -------------------------------------------------------
     #  Brightness Sub-Menu
     # -------------------------------------------------------
     def _open_brightness_submenu(self):
-        """
-        Replace current list items with brightness levels,
-        remembering old items for a 'back' or direct return.
-        """
         # Save current state
         self.menu_stack.append((list(self.display_items), self.current_index))
         self.submenu_active = True
+        self.current_submenu_name = "brightness"
 
         # Now show 3 levels
         self.display_items = ["Low", "Medium", "High"]
@@ -192,7 +239,6 @@ class DisplayMenu(BaseManager):
         User picked "Low", "Medium", or "High". Apply contrast, then return.
         """
         self.logger.debug(f"DisplayMenu: Brightness sub-menu => {selected_level}")
-        # Simple mapping
         brightness_map = {
             "Low":    50,
             "Medium": 150,
@@ -200,7 +246,6 @@ class DisplayMenu(BaseManager):
         }
         val = brightness_map.get(selected_level, 150)
 
-        # Apply immediately if your display_manager.oled supports .contrast()
         try:
             if hasattr(self.display_manager.oled, "contrast"):
                 self.display_manager.oled.contrast(val)
@@ -210,23 +255,21 @@ class DisplayMenu(BaseManager):
         except Exception as e:
             self.logger.error(f"DisplayMenu: Failed to set brightness => {e}")
 
-        # (Optional) Save to config so it’s remembered
         self.mode_manager.config["oled_brightness"] = val
         self.mode_manager.save_preferences()
 
-        # Return to main list or auto-exit
         self._close_submenu_and_return()
 
     def _close_submenu_and_return(self):
         """
-        Restore the old list items from the stack, if you want to remain in DisplayMenu,
-        or just exit to clock.
+        Restore the old list items from the stack, or exit if none.
         """
         if self.menu_stack:
             old_items, old_index = self.menu_stack.pop()
             self.display_items  = old_items
             self.current_index  = old_index
             self.submenu_active = False
+            self.current_submenu_name = None
             self.show_items_list()
         else:
             # no previous => just exit

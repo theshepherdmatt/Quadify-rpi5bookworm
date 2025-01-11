@@ -73,7 +73,8 @@ class ModeManager:
             "screensaver_enabled",
             "screensaver_type",
             "screensaver_timeout",
-            "oled_brightness"
+            "oled_brightness",
+            "cava_enabled"
         ):
             self.config[key] = preferences[key]
 
@@ -171,7 +172,9 @@ class ModeManager:
             "screensaver_enabled",
             "screensaver_type",
             "screensaver_timeout",
-            "oled_brightness"
+            "oled_brightness",
+            "cava_enabled"
+            
         ):
             # If it’s in our config, put it in data
             if key in self.config:
@@ -207,6 +210,7 @@ class ModeManager:
             "screensaver_type": "none",
             "screensaver_timeout": 120,
             "oled_brightness": 100,
+            "cava_enabled": False,
         }
 
         # Load preferences from file if it exists
@@ -589,10 +593,12 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No original_screen set.")
 
-        self.reset_idle_timer()
+
 
     def enter_modern(self, event):
         self.logger.info("ModeManager: Entering 'modern' playback mode.")
+
+        # Stop other screens/managers
         if self.clock:
             self.clock.stop()
         if self.menu_manager and self.menu_manager.is_active:
@@ -614,13 +620,40 @@ class ModeManager:
         if self.screensaver:
             self.screensaver.stop_screensaver()
 
+        # ---------------------------------------------
+        #  Check if user wants the CAVA spectrum
+        # ---------------------------------------------
+        cava_enabled = self.config.get("cava_enabled", False)
+        import subprocess
+
+        if cava_enabled:
+            self.logger.info("ModeManager: CAVA spectrum is enabled => enabling and starting.")
+            try:
+                # We want it to run at boot => enable it
+                subprocess.run(["sudo", "systemctl", "enable", "cava"], check=True)
+                subprocess.run(["sudo", "systemctl", "start", "cava"], check=True)
+            except subprocess.CalledProcessError as e:
+                self.logger.error(f"ModeManager: Failed to enable/start cava => {e}")
+        else:
+            self.logger.info("ModeManager: CAVA spectrum is disabled => disabling and stopping.")
+            try:
+                # We don’t want it to run at boot => disable it
+                subprocess.run(["sudo", "systemctl", "disable", "cava"], check=True)
+                subprocess.run(["sudo", "systemctl", "stop", "cava"], check=True)
+            except subprocess.CalledProcessError as e:
+                self.logger.error(f"ModeManager: Failed to disable/stop cava => {e}")
+
+        # ---------------------------------------------
+        #  Finally, start the modern screen
+        # ---------------------------------------------
         if self.modern_screen:
             self.modern_screen.start_mode()
             self.logger.info("ModeManager: Modern screen started.")
         else:
             self.logger.warning("ModeManager: No modern_screen set.")
 
-        self.reset_idle_timer()
+
+
 
     def enter_systeminfo(self, event):
         self.logger.info("ModeManager: Entering 'systeminfo' mode.")

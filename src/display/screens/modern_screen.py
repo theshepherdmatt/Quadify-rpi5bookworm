@@ -17,6 +17,7 @@ class ModernScreen(BaseManager):
       - Spectrum visualization (via CAVA FIFO)
       - Progress bar
       - Volume and track info
+      - Service icon (Tidal, Qobuz, etc.)
     """
 
     def __init__(self, display_manager, volumio_listener, mode_manager):
@@ -24,7 +25,7 @@ class ModernScreen(BaseManager):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(logging.DEBUG)
 
-        self.mode_manager    = mode_manager
+        self.mode_manager     = mode_manager
         self.volumio_listener = volumio_listener
 
         # Spectrum / CAVA
@@ -33,10 +34,10 @@ class ModernScreen(BaseManager):
         self.spectrum_bars    = []
 
         # Font references
-        self.font_title   = self.display_manager.fonts.get('song_font', ImageFont.load_default())
-        self.font_artist  = self.display_manager.fonts.get('artist_font', ImageFont.load_default())
-        self.font_info    = self.display_manager.fonts.get('data_font',   ImageFont.load_default())
-        self.font_progress= self.display_manager.fonts.get('progress_bar',ImageFont.load_default())
+        self.font_title    = display_manager.fonts.get('song_font', ImageFont.load_default())
+        self.font_artist   = display_manager.fonts.get('artist_font', ImageFont.load_default())
+        self.font_info     = display_manager.fonts.get('data_font',   ImageFont.load_default())
+        self.font_progress = display_manager.fonts.get('progress_bar',ImageFont.load_default())
 
         # Scrolling
         self.scroll_offset_title  = 0
@@ -50,6 +51,9 @@ class ModernScreen(BaseManager):
         self.update_event    = threading.Event()
         self.stop_event      = threading.Event()
         self.is_active       = False
+
+        # Keep track of the last-known service so if we pause/stop, we can still show the same icon
+        self.previous_service = None
 
         # Display update thread
         self.update_thread = threading.Thread(target=self.update_display_loop, daemon=True)
@@ -105,11 +109,10 @@ class ModernScreen(BaseManager):
                     self.current_state["seek"] = self.current_state.get("seek", 0) + int(elapsed * 1000)
                     last_update_time = time.time()
 
-            # If active & mode == 'modern', draw
+            # If active & mode == 'modern' and we have a current state, let's draw
             if self.is_active and self.mode_manager.get_mode() == 'modern' and self.current_state:
                 self.logger.debug("ModernScreen: drawing updated display.")
                 self.draw_display(self.current_state)
-
 
     # ------------------------------------------------------------------
     #   Start/Stop
@@ -138,7 +141,6 @@ class ModernScreen(BaseManager):
             self.update_thread.start()
             self.logger.debug("ModernScreen: display update thread restarted.")
 
-
     def stop_mode(self):
         """
         Called when leaving 'modern' mode in ModeManager.
@@ -165,7 +167,6 @@ class ModernScreen(BaseManager):
         self.display_manager.clear_screen()
         self.logger.info("ModernScreen: Stopped mode and cleared screen.")
 
-
     # ------------------------------------------------------------------
     #   Spectrum FIFO
     # ------------------------------------------------------------------
@@ -188,7 +189,6 @@ class ModernScreen(BaseManager):
                         self.spectrum_bars = bars
         except Exception as e:
             self.logger.error(f"ModernScreen: error reading FIFO => {e}")
-
 
     # ------------------------------------------------------------------
     #   Scroll & Volume
@@ -243,7 +243,6 @@ class ModernScreen(BaseManager):
         except Exception as e:
             self.logger.error(f"ModernScreen: error adjusting volume => {e}")
 
-
     # ------------------------------------------------------------------
     #   Drawing the screen
     # ------------------------------------------------------------------
@@ -254,28 +253,43 @@ class ModernScreen(BaseManager):
           - Artist/title with scrolling
           - Progress bar
           - Volume & track info
+          - Smaller service icon at bottom-right, near total duration
         """
         base_image = Image.new("RGB", self.display_manager.oled.size, "black")
         draw = ImageDraw.Draw(base_image)
 
-        # 1) Draw spectrum
+        # 1) Possibly override 'service' if trackType says Tidal/Qobuz
+        service  = data.get("service", "default").lower()
+        track_type = data.get("trackType", "").lower()
+        status   = data.get("status", "").lower()
+
+        if service == "mpd" and track_type in ["tidal", "qobuz", "spotify"]:
+            service = track_type
+
+        if status in ["pause", "stop"] and not service:
+            service = self.previous_service or "default"
+        else:
+            if service and service != self.previous_service:
+                self.logger.info(f"ModernScreen: Service changed => {service}")
+            self.previous_service = service or self.previous_service or "default"
+
+        # 2) Draw the spectrum (if enabled)
         self._draw_spectrum(draw)
 
-        # 2) Extract data from Volumio state
+        # 3) Data from Volumio state
         song_title = data.get("title",  "Unknown Title")
         artist_name= data.get("artist", "Unknown Artist")
         seek_ms    = data.get("seek",   0)
         duration_s = data.get("duration", 1)
-        service    = data.get("service", "default")
         samplerate = data.get("samplerate", "N/A")
         bitdepth   = data.get("bitdepth",   "N/A")
         volume     = data.get("volume",     50)
 
-        # Convert seek => seconds
+        # Convert seek => seconds, clamp progress to [0..1]
         seek_s = max(0, seek_ms / 1000)
         progress = max(0.0, min(seek_s / duration_s, 1.0))
 
-        # Time strings
+        # Times
         cur_min = int(seek_s // 60)
         cur_sec = int(seek_s % 60)
         tot_min = int(duration_s // 60)
@@ -283,10 +297,10 @@ class ModernScreen(BaseManager):
         current_time   = f"{cur_min}:{cur_sec:02d}"
         total_duration = f"{tot_min}:{tot_sec:02d}"
 
-        # 3) Artist/title scrolling
+        # 4) Artist/title scrolling
         screen_width, screen_height = self.display_manager.oled.size
         margin        = 5
-        max_text_width= screen_width - 2*margin
+        max_text_width= screen_width - 2 * margin
 
         # Artist
         artist_disp, self.scroll_offset_artist, artist_scrolling = self.update_scroll(
@@ -312,29 +326,35 @@ class ModernScreen(BaseManager):
         title_y = margin + 6
         draw.text((title_x, title_y), title_disp, font=self.font_title, fill="white")
 
-        # 4) Info text: e.g. "48kHz / 16bit"
+        # 5) Info text: e.g. "48kHz / 16bit"
         info_text = f"{samplerate} / {bitdepth}"
         info_w, info_h = self.font_info.getsize(info_text)
         info_x = (screen_width - info_w) // 2
         info_y = margin + 25
         draw.text((info_x, info_y), info_text, font=self.font_info, fill="white")
 
-        # 5) Progress bar
+        # 6) Progress bar + times
         progress_width = int(screen_width * 0.7)
         progress_x = (screen_width - progress_width) // 2
         progress_y = margin + 55
 
-        # Times
+        # Current time (left)
         draw.text((progress_x - 30, progress_y - 9), current_time, font=self.font_info, fill="white")
-        draw.text((progress_x + progress_width + 12, progress_y - 9), total_duration, font=self.font_info, fill="white")
 
-        # Draw the bar
-        draw.line([progress_x, progress_y, progress_x + progress_width, progress_y], fill="white", width=1)
-        # progress indicator
+        # Total duration (right)
+        dur_x = progress_x + progress_width + 12
+        dur_y = progress_y - 9
+        draw.text((dur_x, dur_y), total_duration, font=self.font_info, fill="white")
+
+        # Draw main progress line
+        draw.line([progress_x, progress_y, progress_x + progress_width, progress_y],
+                  fill="white", width=1)
+        # Progress indicator
         indicator_x = progress_x + int(progress_width * progress)
-        draw.line([indicator_x, progress_y - 2, indicator_x, progress_y + 2], fill="white", width=1)
+        draw.line([indicator_x, progress_y - 2, indicator_x, progress_y + 2],
+                  fill="white", width=1)
 
-        # 6) Volume icon & text
+        # 7) Volume icon & text
         volume_icon = self.display_manager.icons.get('volume', self.display_manager.default_icon)
         if volume_icon:
             volume_icon = volume_icon.resize((10, 10), Image.LANCZOS)
@@ -345,33 +365,85 @@ class ModernScreen(BaseManager):
         vol_text_y  = vol_icon_y - 2
         draw.text((vol_text_x, vol_text_y), str(volume), font=self.font_info, fill="white")
 
-        # Show final
+        # ----------------------------------------------------
+        # 8) Place a smaller service icon near total_duration
+        # ----------------------------------------------------
+
+        icon = self.display_manager.icons.get(service)
+        if icon:
+            # Flatten alpha if needed
+            if icon.mode == "RGBA":
+                bg = Image.new("RGB", icon.size, (0, 0, 0))
+                bg.paste(icon, mask=icon.split()[3])
+                icon = bg
+
+            # Resize the icon
+            icon = icon.resize((20, 20), Image.LANCZOS)
+
+            # Measure total_duration text so we can figure out where to place the icon
+            dur_text_w, dur_text_h = draw.textsize(total_duration, font=self.font_info)
+
+            # Example: let user define manual offsets
+            # so you can easily tweak them
+            manual_offset_x = -20   # how far left/right from the text
+            manual_offset_y = -20    # how far up/down from the text
+
+            # So the icon's X is near the end of total_duration text:
+            icon_x = dur_x + dur_text_w + manual_offset_x
+            # and the Y can be around the same line as total_duration, with your manual offset
+            icon_y = dur_y + manual_offset_y
+
+            # Paste it
+            base_image.paste(icon, (icon_x, icon_y))
+
+            self.logger.debug(
+                f"ModernScreen: Pasted service icon '{service}' at ({icon_x}, {icon_y}) "
+                "with manual offsets."
+            )
+        else:
+            self.logger.debug(f"ModernScreen: No icon found for service='{service}' => skipping icon.")
+
+        # Finally, display
         self.display_manager.oled.display(base_image)
         self.logger.debug("ModernScreen: Display updated with 'modern' playback UI.")
 
-
     def _draw_spectrum(self, draw):
         """
-        Simple vertical bar spectrum from self.spectrum_bars.
-        For example, if each bar in range 0..255 => scale to half screen.
+        Draw vertical bar spectrum from self.spectrum_bars, 
+        or a blank region if the user disabled CAVA.
         """
-        bars = self.spectrum_bars
         width, height = self.display_manager.oled.size
+        bar_region_height = height // 2
+        vertical_offset   = -8  # same offset as your bars
+
+        # If user turned off CAVA or the thread isn't running,
+        # fill that region with black to 'clear' any old bars.
+        if (not self.running_spectrum) or (not self.mode_manager.config.get("cava_enabled", False)):
+            y_top = max(0, vertical_offset)
+            y_bottom = min(height, bar_region_height + vertical_offset)
+
+            draw.rectangle(
+                [0, y_top, width, y_bottom],
+                fill="black"
+            )
+            return
+
+        # Otherwise, user wants CAVA => draw bars
+        bars = self.spectrum_bars
         bar_width  = 2
         gap_width  = 3
-        max_height = height // 2
+        max_height = bar_region_height
         start_x    = (width - (len(bars) * (bar_width + gap_width))) // 2
-        vertical_offset = -8  # shift upward if needed
 
         for i, bar in enumerate(bars):
             bar_val = max(0, min(bar, 255))
             bar_h   = int((bar_val / 255.0) * max_height)
-            x1      = start_x + i * (bar_width + gap_width)
-            x2      = x1 + bar_width
-            y1      = height - bar_h + vertical_offset
-            y2      = height + vertical_offset
-            draw.rectangle([x1, y1, x2, y2], fill="#303030")
 
+            x1 = start_x + i * (bar_width + gap_width)
+            x2 = x1 + bar_width
+            y1 = height - bar_h + vertical_offset
+            y2 = height + vertical_offset
+            draw.rectangle([x1, y1, x2, y2], fill="#303030")
 
     # ------------------------------------------------------------------
     #   External Interaction
@@ -385,7 +457,6 @@ class ModernScreen(BaseManager):
             self.draw_display(state)
         else:
             self.logger.warning("ModernScreen: No current volumio state available to display.")
-
 
     def toggle_play_pause(self):
         """Emit Volumio play/pause toggle if connected."""

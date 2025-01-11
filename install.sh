@@ -365,9 +365,9 @@ setup_cava_service() {
     if [[ -f "$LOCAL_CAVA_SERVICE" ]]; then
         run_command "cp \"$LOCAL_CAVA_SERVICE\" \"$CAVA_SERVICE_FILE\""
         run_command "systemctl daemon-reload"
-        run_command "systemctl enable cava.service"
-        run_command "systemctl start cava.service"
-        log_message "success" "CAVA service started."
+        #run_command "systemctl enable cava.service"
+        #run_command "systemctl start cava.service"
+        #log_message "success" "CAVA service started."
     else
         log_message "error" "cava.service not found in /home/volumio/Quadify/service."
     fi
