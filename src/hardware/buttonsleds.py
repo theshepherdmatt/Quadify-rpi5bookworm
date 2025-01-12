@@ -304,9 +304,9 @@ class ButtonsLEDController:
                 self.light_button_led_for(LED.LED7, 0.5)
 
             elif button_id == 8:
-                self.logger.info("Button 8 pressed => restarting 'quoode' service.")
-                subprocess.run(["sudo", "systemctl", "restart", "quoode"], check=False)
-                self.logger.debug("Executed 'systemctl restart quoode'.")
+                self.logger.info("Button 8 pressed => restarting 'quadify' service.")
+                subprocess.run(["sudo", "systemctl", "restart", "quadify"], check=False)
+                self.logger.debug("Executed 'systemctl restart quadify'.")
                 self.light_button_led_for(LED.LED8, 0.5)
 
             else:
