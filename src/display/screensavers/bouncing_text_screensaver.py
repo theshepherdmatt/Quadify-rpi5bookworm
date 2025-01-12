@@ -1,19 +1,18 @@
-# src/display/screensavers/bouncing_text_screensaver.py
-
 import time
 import threading
 from PIL import Image, ImageDraw, ImageFont
 
 class BouncingTextScreensaver:
     """
-    A screensaver that bounces the text "Quoode" around the screen
-    with a small x,y velocity.
+    A screensaver that bounces the text "Quadify" around the screen
+    with a small x, y velocity.
     """
 
-    def __init__(self, display_manager, text="Quadify", update_interval=0.06):
+    def __init__(self, display_manager, text="Quadify", font_key="radio_title", update_interval=0.06):
         """
         :param display_manager:  DisplayManager instance
         :param text:             Which text to bounce
+        :param font_key:         The key to retrieve the font from display_manager.fonts
         :param update_interval:  Delay (in seconds) between frames
         """
         self.display_manager = display_manager
@@ -31,9 +30,8 @@ class BouncingTextScreensaver:
         self.vx = 1   # horizontal speed
         self.vy = 1   # vertical speed
 
-        # Basic font for bouncing text
-        # or retrieve one of your existing fonts from display_manager.fonts
-        self.font = ImageFont.load_default()
+        # Retrieve font from display_manager or fall back to default
+        self.font = display_manager.fonts.get(font_key, ImageFont.load_default())
 
     def start_screensaver(self):
         if self.is_running:
@@ -63,7 +61,7 @@ class BouncingTextScreensaver:
         # 2) Measure text size
         temp_img = Image.new("1", (self.width, self.height))
         draw_temp = ImageDraw.Draw(temp_img)
-        tx, ty, tx2, ty2 = draw_temp.textbbox((0,0), self.text, font=self.font)
+        tx, ty, tx2, ty2 = draw_temp.textbbox((0, 0), self.text, font=self.font)
         text_w = tx2 - tx
         text_h = ty2 - ty
 
