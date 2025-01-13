@@ -696,7 +696,6 @@ class ModeManager:
         
         self.stop_all_screens()
 
-        # Then start config_menu if it exists
         if self.config_menu:
             self.config_menu.start_mode()
             self.logger.info("ModeManager: Config menu started.")
