@@ -3,7 +3,7 @@ Description=CAVA VU Meter - Console-based Audio Visualizer
 After=sound.target
 
 [Service]
-ExecStart=/usr/local/bin/cava -p /home/volumio/cava/config/vu_config
+ExecStart=/usr/local/bin/cava -p /home/volumio/cava/config/config_vumeter
 Restart=always
 RestartSec=3
 User=volumio
