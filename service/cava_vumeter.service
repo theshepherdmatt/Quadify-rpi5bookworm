@@ -1,13 +1,13 @@
 [Unit]
-Description=CAVA for Quadify VU Meter
+Description=CAVA VU Meter - Console-based Audio Visualizer
 After=sound.target
 
 [Service]
-Type=simple
-User=volumio
-# Point to your second config file
-ExecStart=/usr/local/bin/cava -p /home/volumio/cava/config/vu_config
+ExecStart=/usr/local/bin/cava -p /home/volumio/cava/config/config_vumeter
 Restart=always
+RestartSec=3
+User=volumio
+Group=volumio
 
 [Install]
 WantedBy=multi-user.target

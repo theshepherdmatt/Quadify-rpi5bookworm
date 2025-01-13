@@ -613,10 +613,6 @@ class ModeManager:
         self.logger.info("ModeManager: Entering 'menu' state.")
         self.stop_all_screens()
 
-        # Stop both possible CAVA services if they might have been running
-        self.set_cava_service_state(False, service_name="cava")
-        self.set_cava_service_state(False, service_name="cava_vumeter")
-
         if self.menu_manager:
             self.menu_manager.start_mode()
             self.logger.info("ModeManager: MenuManager started.")
@@ -716,12 +712,10 @@ class ModeManager:
 
     def exit_modern(self, event):
         self.logger.info("ModeManager: Exiting 'modern' => stopping cava.service")
-        self.set_cava_service_state(False, "cava")  # stop standard CAVA
         self.display_manager.clear_screen()
 
     def exit_vumeterscreen(self, event):
         self.logger.info("ModeManager: Exiting 'vumeterscreen' => stopping cava_vumeter.service")
-        self.set_cava_service_state(False, "cava_vumeter")
         self.display_manager.clear_screen()
 
     # ------------------------------------------------------------------

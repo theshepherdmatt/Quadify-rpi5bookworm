@@ -422,7 +422,7 @@ setup_cava_service() {
         run_command "cp \"$LOCAL_CAVA_SERVICE\" \"$CAVA_SERVICE_FILE\""
         run_command "systemctl daemon-reload"
         # Optionally enable here if you want it at boot:
-        # run_command "systemctl enable cava.service"
+        run_command "systemctl enable cava.service"
         # run_command "systemctl start cava.service"
         log_message "success" "CAVA service installed. (•‿•)"
     else
@@ -441,7 +441,7 @@ setup_cava_vumeter_service() {
         run_command "cp \"$LOCAL_VUMETER_SERVICE\" \"$CAVA_VUMETER_SERVICE_FILE\""
         run_command "systemctl daemon-reload"
         # Similarly, you could enable this if you want:
-        # run_command "systemctl enable cava_vumeter.service"
+        run_command "systemctl enable cava_vumeter.service"
         # run_command "systemctl start cava_vumeter.service"
         log_message "success" "CAVA VU meter service installed. (ﾉ◕ヮ◕)ﾉ*:･ﾟ✧"
     else
@@ -526,6 +526,7 @@ main() {
     configure_mpd
     install_cava_from_fork
     setup_cava_service
+    setup_cava_vumeter_service
     configure_buttons_leds
     setup_samba
     set_permissions

@@ -1,5 +1,5 @@
 {
-  "display_mode": "modern",
+  "display_mode": "vumeterscreen",
   "clock_font_key": "clock_sans",
   "show_seconds": false,
   "show_date": false,
@@ -7,5 +7,5 @@
   "screensaver_type": "snake",
   "screensaver_timeout": 60,
   "oled_brightness": 50,
-  "cava_enabled": false
+  "cava_enabled": true
 }
