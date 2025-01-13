@@ -53,15 +53,9 @@ log_progress() {
     echo -e "${BLUE}[${CURRENT_STEP}/${TOTAL_STEPS}]${NC} $message"
 }
 
-run_command() {
-    local cmd="$1"
-    eval "$cmd" >> "$LOG_FILE" 2>&1
-    if [ $? -ne 0 ]; then
-        log_message "error" "Command failed: $cmd. Check $LOG_FILE for details."
-        exit 1
-    fi
-}
-
+# ============================
+#  Check Root BEFORE We Call It
+# ============================
 check_root() {
     if [ "$(id -u)" -ne 0 ]; then
         log_message "error" "Please run as root or via sudo."
@@ -70,10 +64,88 @@ check_root() {
 }
 
 # ============================
+#   Quadify-Specific Tips
+# ============================
+TIPS=(
+  "Long-press any button to return home to the clock mode."
+  "Under 'Config', you can switch display modes—Modern, Original, or VU-Screen."
+  "Don’t forget to explore different screensaver types under 'Screensaver' in Config!"
+  "Brightness can be tweaked in Config -> Display for late-night listening."
+  "Quadify: Where code meets Hi-Fi. Check new clock faces in 'Clock' menu!"
+  "Need track info? Modern screen overlays sample rate & bit depth at the bottom."
+  "Help & logs: see install.log or run 'journalctl -u quadify.service'."
+  "Idle logic is improved—no more burnt-in OLED pixels!"
+)
+
+show_random_tip() {
+    local index=$((RANDOM % ${#TIPS[@]}))
+    log_message "info" "Tip: ${TIPS[$index]}"
+}
+
+# ============================
+#   Spinner for Long Commands
+# ============================
+spin() {
+    local pid="$1"          # PID of the command to monitor
+    local delay=0.1         # How fast to update
+    # Four 'frames' of the spinning wheel in Unicode
+    local frames=("◴" "◷" "◶" "◵")
+
+    # Print an initial message, no newline
+    echo -ne "${MAGENTA}Installing... ${NC}"
+
+    # While the process is still alive
+    while kill -0 "$pid" 2>/dev/null; do
+        # Cycle through the frames
+        for frame in "${frames[@]}"; do
+            echo -en "\b${frame}"   # "\b" moves back 1 char, so we overwrite
+            sleep "$delay"
+
+            # If the process ended mid-loop, break early
+            if ! kill -0 "$pid" 2>/dev/null; then
+                break
+            fi
+        done
+    done
+
+    # Clear the spinner char and move to a new line
+    echo -en "\b \n"
+}
+
+
+# ============================
+#   run_command with Spinner
+# ============================
+run_command() {
+    local cmd="$1"
+    echo "Running: $cmd" >> "$LOG_FILE"
+
+    # Start the command in background
+    bash -c "$cmd" >> "$LOG_FILE" 2>&1 &
+    local pid=$!
+
+    # Call spin with that PID
+    spin "$pid"
+
+    # Wait for the process to actually finish and get exit status
+    wait $pid
+    local exit_status=$?
+    if [ $exit_status -ne 0 ]; then
+        log_message "error" "Command failed: $cmd. Check $LOG_FILE for details."
+        exit 1
+    fi
+}
+
+# ============================
+#   Start Script with Banner
+# ============================
+banner
+
+# ============================
 #   System Dependencies
 # ============================
 install_system_dependencies() {
-    log_progress "Installing system-level dependencies..."
+    log_progress "Installing system-level dependencies, this might take a while so put the kettle on..."
 
     run_command "apt-get update"
     run_command "apt-get install -y \
@@ -95,24 +167,27 @@ install_system_dependencies() {
         libssl-dev \
         lsof"
 
-    log_message "success" "System-level dependencies installed."
+    log_message "success" "System-level dependencies installed. (ᵔᴥᵔ)"
+    show_random_tip
 }
 
 upgrade_pip() {
     log_progress "Upgrading pip, setuptools, and wheel..."
     run_command "python3.7 -m pip install --upgrade pip setuptools wheel"
-    log_message "success" "pip, setuptools, and wheel upgraded."
+    log_message "success" "pip, setuptools, and wheel upgraded. (╯°□°）╯︵ ┻━┻ (jk)"
+    show_random_tip
 }
 
 install_python_dependencies() {
-    log_progress "Installing Python dependencies..."
+    log_progress "Installing Python dependencies, please wait..."
 
     # Force-install pycairo first
     run_command "python3.7 -m pip install --upgrade --ignore-installed pycairo"
 
     # Then the rest from requirements.txt
     run_command "python3.7 -m pip install --upgrade --ignore-installed -r /home/volumio/Quadify/requirements.txt"
-    log_message "success" "Python dependencies installed."
+    log_message "success" "Python dependencies installed. (•‿•)"
+    show_random_tip
 }
 
 enable_i2c_spi() {
@@ -156,6 +231,7 @@ enable_i2c_spi() {
             exit 1
         fi
     fi
+    show_random_tip
 }
 
 # ============================
@@ -176,6 +252,7 @@ detect_i2c_address() {
         log_message "success" "MCP23017 found at I2C: 0x$address."
         update_buttonsleds_address "$address"
     fi
+    show_random_tip
 }
 
 update_buttonsleds_address() {
@@ -232,6 +309,7 @@ EOF
     run_command "chown -R volumio:volumio /home/volumio/Quadify"
     run_command "chmod -R 777 /home/volumio/Quadify"
     log_message "success" "Permissions set for /home/volumio/Quadify."
+    show_random_tip
 }
 
 # ============================
@@ -248,11 +326,12 @@ setup_main_service() {
         run_command "systemctl daemon-reload"
         run_command "systemctl enable quadify.service"
         run_command "systemctl start quadify.service"
-        log_message "success" "quadify.service installed and started."
+        log_message "success" "quadify.service installed and started. (ノ^_^)ノ"
     else
         log_message "error" "quadify.service not found in /home/volumio/Quadify/service."
         exit 1
     fi
+    show_random_tip
 }
 
 # ============================
@@ -279,6 +358,7 @@ audio_output {
 
     run_command "systemctl restart mpd"
     log_message "success" "MPD restarted with updated FIFO config."
+    show_random_tip
 }
 
 # ============================
@@ -299,7 +379,7 @@ install_cava_from_fork() {
     CAVA_INSTALL_DIR="/home/volumio/cava"
 
     if check_cava_installed; then
-        log_message "info" "CAVA already installed. Skipping."
+        log_message "info" "CAVA already installed. Skipping. (•_•) ( •_•)>⌐■-■ (⌐■_■)"
         return
     fi
 
@@ -328,32 +408,8 @@ install_cava_from_fork() {
     run_command "cd $CAVA_INSTALL_DIR && ./configure"
     run_command "cd $CAVA_INSTALL_DIR && make"
     run_command "cd $CAVA_INSTALL_DIR && make install"
-    log_message "success" "CAVA installed from fork."
-}
-
-setup_cava_config() {
-    log_progress "Setting up CAVA config..."
-
-    CONFIG_DIR="/home/volumio/.config/cava"
-    CONFIG_FILE="$CONFIG_DIR/config"
-    REPO_CONFIG_FILE="/home/volumio/cava/config/default_config"
-
-    run_command "mkdir -p \"$CONFIG_DIR\""
-
-    if [[ ! -f "$CONFIG_FILE" ]]; then
-        if [[ -f "$REPO_CONFIG_FILE" ]]; then
-            run_command "cp \"$REPO_CONFIG_FILE\" \"$CONFIG_FILE\""
-            log_message "info" "CAVA default config copied."
-        else
-            log_message "error" "No default_config in the cava repo."
-            exit 1
-        fi
-    else
-        log_message "info" "CAVA config already exists at $CONFIG_FILE."
-    fi
-
-    run_command "chown -R volumio:volumio \"$CONFIG_DIR\""
-    log_message "success" "CAVA config setup complete."
+    log_message "success" "CAVA installed from fork. (￣▽￣)ノ"
+    show_random_tip
 }
 
 setup_cava_service() {
@@ -365,12 +421,14 @@ setup_cava_service() {
     if [[ -f "$LOCAL_CAVA_SERVICE" ]]; then
         run_command "cp \"$LOCAL_CAVA_SERVICE\" \"$CAVA_SERVICE_FILE\""
         run_command "systemctl daemon-reload"
-        #run_command "systemctl enable cava.service"
-        #run_command "systemctl start cava.service"
-        #log_message "success" "CAVA service started."
+        # Optionally enable here if you want it at boot:
+        # run_command "systemctl enable cava.service"
+        # run_command "systemctl start cava.service"
+        log_message "success" "CAVA service installed. (•‿•)"
     else
         log_message "error" "cava.service not found in /home/volumio/Quadify/service."
     fi
+    show_random_tip
 }
 
 setup_cava_vumeter_service() {
@@ -382,16 +440,15 @@ setup_cava_vumeter_service() {
     if [[ -f "$LOCAL_VUMETER_SERVICE" ]]; then
         run_command "cp \"$LOCAL_VUMETER_SERVICE\" \"$CAVA_VUMETER_SERVICE_FILE\""
         run_command "systemctl daemon-reload"
-        #run_command "systemctl enable cava_vumeter.service"
-        # Don’t auto-start if you want to start only when user enters VU mode
-        # But if you want it at boot, do:
+        # Similarly, you could enable this if you want:
+        # run_command "systemctl enable cava_vumeter.service"
         # run_command "systemctl start cava_vumeter.service"
-        log_message "success" "CAVA VU meter service installed."
+        log_message "success" "CAVA VU meter service installed. (ﾉ◕ヮ◕)ﾉ*:･ﾟ✧"
     else
         log_message "error" "cava_vumeter.service not found in /home/volumio/Quadify/service."
     fi
+    show_random_tip
 }
-
 
 # ============================
 #   Buttons + LEDs Handling
@@ -438,6 +495,7 @@ configure_buttons_leds() {
         esac
     done
     log_message "success" "Buttons/LEDs configuration complete."
+    show_random_tip
 }
 
 # ============================
@@ -454,9 +512,9 @@ set_permissions() {
 #   Main Installation
 # ============================
 main() {
-    banner
-    log_message "info" "Starting Quadify Installer..."
     check_root
+
+    log_message "info" "Starting Quadify Installer..."
 
     install_system_dependencies
     enable_i2c_spi
@@ -467,13 +525,31 @@ main() {
     setup_main_service
     configure_mpd
     install_cava_from_fork
-    setup_cava_config
     setup_cava_service
     configure_buttons_leds
     setup_samba
     set_permissions
 
-    log_message "success" "Quadify installation complete! Review any warnings above if present."
+    log_message "success" "Quadify installation complete! A reboot is required."
+
+    # Ask user if they'd like to reboot now
+    while true; do
+        read -rp "Reboot now? (y/n) " answer
+        case $answer in
+            [Yy]* )
+                log_message "info" "Rebooting system now. See you on the other side! (ง°ل͜°)ง"
+                reboot
+                exit 0
+                ;;
+            [Nn]* )
+                log_message "info" "Installation finished. Please reboot manually later. ᕕ( ᐛ )ᕗ"
+                break
+                ;;
+            * )
+                log_message "warning" "Please answer y or n."
+                ;;
+        esac
+    done
 }
 
 main
