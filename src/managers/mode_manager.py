@@ -313,12 +313,17 @@ class ModeManager:
     #  IDLE / Screensaver
     # ------------------------------------------------------------------
     def reset_idle_timer(self):
+        # Always refresh self.idle_timeout from the latest config
+        self.idle_timeout = self.config.get("screensaver_timeout", 360)
+
         screensaver_enabled = self.config.get("screensaver_enabled", True)
         if not screensaver_enabled:
             self._cancel_idle_timer()
             return
+
         self._cancel_idle_timer()
         self._start_idle_timer()
+
 
     def _start_idle_timer(self):
         if self.idle_timeout <= 0:
