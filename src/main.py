@@ -15,6 +15,7 @@ from display.screens.clock import Clock
 from hardware.buttonsleds import ButtonsLEDController
 from display.screens.original_screen import OriginalScreen
 from display.screens.modern_screen import ModernScreen
+from display.screens.vumeter_screen import VUMeterScreen
 from display.screens.system_info_screen import SystemInfoScreen
 from display.screensavers.snake_screensaver import SnakeScreensaver
 from display.screensavers.starfield_screensaver import StarfieldScreensaver
@@ -184,6 +185,12 @@ def main():
             volume_change = 10 if direction == 1 else -20
             mode_manager.modern_screen.adjust_volume(volume_change)
             logger.debug(f"ModernScreen: Adjusted volume by {volume_change}")
+
+        elif current_mode == 'vumeterscreen':
+            volume_change = 10 if direction == 1 else -20
+            mode_manager.vumeter_screen.adjust_volume(volume_change)
+            mode_manager.exit_screensaver()
+            logger.debug(f"VUMeterScreen: Adjusted volume by {volume_change}")
 
         elif current_mode == 'webradio':
             volume_change = 10 if direction == 1 else -20

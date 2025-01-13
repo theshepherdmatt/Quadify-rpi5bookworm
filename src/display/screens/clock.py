@@ -126,7 +126,8 @@ class Clock:
         if self.running:
             self.running = False
             self.thread.join()
-            self.display_manager.clear_screen()
+            #self.display_manager.clear_screen()
+            self.logger.warning("clear_screen() called from clock") 
             print("Clock: Stopped.")
 
     def update_clock(self):

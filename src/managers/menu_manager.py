@@ -241,6 +241,11 @@ class MenuManager:
             self.logger.info("MenuManager: Switching to Modern screen.")
             self.mode_manager.to_menu()  # Return to menu after selection
 
+        elif selected_item == "VUScreen":
+            self.mode_manager.to_vuscreen()
+            self.logger.info("MenuManager: Switching to Modern screen.")
+            self.mode_manager.to_menu()  # Return to menu after selection
+
         elif selected_item == "NAS":
             self.mode_manager.to_library(start_uri="music-library/NAS")
             self.logger.info("Library Manager for NAS activated.")

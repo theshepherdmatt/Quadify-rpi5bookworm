@@ -1,0 +1,13 @@
+[Unit]
+Description=CAVA for Quadify VU Meter
+After=sound.target
+
+[Service]
+Type=simple
+User=volumio
+# Point to your second config file
+ExecStart=/usr/local/bin/cava -p /home/volumio/.config/cava/config_vumeter
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

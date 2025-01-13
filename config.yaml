@@ -13,7 +13,11 @@ display:
   icon_dir: "/home/volumio/Quadify/src/assets/images"
   default_album_art: "/home/volumio/Quadify/src/assets/images/webradio.png"
   loading_gif_path: "/home/volumio/Quadify/src/assets/images/Loading.gif"  # Path for loading screen GIF
-  logo_path: "/home/volumio/Quadify/src/assets/images/logo.png"  # Path relative to project root
+  logo_path: "/home/volumio/Quadify/src/assets/images/logo.png"
+  vu_path: "/home/volumio/Quadify/src/assets/images/vu.png"
+  needle_left_path: "/home/volumio/Quadify/src/assets/images/needle_left.png"
+  needle_right_path: "/home/volumio/Quadify/src/assets/images/needle_right.png"
+
   rotation: 2  # Set rotation if needed (0, 90, 180, 270)
   fonts:
     playback_large:

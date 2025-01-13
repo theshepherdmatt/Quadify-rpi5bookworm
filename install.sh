@@ -373,6 +373,26 @@ setup_cava_service() {
     fi
 }
 
+setup_cava_vumeter_service() {
+    log_progress "Setting up CAVA VU Meter service..."
+
+    CAVA_VUMETER_SERVICE_FILE="/etc/systemd/system/cava_vumeter.service"
+    LOCAL_VUMETER_SERVICE="/home/volumio/Quadify/service/cava_vumeter.service"
+
+    if [[ -f "$LOCAL_VUMETER_SERVICE" ]]; then
+        run_command "cp \"$LOCAL_VUMETER_SERVICE\" \"$CAVA_VUMETER_SERVICE_FILE\""
+        run_command "systemctl daemon-reload"
+        run_command "systemctl enable cava_vumeter.service"
+        # Don’t auto-start if you want to start only when user enters VU mode
+        # But if you want it at boot, do:
+        # run_command "systemctl start cava_vumeter.service"
+        log_message "success" "CAVA VU meter service installed."
+    else
+        log_message "error" "cava_vumeter.service not found in /home/volumio/Quadify/service."
+    fi
+}
+
+
 # ============================
 #   Buttons + LEDs Handling
 # ============================

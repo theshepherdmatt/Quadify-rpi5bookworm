@@ -2,6 +2,7 @@ import logging
 import os
 import json
 import threading
+import time
 from transitions import Machine
 
 class ModeManager:
@@ -22,6 +23,7 @@ class ModeManager:
         {'name': 'clockmenu',       'on_enter': 'enter_clockmenu'},
         {'name': 'original',        'on_enter': 'enter_original'},
         {'name': 'modern',          'on_enter': 'enter_modern'},
+        {'name': 'vumeterscreen',   'on_enter': 'enter_vumeterscreen'},
         {'name': 'systeminfo',      'on_enter': 'enter_systeminfo'},
         {'name': 'configmenu',      'on_enter': 'enter_configmenu'},
 
@@ -60,6 +62,12 @@ class ModeManager:
         self.volumio_listener  = volumio_listener
         self.config            = config or {}
 
+        self.last_mode_change_time = 0.0
+        self.min_mode_switch_interval = 0.5  # e.g. 0.5 seconds
+
+        self.logger.debug("ModeManager: Initialized with last_mode_change_time and min_mode_switch_interval")
+
+
         # Preferences path
         script_dir = os.path.dirname(os.path.abspath(__file__))
         self.preference_file_path = os.path.join(script_dir, preference_file_path)
@@ -74,7 +82,7 @@ class ModeManager:
             "screensaver_type",
             "screensaver_timeout",
             "oled_brightness",
-            "cava_enabled"
+            "cava_enabled",
         ):
             self.config[key] = preferences[key]
 
@@ -91,6 +99,7 @@ class ModeManager:
         self.usb_library_manager    = None
         self.original_screen        = None
         self.modern_screen          = None
+        self.vumeter_screen          = None
         self.webradio_screen        = None
         self.screensaver            = None
         self.screensaver_menu       = None
@@ -108,7 +117,7 @@ class ModeManager:
         self.current_status         = None
         self.previous_status        = None
         self.pause_stop_timer       = None
-        self.pause_stop_delay       = 0.5  # e.g. half-second
+        self.pause_stop_delay       = 1.5  # e.g. half-second
 
         self.logger.debug(f"ModeManager: idle_timeout={self.idle_timeout}, display_mode={self.config.get('display_mode')}")
 
@@ -190,7 +199,7 @@ class ModeManager:
 
 
     def set_display_mode(self, mode_name):
-        if mode_name in ("original", "modern"):
+        if mode_name in ("original", "modern", "vumeterscreen"):
             self.config["display_mode"] = mode_name
             self.logger.info(f"ModeManager: Display mode set to '{mode_name}'.")
             self.save_preferences()
@@ -199,8 +208,6 @@ class ModeManager:
 
 
     def _load_preferences(self):
-        """Load all preferences from the preference.json file or use defaults."""
-        # Default preferences
         default_preferences = {
             "display_mode": "original",
             "clock_font_key": "default",
@@ -211,14 +218,13 @@ class ModeManager:
             "screensaver_timeout": 120,
             "oled_brightness": 100,
             "cava_enabled": False,
+
         }
 
-        # Load preferences from file if it exists
         if os.path.exists(self.preference_file_path):
             try:
                 with open(self.preference_file_path, "r") as f:
                     file_preferences = json.load(f)
-                    # Merge loaded preferences with defaults
                     default_preferences.update(file_preferences)
                     self.logger.info(f"Loaded preferences: {default_preferences}")
             except (json.JSONDecodeError, IOError) as e:
@@ -264,6 +270,9 @@ class ModeManager:
 
     def set_modern_screen(self, modern_screen):
         self.modern_screen = modern_screen
+
+    def set_vumeter_screen(self, vumeter_screen):
+        self.vumeter_screen = vumeter_screen
 
     def set_webradio_screen(self, webradio_screen):
         self.webradio_screen = webradio_screen
@@ -349,6 +358,7 @@ class ModeManager:
         self.machine.add_transition('to_configmenu',    source='*', dest='configmenu')
         self.machine.add_transition('to_original',     source='*', dest='original')
         self.machine.add_transition('to_modern',       source='*', dest='modern')
+        self.machine.add_transition('to_vumeterscreen', source='*', dest='vumeterscreen')
         self.machine.add_transition('to_systeminfo',   source='*', dest='systeminfo')
 
         # Quadify-like
@@ -399,6 +409,8 @@ class ModeManager:
             self.system_info_screen.stop_mode()
         if self.modern_screen and self.modern_screen.is_active:
             self.modern_screen.stop_mode()
+        if self.vumeter_screen and self.vumeter_screen.is_active:
+            self.vumeter_screen.stop_mode()
         if self.original_screen and self.original_screen.is_active:
             self.original_screen.stop_mode()
         if self.screensaver:
@@ -422,6 +434,8 @@ class ModeManager:
             self.original_screen.stop_mode()
         if self.modern_screen and self.modern_screen.is_active:
             self.modern_screen.stop_mode()
+        if self.vumeter_screen and self.vumeter_screen.is_active:
+            self.vumeter_screen.stop_mode()
         if self.menu_manager and self.menu_manager.is_active:
             self.menu_manager.stop_mode()
         if self.clock_menu and self.clock_menu.is_active:
@@ -466,6 +480,8 @@ class ModeManager:
             self.original_screen.stop_mode()
         if self.modern_screen and self.modern_screen.is_active:
             self.modern_screen.stop_mode()
+        if self.vumeter_screen and self.vumeter_screen.is_active:
+            self.vumeter_screen.stop_mode()
 
         if self.screensaver:
             self.screensaver.start_screensaver()
@@ -493,6 +509,8 @@ class ModeManager:
             self.original_screen.stop_mode()
         if self.modern_screen and self.modern_screen.is_active:
             self.modern_screen.stop_mode()
+        if self.vumeter_screen and self.vumeter_screen.is_active:
+            self.vumeter_screen.stop_mode()
         if self.screensaver:
             self.screensaver.stop_screensaver()
 
@@ -522,6 +540,8 @@ class ModeManager:
             self.original_screen.stop_mode()
         if self.modern_screen and self.modern_screen.is_active:
             self.modern_screen.stop_mode()
+        if self.vumeter_screen and self.vumeter_screen.is_active:
+            self.vumeter_screen.stop_mode()
         if self.screensaver:
             self.screensaver.stop_screensaver()
 
@@ -553,6 +573,8 @@ class ModeManager:
             self.original_screen.stop_mode()
         if self.modern_screen and self.modern_screen.is_active:
             self.modern_screen.stop_mode()
+        if self.vumeter_screen and self.vumeter_screen.is_active:
+            self.vumeter_screen.stop_mode()
         if self.screensaver:
             self.screensaver.stop_screensaver()
 
@@ -584,6 +606,8 @@ class ModeManager:
             self.system_info_screen.stop_mode()
         if self.modern_screen and self.modern_screen.is_active:
             self.modern_screen.stop_mode()
+        if self.vumeter_screen and self.vumeter_screen.is_active:
+            self.vumeter_screen.stop_mode()
         if self.screensaver:
             self.screensaver.stop_screensaver()
 
@@ -653,8 +677,6 @@ class ModeManager:
             self.logger.warning("ModeManager: No modern_screen set.")
 
 
-
-
     def enter_systeminfo(self, event):
         self.logger.info("ModeManager: Entering 'systeminfo' mode.")
         if self.clock:
@@ -675,6 +697,8 @@ class ModeManager:
             self.original_screen.stop_mode()
         if self.modern_screen and self.modern_screen.is_active:
             self.modern_screen.stop_mode()
+        if self.vumeter_screen and self.vumeter_screen.is_active:
+            self.vumeter_screen.stop_mode()
         if self.screensaver:
             self.screensaver.stop_screensaver()
 
@@ -694,6 +718,8 @@ class ModeManager:
             self.original_screen.stop_mode()
         if self.modern_screen and self.modern_screen.is_active:
             self.modern_screen.stop_mode()
+        if self.vumeter_screen and self.vumeter_screen.is_active:
+            self.vumeter_screen.stop_mode()
         if self.system_info_screen and self.system_info_screen.is_active:
             self.system_info_screen.stop_mode()
         if self.radio_manager and self.radio_manager.is_active:
@@ -723,6 +749,8 @@ class ModeManager:
             self.original_screen.stop_mode()
         if self.modern_screen and self.modern_screen.is_active:
             self.modern_screen.stop_mode()
+        if self.vumeter_screen and self.vumeter_screen.is_active:
+            self.vumeter_screen.stop_mode()
         if self.menu_manager and self.menu_manager.is_active:
             self.menu_manager.stop_mode()
         if self.config_menu and self.config_menu.is_active:
@@ -756,6 +784,8 @@ class ModeManager:
             self.original_screen.stop_mode()
         if self.modern_screen and self.modern_screen.is_active:
             self.modern_screen.stop_mode()
+        if self.vumeter_screen and self.vumeter_screen.is_active:
+            self.vumeter_screen.stop_mode()
         if self.menu_manager and self.menu_manager.is_active:
             self.menu_manager.stop_mode()
         if self.config_menu and self.config_menu.is_active:
@@ -789,6 +819,8 @@ class ModeManager:
             self.original_screen.stop_mode()
         if self.modern_screen and self.modern_screen.is_active:
             self.modern_screen.stop_mode()
+        if self.vumeter_screen and self.vumeter_screen.is_active:
+            self.vumeter_screen.stop_mode()
         if self.menu_manager and self.menu_manager.is_active:
             self.menu_manager.stop_mode()
         if self.config_menu and self.config_menu.is_active:
@@ -822,6 +854,8 @@ class ModeManager:
             self.original_screen.stop_mode()
         if self.modern_screen and self.modern_screen.is_active:
             self.modern_screen.stop_mode()
+        if self.vumeter_screen and self.vumeter_screen.is_active:
+            self.vumeter_screen.stop_mode()
         if self.menu_manager and self.menu_manager.is_active:
             self.menu_manager.stop_mode()
         if self.config_menu and self.config_menu.is_active:
@@ -856,6 +890,8 @@ class ModeManager:
             self.original_screen.stop_mode()
         if self.modern_screen and self.modern_screen.is_active:
             self.modern_screen.stop_mode()
+        if self.vumeter_screen and self.vumeter_screen.is_active:
+            self.vumeter_screen.stop_mode()
         if self.menu_manager and self.menu_manager.is_active:
             self.menu_manager.stop_mode()
         if self.config_menu and self.config_menu.is_active:
@@ -890,6 +926,8 @@ class ModeManager:
             self.original_screen.stop_mode()
         if self.modern_screen and self.modern_screen.is_active:
             self.modern_screen.stop_mode()
+        if self.vumeter_screen and self.vumeter_screen.is_active:
+            self.vumeter_screen.stop_mode()
         if self.menu_manager and self.menu_manager.is_active:
             self.menu_manager.stop_mode()
         if self.config_menu and self.config_menu.is_active:
@@ -913,7 +951,6 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No spotify_manager set.")
 
-        self.reset_idle_timer()
 
     def enter_webradio(self, event):
         self.logger.info("ModeManager: Entering 'webradio' state.")
@@ -923,6 +960,8 @@ class ModeManager:
             self.original_screen.stop_mode()
         if self.modern_screen and self.modern_screen.is_active:
             self.modern_screen.stop_mode()
+        if self.vumeter_screen and self.vumeter_screen.is_active:
+            self.vumeter_screen.stop_mode()
         if self.menu_manager and self.menu_manager.is_active:
             self.menu_manager.stop_mode()
         if self.radio_manager and self.radio_manager.is_active:
@@ -944,7 +983,41 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No webradio_screen set.")
 
-        self.reset_idle_timer()
+
+    def enter_vumeterscreen(self, event):
+        self.logger.info("ModeManager: Entering 'vumeter_screen' state.")
+
+        if self.clock:
+            self.clock.stop()
+        if self.original_screen and self.original_screen.is_active:
+            self.original_screen.stop_mode()
+        if self.modern_screen and self.modern_screen.is_active:
+            self.modern_screen.stop_mode()
+        if self.webradio_screen and self.webradio_screen.is_active:
+            self.webradio_screen.stop_mode()
+        if self.menu_manager and self.menu_manager.is_active:
+            self.menu_manager.stop_mode()
+        if self.radio_manager and self.radio_manager.is_active:
+            self.radio_manager.stop_mode()
+        if self.clock_menu and self.clock_menu.is_active:
+            self.clock_menu.stop_mode()
+        if self.display_menu and self.display_menu.is_active:
+            self.display_menu.stop_mode()
+        if self.screensaver_menu and self.screensaver_menu.is_active:
+            self.screensaver_menu.stop_mode()
+        if self.system_info_screen and self.system_info_screen.is_active:
+            self.system_info_screen.stop_mode()
+        if self.screensaver:
+            self.screensaver.stop_screensaver()
+
+        # 3) Now start the VU meter
+        if self.vumeter_screen:
+            self.vumeter_screen.start_mode()
+            self.logger.info("ModeManager: VUMeterScreen started.")
+        else:
+            self.logger.warning("ModeManager: No vumeter_screen set.")
+
+
 
     def enter_configmenu(self, event):
             self.logger.info("Entering 'configmenu'.")
@@ -982,8 +1055,6 @@ class ModeManager:
             # Identify track change from play->stop or stop->play
             if self.previous_status == "play" and self.current_status == "stop":
                 self._handle_track_change()
-            elif self.previous_status == "stop" and self.current_status == "play":
-                self._handle_track_resumed()
 
             # Now handle logic for 'play', 'pause', 'stop' in one place
             self._handle_playback_states(status, service)
@@ -1008,38 +1079,65 @@ class ModeManager:
             self.logger.debug("ModeManager: Started stop verification timer.")
 
 
+
     def _handle_playback_states(self, status, service):
+        now = time.time()
+        desired_mode = self.config.get("display_mode", "original")
+
+        # 1) If too soon since last mode switch, skip
+        if (now - self.last_mode_change_time) < self.min_mode_switch_interval:
+            self.logger.debug("ModeManager: Ignoring rapid consecutive playback-state => no mode switch.")
+            return
+
         if status == "play":
-            # Go to original/modern
-            if self.config.get("display_mode") == "modern":
-                self.to_modern()
+            # 2) Check if we're already in the correct mode
+            current_mode = self.get_mode()  # e.g. "vumeterscreen", "modern", etc.
+
+            if desired_mode == "vumeterscreen":
+                if current_mode == "vumeterscreen":
+                    self.logger.debug("ModeManager: Already in vumeterscreen, skipping transition.")
+                else:
+                    self.to_vumeterscreen()
+                    self.last_mode_change_time = now
+
+            elif desired_mode == "modern":
+                if current_mode == "modern":
+                    self.logger.debug("ModeManager: Already in modern, skipping transition.")
+                else:
+                    self.to_modern()
+                    self.last_mode_change_time = now
+
             else:
-                self.to_original()
+                # default to original
+                if current_mode == "original":
+                    self.logger.debug("ModeManager: Already in original, skipping transition.")
+                else:
+                    self.to_original()
+                    self.last_mode_change_time = now
+
             self.reset_idle_timer()
 
         elif status == "pause":
-            # Optionally wait a short timer to see if user resumes
+            # (whatever logic you already have)
             self._start_pause_timer()
-
-        elif status == "stop":
-            # User or track ended => revert to clock
-            self.logger.debug("ModeManager: 'stop' => going to clock.")
-            self._cancel_pause_timer()
-            self.to_clock()
 
 
 
     def _start_pause_timer(self):
-        """If we paused, revert to clock after self.pause_stop_delay unless user resumes."""
+        """
+        If we just paused or stopped, revert to clock
+        after self.pause_stop_delay unless user resumes.
+        """
         if not self.pause_stop_timer:
             self.pause_stop_timer = threading.Timer(
-                self.pause_stop_delay,  
+                self.pause_stop_delay,
                 self.switch_to_clock_if_still_stopped_or_paused
             )
             self.pause_stop_timer.start()
-            self.logger.debug("ModeManager: Started pause timer.")
+            self.logger.debug("ModeManager: Started pause/stop timer.")
         else:
-            self.logger.debug("ModeManager: Pause timer already running.")
+            self.logger.debug("ModeManager: pause/stop timer already running.")
+
 
 
     def _cancel_pause_timer(self):
@@ -1051,10 +1149,6 @@ class ModeManager:
 
 
     def switch_to_clock_if_still_stopped_or_paused(self):
-        """
-        After the timer, if we remain paused or stopped, go to clock.
-        Otherwise (if user resumed), do nothing.
-        """
         with self.lock:
             if self.current_status in ["pause", "stop"]:
                 self.to_clock()
@@ -1062,6 +1156,7 @@ class ModeManager:
             else:
                 self.logger.debug("ModeManager: Playback resumed or changed; staying in current mode.")
             self.pause_stop_timer = None
+
 
 
 
