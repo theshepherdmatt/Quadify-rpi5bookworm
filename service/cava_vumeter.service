@@ -1,5 +1,5 @@
 [Unit]
-Description=CAVA - Console-based Audio Visualizer
+Description=CAVA VU Meter - Console-based Audio Visualizer
 After=sound.target
 
 [Service]
