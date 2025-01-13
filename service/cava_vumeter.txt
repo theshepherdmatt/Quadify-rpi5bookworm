@@ -6,7 +6,7 @@ After=sound.target
 Type=simple
 User=volumio
 # Point to your second config file
-ExecStart=/usr/local/bin/cava -p /home/volumio/.config/cava/config_vumeter
+ExecStart=/usr/local/bin/cava -p /home/volumio/cava/config/vu_config
 Restart=always
 
 [Install]

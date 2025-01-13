@@ -1,10 +1,10 @@
 {
-  "display_mode": "vumeterscreen",
+  "display_mode": "modern",
   "clock_font_key": "clock_sans",
   "show_seconds": false,
   "show_date": false,
   "screensaver_enabled": true,
-  "screensaver_type": "quadify",
+  "screensaver_type": "none",
   "screensaver_timeout": 60,
   "oled_brightness": 50,
   "cava_enabled": false

@@ -382,7 +382,7 @@ setup_cava_vumeter_service() {
     if [[ -f "$LOCAL_VUMETER_SERVICE" ]]; then
         run_command "cp \"$LOCAL_VUMETER_SERVICE\" \"$CAVA_VUMETER_SERVICE_FILE\""
         run_command "systemctl daemon-reload"
-        run_command "systemctl enable cava_vumeter.service"
+        #run_command "systemctl enable cava_vumeter.service"
         # Don’t auto-start if you want to start only when user enters VU mode
         # But if you want it at boot, do:
         # run_command "systemctl start cava_vumeter.service"
