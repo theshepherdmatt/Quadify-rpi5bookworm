@@ -83,57 +83,20 @@ show_random_tip() {
 }
 
 # ============================
-#   Spinner for Long Commands
-# ============================
-spin() {
-    local pid="$1"          # PID of the command to monitor
-    local delay=0.1         # How fast to update
-    # Four 'frames' of the spinning wheel in Unicode
-    local frames=("◴" "◷" "◶" "◵")
-
-    # Print an initial message, no newline
-    echo -ne "${MAGENTA}Installing... ${NC}"
-
-    # While the process is still alive
-    while kill -0 "$pid" 2>/dev/null; do
-        # Cycle through the frames
-        for frame in "${frames[@]}"; do
-            echo -en "\b${frame}"   # "\b" moves back 1 char, so we overwrite
-            sleep "$delay"
-
-            # If the process ended mid-loop, break early
-            if ! kill -0 "$pid" 2>/dev/null; then
-                break
-            fi
-        done
-    done
-
-    # Clear the spinner char and move to a new line
-    echo -en "\b \n"
-}
-
-
-# ============================
-#   run_command with Spinner
+#   run_command with Minimal Output
 # ============================
 run_command() {
     local cmd="$1"
     echo "Running: $cmd" >> "$LOG_FILE"
 
-    # Start the command in background
-    bash -c "$cmd" >> "$LOG_FILE" 2>&1 &
-    local pid=$!
-
-    # Call spin with that PID
-    spin "$pid"
-
-    # Wait for the process to actually finish and get exit status
-    wait $pid
+    echo -e "${MAGENTA}Running command...${NC}"
+    bash -c "$cmd" >> "$LOG_FILE" 2>&1
     local exit_status=$?
     if [ $exit_status -ne 0 ]; then
         log_message "error" "Command failed: $cmd. Check $LOG_FILE for details."
         exit 1
     fi
+    echo -e "${GREEN}Done.${NC}"
 }
 
 # ============================
@@ -174,7 +137,7 @@ install_system_dependencies() {
 upgrade_pip() {
     log_progress "Upgrading pip, setuptools, and wheel..."
     run_command "python3.7 -m pip install --upgrade pip setuptools wheel"
-    log_message "success" "pip, setuptools, and wheel upgraded. (╯°□°）╯︵ ┻━┻ (jk)"
+    log_message "success" "pip, setuptools, and wheel upgraded."
     show_random_tip
 }
 
@@ -379,7 +342,7 @@ install_cava_from_fork() {
     CAVA_INSTALL_DIR="/home/volumio/cava"
 
     if check_cava_installed; then
-        log_message "info" "CAVA already installed. Skipping. (•_•) ( •_•)>⌐■-■ (⌐■_■)"
+        log_message "info" "CAVA already installed. Skipping."
         return
     fi
 
@@ -408,7 +371,7 @@ install_cava_from_fork() {
     run_command "cd $CAVA_INSTALL_DIR && ./configure"
     run_command "cd $CAVA_INSTALL_DIR && make"
     run_command "cd $CAVA_INSTALL_DIR && make install"
-    log_message "success" "CAVA installed from fork. (￣▽￣)ノ"
+    log_message "success" "CAVA installed from fork."
     show_random_tip
 }
 
@@ -421,10 +384,9 @@ setup_cava_service() {
     if [[ -f "$LOCAL_CAVA_SERVICE" ]]; then
         run_command "cp \"$LOCAL_CAVA_SERVICE\" \"$CAVA_SERVICE_FILE\""
         run_command "systemctl daemon-reload"
-        # Optionally enable here if you want it at boot:
         run_command "systemctl enable cava.service"
-        # run_command "systemctl start cava.service"
-        log_message "success" "CAVA service installed. (•‿•)"
+        # run_command "systemctl start cava.service"  # Optionally start here
+        log_message "success" "CAVA service installed."
     else
         log_message "error" "cava.service not found in /home/volumio/Quadify/service."
     fi
@@ -440,10 +402,9 @@ setup_cava_vumeter_service() {
     if [[ -f "$LOCAL_VUMETER_SERVICE" ]]; then
         run_command "cp \"$LOCAL_VUMETER_SERVICE\" \"$CAVA_VUMETER_SERVICE_FILE\""
         run_command "systemctl daemon-reload"
-        # Similarly, you could enable this if you want:
         run_command "systemctl enable cava_vumeter.service"
-        # run_command "systemctl start cava_vumeter.service"
-        log_message "success" "CAVA VU meter service installed. (ﾉ◕ヮ◕)ﾉ*:･ﾟ✧"
+        # run_command "systemctl start cava_vumeter.service"  # Optionally start here
+        log_message "success" "CAVA VU meter service installed."
     else
         log_message "error" "cava_vumeter.service not found in /home/volumio/Quadify/service."
     fi
@@ -454,7 +415,8 @@ setup_cava_vumeter_service() {
 #   Buttons + LEDs Handling
 # ============================
 configure_buttons_leds() {
-    log_progress "Configuring Buttons and LEDs..."
+    # If user doesn't want buttons/LEDs, we just comment them out
+    # If user wants them, we do detection + uncomment
 
     MAIN_PY_PATH="/home/volumio/Quadify/src/main.py"
     if [[ ! -f "$MAIN_PY_PATH" ]]; then
@@ -462,40 +424,27 @@ configure_buttons_leds() {
         exit 1
     fi
 
-    while true; do
-        read -rp "Enable Buttons & LEDs? (y/n): " yn
-        case $yn in
-            [Yy]* )
-                log_message "info" "Enabling 'buttons_leds' usage in main.py..."
-                # Uncomment the relevant lines
-                if grep -qE "^[#]*\s*buttons_leds\s*=\s*ButtonsLEDController" "$MAIN_PY_PATH"; then
-                    sed -i.bak '/buttons_leds\s*=\s*ButtonsLEDController/ s/^#//' "$MAIN_PY_PATH"
-                fi
-                if grep -qE "^[#]*\s*buttons_leds.start()" "$MAIN_PY_PATH"; then
-                    sed -i.bak '/buttons_leds.start()/ s/^#//' "$MAIN_PY_PATH"
-                fi
-                log_message "success" "Buttons/LEDs lines uncommented."
-                break
-                ;;
-            [Nn]* )
-                log_message "info" "Disabling 'buttons_leds' usage in main.py..."
-                # Comment out if found
-                if grep -qE "^[^#]*\s*buttons_leds\s*=\s*ButtonsLEDController" "$MAIN_PY_PATH"; then
-                    sed -i.bak '/buttons_leds\s*=\s*ButtonsLEDController/ s/^\(\s*\)/\1#/' "$MAIN_PY_PATH"
-                fi
-                if grep -qE "^[^#]*\s*buttons_leds.start()" "$MAIN_PY_PATH"; then
-                    sed -i.bak '/buttons_leds.start()/ s/^\(\s*\)/\1#/' "$MAIN_PY_PATH"
-                fi
-                log_message "success" "Buttons/LEDs lines commented out."
-                break
-                ;;
-            * )
-                log_message "warning" "Please answer y or n."
-                ;;
-        esac
-    done
-    log_message "success" "Buttons/LEDs configuration complete."
-    show_random_tip
+    if [ "$BUTTONSLEDS_ENABLED" = false ]; then
+        log_message "info" "Disabling 'buttons_leds' usage in main.py..."
+        # Comment out lines in main.py:
+        if grep -qE "^[^#]*\s*buttons_leds\s*=\s*ButtonsLEDController" "$MAIN_PY_PATH"; then
+            sed -i.bak '/buttons_leds\s*=\s*ButtonsLEDController/ s/^\(\s*\)/\1#/' "$MAIN_PY_PATH"
+        fi
+        if grep -qE "^[^#]*\s*buttons_leds.start()" "$MAIN_PY_PATH"; then
+            sed -i.bak '/buttons_leds.start()/ s/^\(\s*\)/\1#/' "$MAIN_PY_PATH"
+        fi
+        log_message "success" "Buttons/LEDs lines commented out."
+    else
+        log_message "info" "Enabling 'buttons_leds' usage in main.py..."
+        # Uncomment lines in main.py:
+        if grep -qE "^[#]*\s*buttons_leds\s*=\s*ButtonsLEDController" "$MAIN_PY_PATH"; then
+            sed -i.bak '/buttons_leds\s*=\s*ButtonsLEDController/ s/^#//' "$MAIN_PY_PATH"
+        fi
+        if grep -qE "^[#]*\s*buttons_leds.start()" "$MAIN_PY_PATH"; then
+            sed -i.bak '/buttons_leds.start()/ s/^#//' "$MAIN_PY_PATH"
+        fi
+        log_message "success" "Buttons/LEDs lines uncommented."
+    fi
 }
 
 # ============================
@@ -516,34 +465,70 @@ main() {
 
     log_message "info" "Starting Quadify Installer..."
 
+    # 1) Ask user about Buttons & LEDs with MCP23017
+    BUTTONSLEDS_ENABLED=false
+    while true; do
+        read -rp "Enable Buttons & LEDs with MCP23017? (y/n): " answer
+        case $answer in
+            [Yy]* )
+                BUTTONSLEDS_ENABLED=true
+                break
+                ;;
+            [Nn]* )
+                BUTTONSLEDS_ENABLED=false
+                break
+                ;;
+            * )
+                log_message "warning" "Please answer y or n."
+                ;;
+        esac
+    done
+
+    # 2) Install system dependencies (includes i2c-tools, etc.)
     install_system_dependencies
+    # 3) Enable i2c/spi (only truly needed if using Buttons/LEDs, but safe to keep)
     enable_i2c_spi
+    # 4) Upgrade pip
     upgrade_pip
+    # 5) Install python dependencies
     install_python_dependencies
 
-    detect_i2c_address
+    # 6) If user chose Buttons/LEDs, detect I2C address
+    if [ "$BUTTONSLEDS_ENABLED" = true ]; then
+        detect_i2c_address
+    else
+        log_message "info" "Skipping I2C detect, as user chose not to enable Buttons/LEDs."
+    fi
+
+    # 7) Setup main Quadify service
     setup_main_service
+    # 8) Configure MPD
     configure_mpd
+    # 9) Install CAVA from fork
     install_cava_from_fork
+    # 10) Setup CAVA services
     setup_cava_service
     setup_cava_vumeter_service
+    # 11) Configure Buttons & LEDs (comment/uncomment lines in main.py)
     configure_buttons_leds
+    # 12) Setup Samba
     setup_samba
+    # 13) Permissions
     set_permissions
 
     log_message "success" "Quadify installation complete! A reboot is required."
 
-    # Ask user if they'd like to reboot now
+    # 14) Ask user if they'd like to reboot now
     while true; do
         read -rp "Reboot now? (y/n) " answer
         case $answer in
             [Yy]* )
-                log_message "info" "Rebooting system now. See you on the other side! (ง°ل͜°)ง"
+                log_message "info" "Rebooting system now. See you on the other side!"
                 reboot
                 exit 0
                 ;;
             [Nn]* )
-                log_message "info" "Installation finished. Please reboot manually later. ᕕ( ᐛ )ᕗ"
+                log_message "info" "Installation finished. Please reboot manually later."
                 break
                 ;;
             * )

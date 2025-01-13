@@ -168,8 +168,8 @@ def main():
     logger.info("Forced system into 'clock' mode after all initialization.")
 
     # 12) ButtonsLEDs
-    buttons_leds = ButtonsLEDController(config_path=config_path)
-    buttons_leds.start()
+    #buttons_leds = ButtonsLEDController(config_path=config_path)
+    #buttons_leds.start()
 
     # 13) Define RotaryControl callbacks
     def on_rotate(direction):
