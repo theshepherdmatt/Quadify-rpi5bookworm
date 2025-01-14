@@ -478,13 +478,6 @@ class ModeManager:
 
 
     # ------------------------------------------------------------------
-    #  Idle Timer (example)
-    # ------------------------------------------------------------------
-    def reset_idle_timer(self):
-        self.logger.debug(f"ModeManager: reset_idle_timer => {self.idle_timeout}s.")
-        # (Implementation omitted...)
-
-    # ------------------------------------------------------------------
     #  State Entry Methods
     # ------------------------------------------------------------------
 
