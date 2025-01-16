@@ -441,6 +441,38 @@ class ModeManager:
             self.system_info_screen.stop_mode()
 
     # ------------------------------------------------------------------
+<<<<<<< HEAD
+=======
+    #  Helper: set_cava_service_state
+    # ------------------------------------------------------------------
+    def set_cava_service_state(self, enable: bool, service_name="cava"):
+        # 1) Check if the service is active or enabled 
+        # to skip repeated calls if no change is needed
+        is_active = subprocess.run(
+            ["systemctl", "is-active", service_name], capture_output=True, text=True
+        ).stdout.strip() == "active"
+
+        is_enabled = subprocess.run(
+            ["systemctl", "is-enabled", service_name], capture_output=True, text=True
+        ).stdout.strip() == "enabled"
+
+        if enable:
+            # Only enable if not already enabled
+            if not is_enabled:
+                subprocess.run(["sudo", "systemctl", "enable", service_name], check=True)
+            # Only start if not already active
+            if not is_active:
+                subprocess.run(["sudo", "systemctl", "start", service_name], check=True)
+        else:
+            # Only disable/stop if actually enabled/active
+            if is_active:
+                subprocess.run(["sudo", "systemctl", "stop", service_name], check=True)
+            if is_enabled:
+                subprocess.run(["sudo", "systemctl", "disable", service_name], check=True)
+
+
+    # ------------------------------------------------------------------
+>>>>>>> origin/main
     #  State Entry Methods
     # ------------------------------------------------------------------
 
