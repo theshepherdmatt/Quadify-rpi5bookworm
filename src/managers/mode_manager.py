@@ -23,8 +23,7 @@ class ModeManager:
         {'name': 'displaymenu',     'on_enter': 'enter_displaymenu'},
         {'name': 'clockmenu',       'on_enter': 'enter_clockmenu'},
         {'name': 'original',        'on_enter': 'enter_original'},
-        {'name': 'modern',          'on_enter': 'enter_modern', 'on_exit': 'exit_modern'},
-        {'name': 'vumeterscreen',   'on_enter': 'enter_vumeterscreen', 'on_exit': 'exit_vumeterscreen'},
+        {'name': 'modern',          'on_enter': 'enter_modern'},
         {'name': 'systeminfo',      'on_enter': 'enter_systeminfo'},
         {'name': 'configmenu',      'on_enter': 'enter_configmenu'},
 
@@ -100,7 +99,6 @@ class ModeManager:
         self.usb_library_manager    = None
         self.original_screen        = None
         self.modern_screen          = None
-        self.vumeter_screen          = None
         self.webradio_screen        = None
         self.screensaver            = None
         self.screensaver_menu       = None
@@ -110,7 +108,7 @@ class ModeManager:
 
         # Screensaver / idle logic
         self.idle_timer       = None
-        self.idle_timeout     = self.config.get("screensaver_timeout", 360)
+        self.idle_timeout     = self.config.get("screensaver_timeout", 60)
 
         self.suppress_state_changes = False  # For transitions
         self.is_track_changing      = False
@@ -200,7 +198,7 @@ class ModeManager:
 
 
     def set_display_mode(self, mode_name):
-        if mode_name in ("original", "modern", "vumeterscreen"):
+        if mode_name in ("original", "modern"):
             self.config["display_mode"] = mode_name
             self.logger.info(f"ModeManager: Display mode set to '{mode_name}'.")
             self.save_preferences()
@@ -271,9 +269,6 @@ class ModeManager:
 
     def set_modern_screen(self, modern_screen):
         self.modern_screen = modern_screen
-
-    def set_vumeter_screen(self, vumeter_screen):
-        self.vumeter_screen = vumeter_screen
 
     def set_webradio_screen(self, webradio_screen):
         self.webradio_screen = webradio_screen
@@ -364,7 +359,6 @@ class ModeManager:
         self.machine.add_transition('to_configmenu',    source='*', dest='configmenu')
         self.machine.add_transition('to_original',     source='*', dest='original')
         self.machine.add_transition('to_modern',       source='*', dest='modern')
-        self.machine.add_transition('to_vumeterscreen', source='*', dest='vumeterscreen')
         self.machine.add_transition('to_systeminfo',   source='*', dest='systeminfo')
 
         # Quadify-like
@@ -441,48 +435,10 @@ class ModeManager:
             self.original_screen.stop_mode()
         if self.modern_screen and self.modern_screen.is_active:
             self.modern_screen.stop_mode()
-        if self.vumeter_screen and self.vumeter_screen.is_active:
-            self.vumeter_screen.stop_mode()
         if self.webradio_screen and self.webradio_screen.is_active:
             self.webradio_screen.stop_mode()
         if self.system_info_screen and self.system_info_screen.is_active:
             self.system_info_screen.stop_mode()
-
-    # ------------------------------------------------------------------
-    #  Helper: set_cava_service_state
-    # ------------------------------------------------------------------
-    def set_cava_service_state(self, enable: bool, service_name="cava"):
-        # 1) Check if the service is active or enabled 
-        # to skip repeated calls if no change is needed
-        is_active = subprocess.run(
-            ["systemctl", "is-active", service_name], capture_output=True, text=True
-        ).stdout.strip() == "active"
-
-        is_enabled = subprocess.run(
-            ["systemctl", "is-enabled", service_name], capture_output=True, text=True
-        ).stdout.strip() == "enabled"
-
-        if enable:
-            # Only enable if not already enabled
-            if not is_enabled:
-                subprocess.run(["sudo", "systemctl", "enable", service_name], check=True)
-            # Only start if not already active
-            if not is_active:
-                subprocess.run(["sudo", "systemctl", "start", service_name], check=True)
-        else:
-            # Only disable/stop if actually enabled/active
-            if is_active:
-                subprocess.run(["sudo", "systemctl", "stop", service_name], check=True)
-            if is_enabled:
-                subprocess.run(["sudo", "systemctl", "disable", service_name], check=True)
-
-
-    # ------------------------------------------------------------------
-    #  Idle Timer (example)
-    # ------------------------------------------------------------------
-    def reset_idle_timer(self):
-        self.logger.debug(f"ModeManager: reset_idle_timer => {self.idle_timeout}s.")
-        # (Implementation omitted...)
 
     # ------------------------------------------------------------------
     #  State Entry Methods
@@ -516,12 +472,8 @@ class ModeManager:
         # 1) Stop all
         self.stop_all_screens()
 
-        # 1) Always stop the VU meter service
-        self.set_cava_service_state(False, service_name="cava_vumeter")
-
         # 2) Check if user wants the standard CAVA
-        cava_enabled = self.config.get("cava_enabled", False)
-        self.set_cava_service_state(cava_enabled, service_name="cava")
+        cava_enabled = self.config.get("cava_enabled", True)
 
         # 3) Start the modern screen
         if self.modern_screen:
@@ -529,23 +481,6 @@ class ModeManager:
             self.logger.info("ModeManager: Modern screen started.")
         else:
             self.logger.warning("ModeManager: No modern_screen set.")
-
-    def enter_vumeterscreen(self, event):
-        self.logger.info("ModeManager: Entering 'vumeterscreen' state.")
-        # 1) Stop all
-        self.stop_all_screens()
-
-        # 1) Always stop the VU meter service
-        self.set_cava_service_state(False, service_name="cava")
-
-        self.set_cava_service_state(True, service_name="cava_vumeter")
-
-        # 3) Now start the VU meter screen
-        if self.vumeter_screen:
-            self.vumeter_screen.start_mode()
-            self.logger.info("ModeManager: VUMeterScreen started.")
-        else:
-            self.logger.warning("ModeManager: No vumeter_screen set.")
 
     def enter_radiomanager(self, event):
         self.logger.info("ModeManager: Entering 'radiomanager' state.")
@@ -718,10 +653,6 @@ class ModeManager:
         self.logger.info("ModeManager: Exiting 'modern' => stopping cava.service")
         self.display_manager.clear_screen()
 
-    def exit_vumeterscreen(self, event):
-        self.logger.info("ModeManager: Exiting 'vumeterscreen' => stopping cava_vumeter.service")
-        self.display_manager.clear_screen()
-
     # ------------------------------------------------------------------
     #  Playback / Volumio state handling
     # ------------------------------------------------------------------
@@ -765,7 +696,6 @@ class ModeManager:
             self.logger.debug("ModeManager: Started stop verification timer.")
 
 
-
     def _handle_playback_states(self, status, service):
         now = time.time()
         desired_mode = self.config.get("display_mode", "original")
@@ -777,16 +707,9 @@ class ModeManager:
 
         if status == "play":
             # 2) Check if we're already in the correct mode
-            current_mode = self.get_mode()  # e.g. "vumeterscreen", "modern", etc.
+            current_mode = self.get_mode()  # e.g., "modern", "original", etc.
 
-            if desired_mode == "vumeterscreen":
-                if current_mode == "vumeterscreen":
-                    self.logger.debug("ModeManager: Already in vumeterscreen, skipping transition.")
-                else:
-                    self.to_vumeterscreen()
-                    self.last_mode_change_time = now
-
-            elif desired_mode == "modern":
+            if desired_mode == "modern":
                 if current_mode == "modern":
                     self.logger.debug("ModeManager: Already in modern, skipping transition.")
                 else:
@@ -794,7 +717,7 @@ class ModeManager:
                     self.last_mode_change_time = now
 
             else:
-                # default to original
+                # Default to original
                 if current_mode == "original":
                     self.logger.debug("ModeManager: Already in original, skipping transition.")
                 else:
@@ -804,9 +727,8 @@ class ModeManager:
             self.reset_idle_timer()
 
         elif status == "pause":
-            # (whatever logic you already have)
+            # Handle pause logic
             self._start_pause_timer()
-
 
 
     def _start_pause_timer(self):

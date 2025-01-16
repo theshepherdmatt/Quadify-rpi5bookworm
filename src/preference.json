@@ -1,11 +1,11 @@
 {
-  "display_mode": "vumeterscreen",
-  "clock_font_key": "clock_digital",
+  "display_mode": "modern",
+  "clock_font_key": "clock_sans",
   "show_seconds": false,
   "show_date": false,
   "screensaver_enabled": true,
   "screensaver_type": "snake",
-  "screensaver_timeout": 300,
+  "screensaver_timeout": 120,
   "oled_brightness": 50,
   "cava_enabled": true
 }

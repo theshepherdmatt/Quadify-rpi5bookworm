@@ -15,7 +15,6 @@ from display.screens.clock import Clock
 from hardware.buttonsleds import ButtonsLEDController
 from display.screens.original_screen import OriginalScreen
 from display.screens.modern_screen import ModernScreen
-from display.screens.vumeter_screen import VUMeterScreen
 from display.screens.system_info_screen import SystemInfoScreen
 from display.screensavers.snake_screensaver import SnakeScreensaver
 from display.screensavers.starfield_screensaver import StarfieldScreensaver
@@ -186,12 +185,6 @@ def main():
             mode_manager.modern_screen.adjust_volume(volume_change)
             logger.debug(f"ModernScreen: Adjusted volume by {volume_change}")
 
-        elif current_mode == 'vumeterscreen':
-            volume_change = 10 if direction == 1 else -20
-            mode_manager.vumeter_screen.adjust_volume(volume_change)
-            mode_manager.exit_screensaver()
-            logger.debug(f"VUMeterScreen: Adjusted volume by {volume_change}")
-
         elif current_mode == 'webradio':
             volume_change = 10 if direction == 1 else -20
             mode_manager.webradio_screen.adjust_volume(volume_change)
@@ -264,7 +257,13 @@ def main():
             mode_manager.clock_menu.select_item()
 
         elif current_mode in ['original', 'modern']:
-            logger.info(f"Button pressed in {current_mode} mode; consider toggling playback or screen switch.")
+            # Toggle play/pause in original or modern mode
+            logger.info(f"Button pressed in {current_mode} mode; toggling playback.")
+            screen = mode_manager.original_screen if current_mode == 'original' else mode_manager.modern_screen
+            if screen:
+                screen.toggle_play_pause()
+            else:
+                logger.warning(f"No screen instance found for mode: {current_mode}")
 
         elif current_mode == 'playlists':
             mode_manager.playlist_manager.select_item()

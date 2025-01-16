@@ -393,23 +393,6 @@ setup_cava_service() {
     show_random_tip
 }
 
-setup_cava_vumeter_service() {
-    log_progress "Setting up CAVA VU Meter service..."
-
-    CAVA_VUMETER_SERVICE_FILE="/etc/systemd/system/cava_vumeter.service"
-    LOCAL_VUMETER_SERVICE="/home/volumio/Quadify/service/cava_vumeter.service"
-
-    if [[ -f "$LOCAL_VUMETER_SERVICE" ]]; then
-        run_command "cp \"$LOCAL_VUMETER_SERVICE\" \"$CAVA_VUMETER_SERVICE_FILE\""
-        run_command "systemctl daemon-reload"
-        run_command "systemctl enable cava_vumeter.service"
-        # run_command "systemctl start cava_vumeter.service"  # Optionally start here
-        log_message "success" "CAVA VU meter service installed."
-    else
-        log_message "error" "cava_vumeter.service not found in /home/volumio/Quadify/service."
-    fi
-    show_random_tip
-}
 
 # ============================
 #   Buttons + LEDs Handling
@@ -506,9 +489,8 @@ main() {
     configure_mpd
     # 9) Install CAVA from fork
     install_cava_from_fork
-    # 10) Setup CAVA services
+    # 10) Setup CAVA service
     setup_cava_service
-    setup_cava_vumeter_service
     # 11) Configure Buttons & LEDs (comment/uncomment lines in main.py)
     configure_buttons_leds
     # 12) Setup Samba

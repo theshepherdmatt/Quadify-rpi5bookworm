@@ -10,7 +10,6 @@ class DisplayMenu(BaseManager):
     A text-list menu for picking which display style to use:
       - Modern
       - Original
-      - VU-Meter
       - Brightness
       Optionally: A sub-menu for "Modern" to toggle "Spectrum" on/off.
     """
@@ -37,7 +36,7 @@ class DisplayMenu(BaseManager):
         self.font = self.display_manager.fonts.get(self.font_key) or ImageFont.load_default()
 
         # Main display menu items
-        self.display_items = ["Modern", "Original", "VU-Screen", "Brightness"]
+        self.display_items = ["Modern", "Original", "Brightness"]
         self.current_index = 0
 
         # Layout
@@ -134,15 +133,6 @@ class DisplayMenu(BaseManager):
                 self.logger.debug("DisplayMenu: Transition to classic screen.")
                 self.mode_manager.config["display_mode"] = "original"
                 self.mode_manager.set_display_mode("original")
-                self.mode_manager.save_preferences()
-                self.stop_mode()
-                self.mode_manager.to_clock()
-
-            if selected_name == "VU-Screen":
-                # Switch to 'original' playback mode
-                self.logger.debug("DisplayMenu: Transition to vumeterscreen.")
-                self.mode_manager.config["display_mode"] = "vumeterscreen"
-                self.mode_manager.set_display_mode("vumeterscreen")
                 self.mode_manager.save_preferences()
                 self.stop_mode()
                 self.mode_manager.to_clock()

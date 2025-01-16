@@ -43,7 +43,6 @@ class ManagerFactory:
         # Quoode/Quadify common screens
         webradio_screen      = self.create_webradio_screen()
         modern_screen        = self.create_modern_screen()
-        vumeter_screen        = self.create_vumeter_screen()
         original_screen      = self.create_original_screen()
 
         # Additional items referenced by new ModeManager states
@@ -67,7 +66,6 @@ class ManagerFactory:
 
         self.mode_manager.set_webradio_screen(webradio_screen)
         self.mode_manager.set_modern_screen(modern_screen)
-        self.mode_manager.set_vumeter_screen(vumeter_screen)
         self.mode_manager.set_original_screen(original_screen)
 
         self.mode_manager.set_clock_menu(clock_menu)
@@ -169,19 +167,6 @@ class ManagerFactory:
             mode_manager      = self.mode_manager
         )
     
-    def create_vumeter_screen(self):
-        from display.screens.vumeter_screen import VUMeterScreen
-
-        # pull the path from config
-        vu_path = self.config.get("display", {}).get("vu_path", "")
-        return VUMeterScreen(
-            display_manager = self.display_manager,
-            volumio_listener= self.volumio_listener,
-            mode_manager    = self.mode_manager,
-            vu_path         = vu_path
-        )
-
-
     def create_original_screen(self):
         from display.screens.original_screen import OriginalScreen
         return OriginalScreen(

@@ -15,9 +15,9 @@ class ScreensaverMenu(BaseManager):
         self,
         display_manager,
         mode_manager,
-        window_size=4,    
-        y_offset=2,
-        line_spacing=15
+        window_size=5,    
+        y_offset=1,
+        line_spacing=12
     ):
         super().__init__(display_manager, None, mode_manager)
 
@@ -218,7 +218,8 @@ class ScreensaverMenu(BaseManager):
             self.current_index = old_index
 
         # Show the main list again
-        self._show_main_list()
+        self.stop_mode()
+        self.mode_manager.to_clock()
 
     # -------------------------------------------------------
     # Helper to store and revert to clock
