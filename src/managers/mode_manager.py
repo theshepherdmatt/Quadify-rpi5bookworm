@@ -24,6 +24,7 @@ class ModeManager:
         {'name': 'clockmenu',       'on_enter': 'enter_clockmenu'},
         {'name': 'original',        'on_enter': 'enter_original'},
         {'name': 'modern',          'on_enter': 'enter_modern'},
+        {'name': 'minimal',          'on_enter': 'enter_minimal'},
         {'name': 'systeminfo',      'on_enter': 'enter_systeminfo'},
         {'name': 'configmenu',      'on_enter': 'enter_configmenu'},
 
@@ -99,6 +100,7 @@ class ModeManager:
         self.usb_library_manager    = None
         self.original_screen        = None
         self.modern_screen          = None
+        self.minimal_screen         = None
         self.webradio_screen        = None
         self.screensaver            = None
         self.screensaver_menu       = None
@@ -198,7 +200,7 @@ class ModeManager:
 
 
     def set_display_mode(self, mode_name):
-        if mode_name in ("original", "modern"):
+        if mode_name in ("original", "modern", "minimal"):
             self.config["display_mode"] = mode_name
             self.logger.info(f"ModeManager: Display mode set to '{mode_name}'.")
             self.save_preferences()
@@ -269,6 +271,9 @@ class ModeManager:
 
     def set_modern_screen(self, modern_screen):
         self.modern_screen = modern_screen
+
+    def set_minimal_screen(self, minimal_screen):
+        self.minimal_screen = minimal_screen
 
     def set_webradio_screen(self, webradio_screen):
         self.webradio_screen = webradio_screen
@@ -359,6 +364,7 @@ class ModeManager:
         self.machine.add_transition('to_configmenu',    source='*', dest='configmenu')
         self.machine.add_transition('to_original',     source='*', dest='original')
         self.machine.add_transition('to_modern',       source='*', dest='modern')
+        self.machine.add_transition('to_minimal',       source='*', dest='minimal')
         self.machine.add_transition('to_systeminfo',   source='*', dest='systeminfo')
 
         # Quadify-like
@@ -435,46 +441,12 @@ class ModeManager:
             self.original_screen.stop_mode()
         if self.modern_screen and self.modern_screen.is_active:
             self.modern_screen.stop_mode()
+        if self.minimal_screen and self.minimal_screen.is_active:
+            self.minimal_screen.stop_mode()
         if self.webradio_screen and self.webradio_screen.is_active:
             self.webradio_screen.stop_mode()
         if self.system_info_screen and self.system_info_screen.is_active:
             self.system_info_screen.stop_mode()
-
-    # ------------------------------------------------------------------
-<<<<<<< HEAD
-=======
-    #  Helper: set_cava_service_state
-    # ------------------------------------------------------------------
-    def set_cava_service_state(self, enable: bool, service_name="cava"):
-        # 1) Check if the service is active or enabled 
-        # to skip repeated calls if no change is needed
-        is_active = subprocess.run(
-            ["systemctl", "is-active", service_name], capture_output=True, text=True
-        ).stdout.strip() == "active"
-
-        is_enabled = subprocess.run(
-            ["systemctl", "is-enabled", service_name], capture_output=True, text=True
-        ).stdout.strip() == "enabled"
-
-        if enable:
-            # Only enable if not already enabled
-            if not is_enabled:
-                subprocess.run(["sudo", "systemctl", "enable", service_name], check=True)
-            # Only start if not already active
-            if not is_active:
-                subprocess.run(["sudo", "systemctl", "start", service_name], check=True)
-        else:
-            # Only disable/stop if actually enabled/active
-            if is_active:
-                subprocess.run(["sudo", "systemctl", "stop", service_name], check=True)
-            if is_enabled:
-                subprocess.run(["sudo", "systemctl", "disable", service_name], check=True)
-
-
-    # ------------------------------------------------------------------
->>>>>>> origin/main
-    #  State Entry Methods
-    # ------------------------------------------------------------------
 
     def enter_boot(self, event):
         self.logger.info("ModeManager: Entering 'boot' state.")
@@ -513,6 +485,19 @@ class ModeManager:
             self.logger.info("ModeManager: Modern screen started.")
         else:
             self.logger.warning("ModeManager: No modern_screen set.")
+
+    def enter_minimal(self, event):
+        self.logger.info("ModeManager: Entering 'minimal' playback mode.")
+        # 1) Stop all
+        self.stop_all_screens()
+
+        # 2) Start the minimal screen
+        if self.minimal_screen:
+            self.minimal_screen.start_mode()
+            self.logger.info("ModeManager: Minimal screen started.")
+        else:
+            self.logger.warning("ModeManager: No minimal_screen set.")
+
 
     def enter_radiomanager(self, event):
         self.logger.info("ModeManager: Entering 'radiomanager' state.")
@@ -681,10 +666,6 @@ class ModeManager:
             self.screensaver.stop_screensaver()
         self.to_clock()
 
-    def exit_modern(self, event):
-        self.logger.info("ModeManager: Exiting 'modern' => stopping cava.service")
-        self.display_manager.clear_screen()
-
     # ------------------------------------------------------------------
     #  Playback / Volumio state handling
     # ------------------------------------------------------------------
@@ -732,30 +713,45 @@ class ModeManager:
         now = time.time()
         desired_mode = self.config.get("display_mode", "original")
 
-        # 1) If too soon since last mode switch, skip
+        # 1) Prevent switching modes too rapidly
         if (now - self.last_mode_change_time) < self.min_mode_switch_interval:
-            self.logger.debug("ModeManager: Ignoring rapid consecutive playback-state => no mode switch.")
+            self.logger.debug("ModeManager: Skipping a rapid mode switch due to cooldown.")
             return
 
         if status == "play":
-            # 2) Check if we're already in the correct mode
-            current_mode = self.get_mode()  # e.g., "modern", "original", etc.
+            current_mode = self.get_mode()
 
-            if desired_mode == "modern":
-                if current_mode == "modern":
-                    self.logger.debug("ModeManager: Already in modern, skipping transition.")
-                else:
-                    self.to_modern()
+            # 2) If the service is WebRadio, switch to webradio mode
+            if service == "webradio":
+                if current_mode != "webradio":
+                    self.to_webradio()
                     self.last_mode_change_time = now
 
             else:
-                # Default to original
-                if current_mode == "original":
-                    self.logger.debug("ModeManager: Already in original, skipping transition.")
-                else:
-                    self.to_original()
-                    self.last_mode_change_time = now
+                # Otherwise, use the configured display mode (modern/original/minimal)
+                if desired_mode == "modern":
+                    if current_mode == "modern":
+                        self.logger.debug("ModeManager: Already in 'modern' mode; no transition needed.")
+                    else:
+                        self.to_modern()
+                        self.last_mode_change_time = now
 
+                elif desired_mode == "minimal":
+                    if current_mode == "minimal":
+                        self.logger.debug("ModeManager: Already in 'minimal' mode; no transition needed.")
+                    else:
+                        self.to_minimal()
+                        self.last_mode_change_time = now
+
+                else:
+                    # Default to 'original'
+                    if current_mode == "original":
+                        self.logger.debug("ModeManager: Already in 'original' mode; no transition needed.")
+                    else:
+                        self.to_original()
+                        self.last_mode_change_time = now
+
+            # Reset the idle timer whenever we start playing
             self.reset_idle_timer()
 
         elif status == "pause":

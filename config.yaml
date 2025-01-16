@@ -19,6 +19,8 @@ display:
   needle_right_path: "/home/volumio/Quadify/src/assets/images/needle_right.png"
 
   rotation: 2  # Set rotation if needed (0, 90, 180, 270)
+
+
   fonts:
     playback_large:
       path: "/home/volumio/Quadify/src/assets/fonts/DSEG7Classic-Light.ttf"
@@ -63,6 +65,17 @@ display:
       path: "/home/volumio/Quadify/src/assets/fonts/OpenSans-Regular.ttf"
       size: 8
 
+      # Minimal fonts
+    minimal_volume:
+      path: "/home/volumio/Quadify/src/assets/fonts/Montserrat-Bold.ttf"
+      size: 42
+    minimal_service:
+      path: "/home/volumio/Quadify/src/assets/fonts/Montserrat-Regular.ttf"
+      size: 27
+    minimal_data:
+      path: "/home/volumio/Quadify/src/assets/fonts/Montserrat-Regular.ttf"
+      size: 10
+
       # Clock fonts (for hours/minutes)
     clock_sans:
       path: "/home/volumio/Quadify/src/assets/fonts/OpenSans-Regular.ttf"
@@ -87,6 +100,7 @@ display:
 
 
   refresh_rate: 60  # Display refresh rate in Hz
+
   cache_images: true  # Cache frequently used images for faster access
   preload_images:
     - "/home/volumio/Quadify/src/assets/images/webradio.png"

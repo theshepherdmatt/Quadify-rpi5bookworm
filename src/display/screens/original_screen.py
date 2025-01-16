@@ -121,12 +121,21 @@ class OriginalScreen(BaseManager):
         self.is_active = True
         self.logger.info("OriginalScreen: Activated 'original' screen mode.")
 
-        # Display current Volumio state if available
+        # 1) Force an immediate getState from Volumio
+        try:
+            if self.volumio_listener and self.volumio_listener.socketIO:
+                self.logger.debug("OriginalScreen: Forcing getState from Volumio.")
+                self.volumio_listener.socketIO.emit("getState", {})
+        except Exception as e:
+            self.logger.warning(f"OriginalScreen: Failed to emit 'getState'. => {e}")
+
+        # 2) Display current Volumio state if available
         current_state = self.volumio_listener.get_current_state()
         if current_state:
             self.draw_display(current_state)
         else:
             self.logger.warning("OriginalScreen: No current Volumio state to display.")
+
 
     def stop_mode(self):
         """

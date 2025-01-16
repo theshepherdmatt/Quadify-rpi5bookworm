@@ -353,12 +353,15 @@ class QobuzManager(BaseManager):
 
     def update_song_info(self, state):
         """Update the playback metrics display based on the current state."""
-        self.logger.info("PlaybackManager: Updating playback metrics display.")
+        self.logger.info("QobuzManager: Updating playback metrics display.")
 
         # Extract relevant playback information
         sample_rate = state.get("samplerate", "Unknown Sample Rate")
         bitdepth = state.get("bitdepth", "Unknown Bit Depth")
         volume = state.get("volume", "Unknown Volume")
 
-        # Forward the information to the PlaybackManager to handle without drawing directly here
-        self.mode_manager.playback_manager.update_playback_metrics(state)
+        # Log or display the extracted information
+        self.logger.info(f"Sample Rate: {sample_rate}, Bit Depth: {bitdepth}, Volume: {volume}")
+
+        # Optional: Update the screen with this information if needed
+        # You can call methods on `self.display_manager` or another appropriate object

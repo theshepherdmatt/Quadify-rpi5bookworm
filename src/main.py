@@ -15,6 +15,7 @@ from display.screens.clock import Clock
 from hardware.buttonsleds import ButtonsLEDController
 from display.screens.original_screen import OriginalScreen
 from display.screens.modern_screen import ModernScreen
+from display.screens.minimal_screen import MinimalScreen
 from display.screens.system_info_screen import SystemInfoScreen
 from display.screensavers.snake_screensaver import SnakeScreensaver
 from display.screensavers.starfield_screensaver import StarfieldScreensaver
@@ -167,8 +168,8 @@ def main():
     logger.info("Forced system into 'clock' mode after all initialization.")
 
     # 12) ButtonsLEDs
-    #buttons_leds = ButtonsLEDController(config_path=config_path)
-    #buttons_leds.start()
+    buttons_leds = ButtonsLEDController(config_path=config_path)
+    buttons_leds.start()
 
     # 13) Define RotaryControl callbacks
     def on_rotate(direction):
@@ -184,6 +185,11 @@ def main():
             volume_change = 10 if direction == 1 else -20
             mode_manager.modern_screen.adjust_volume(volume_change)
             logger.debug(f"ModernScreen: Adjusted volume by {volume_change}")
+
+        elif current_mode == 'minimal':
+            volume_change = 10 if direction == 1 else -20
+            mode_manager.minimal_screen.adjust_volume(volume_change)
+            logger.debug(f"MinimalScreen: Adjusted volume by {volume_change}")
 
         elif current_mode == 'webradio':
             volume_change = 10 if direction == 1 else -20
@@ -256,14 +262,23 @@ def main():
         elif current_mode == 'clockmenu':
             mode_manager.clock_menu.select_item()
 
-        elif current_mode in ['original', 'modern']:
-            # Toggle play/pause in original or modern mode
+        elif current_mode in ['original', 'modern', 'minimal']:
             logger.info(f"Button pressed in {current_mode} mode; toggling playback.")
-            screen = mode_manager.original_screen if current_mode == 'original' else mode_manager.modern_screen
+
+            if current_mode == 'original':
+                screen = mode_manager.original_screen
+            elif current_mode == 'modern':
+                screen = mode_manager.modern_screen
+            elif current_mode == 'minimal':
+                screen = mode_manager.minimal_screen
+            else:
+                screen = None
+
             if screen:
                 screen.toggle_play_pause()
             else:
                 logger.warning(f"No screen instance found for mode: {current_mode}")
+
 
         elif current_mode == 'playlists':
             mode_manager.playlist_manager.select_item()
@@ -272,13 +287,10 @@ def main():
             mode_manager.tidal_manager.select_item()
 
         elif current_mode == 'qobuz':
-            mode_manager.mode_manager.qobuz_manager.select_item()
+            mode_manager.qobuz_manager.select_item()
 
         elif current_mode == 'spotify':
             mode_manager.spotify_manager.select_item()
-
-        elif current_mode == 'webradio':
-            mode_manager.radio_manager.select_item()
 
         elif current_mode == 'library':
             mode_manager.library_manager.select_item()

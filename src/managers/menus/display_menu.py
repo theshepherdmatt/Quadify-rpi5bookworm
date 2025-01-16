@@ -10,8 +10,9 @@ class DisplayMenu(BaseManager):
     A text-list menu for picking which display style to use:
       - Modern
       - Original
+      - Minimal
       - Brightness
-      Optionally: A sub-menu for "Modern" to toggle "Spectrum" on/off.
+      - Spectrum On/Off
     """
 
     def __init__(
@@ -36,7 +37,7 @@ class DisplayMenu(BaseManager):
         self.font = self.display_manager.fonts.get(self.font_key) or ImageFont.load_default()
 
         # Main display menu items
-        self.display_items = ["Modern", "Original", "Brightness"]
+        self.display_items = ["Modern", "Minimal", "Original", "Spectrum", "Brightness" ]
         self.current_index = 0
 
         # Layout
@@ -138,87 +139,45 @@ class DisplayMenu(BaseManager):
                 self.mode_manager.to_clock()
 
             elif selected_name == "Modern":
-                # Instead of instantly switching,
-                # open a sub-menu to let user pick spectrum on/off.
-                self._open_modern_submenu()
+                # Immediately switch to modern
+                self.mode_manager.config["display_mode"] = "modern"
+                self.mode_manager.set_display_mode("modern")
+                self.mode_manager.save_preferences()
+                self.stop_mode()
+                self.mode_manager.to_clock()
+
+            elif selected_name == "Minimal":
+                # Immediately switch to minimal
+                self.mode_manager.config["display_mode"] = "minimal"
+                self.mode_manager.set_display_mode("minimal")
+                self.mode_manager.save_preferences()
+                self.stop_mode()
+                self.mode_manager.to_clock()
 
             elif selected_name == "Brightness":
                 self.logger.info("DisplayMenu: Opening Brightness sub-menu.")
                 self._open_brightness_submenu()
                 self.mode_manager.save_preferences()
 
+            elif selected_name == "Spectrum":
+                # Open a sub-menu for toggling the global 'cava_enabled'
+                self._open_spectrum_submenu()
+
             else:
                 self.logger.warning(f"DisplayMenu: Unrecognized option: {selected_name}")
 
         else:
-            # If we're in a sub-menu (e.g. brightness or modern-spectrum),
-            # handle those selections
+            # If we're in a sub-menu
             if self.current_submenu_name == "brightness":
                 self._handle_brightness_selection(selected_name)
                 self.stop_mode()
                 self.mode_manager.to_clock()
 
-            elif self.current_submenu_name == "modern_spectrum":
+            elif self.current_submenu_name == "spectrum_toggle":
                 # The user is choosing "Spectrum: On" or "Spectrum: Off"
-                self._handle_modern_spectrum_selection(selected_name)
-                # Then we do the actual "modern" transition
+                self._handle_spectrum_toggle(selected_name)
                 self.stop_mode()
                 self.mode_manager.to_clock()
-
-    # -------------------------------------------------------
-    #  Modern Sub-Menu (Spectrum On/Off)
-    # -------------------------------------------------------
-    def _open_modern_submenu(self):
-        """
-        After picking 'Modern', ask the user if they want the spectrum
-        (CAVA) On or Off. Then we set 'display_mode' to 'modern'
-        plus set 'cava_enabled' (or your chosen config key).
-        """
-        # Save the current main list
-        self.menu_stack.append((list(self.display_items), self.current_index))
-
-        self.submenu_active = True
-        self.current_submenu_name = "modern_spectrum"
-
-        # We show two options: "Spectrum: Off" / "Spectrum: On"
-        self.display_items = ["Spectrum: Off", "Spectrum: On"]
-        self.current_index = 0
-        self.show_items_list()
-
-    def _handle_modern_spectrum_selection(self, selected_name):
-        """
-        If "Spectrum: On", set config["cava_enabled"] = True
-        If "Spectrum: Off", set config["cava_enabled"] = False
-        Also set 'display_mode' to 'modern'.
-        """
-        self.logger.debug(f"DisplayMenu: modern_spectrum => {selected_name}")
-        # 1) Set display mode = modern
-        self.mode_manager.config["display_mode"] = "modern"
-        self.mode_manager.set_display_mode("modern")
-
-        # 2) Turn CAVA / Spectrum on/off
-        if selected_name == "Spectrum: On":
-            self.mode_manager.config["cava_enabled"] = True
-            self.logger.info("DisplayMenu: Spectrum enabled in modern mode.")
-        else:
-            self.mode_manager.config["cava_enabled"] = False
-            self.logger.info("DisplayMenu: Spectrum disabled in modern mode.")
-
-        # Save
-        self.mode_manager.save_preferences()
-
-        # Optionally re-start or stop the CAVA service here, or do it in the
-        # modern screen's on_enter logic. For example:
-        """
-        import subprocess
-        if self.mode_manager.config["cava_enabled"]:
-            subprocess.run(["sudo", "systemctl", "start", "cava"])
-        else:
-            subprocess.run(["sudo", "systemctl", "stop", "cava"])
-        """
-
-        # Return to main list or exit
-        self._close_submenu_and_return()
 
     # -------------------------------------------------------
     #  Brightness Sub-Menu
@@ -260,6 +219,55 @@ class DisplayMenu(BaseManager):
 
         self._close_submenu_and_return()
 
+    # -------------------------------------------------------
+    #  Spectrum On/Off Sub-Menu
+    # -------------------------------------------------------
+    def _open_spectrum_submenu(self):
+        """
+        If user selects "Spectrum" in top-level menu,
+        we show "Spectrum: On" or "Spectrum: Off."
+        """
+        self.menu_stack.append((list(self.display_items), self.current_index))
+        self.submenu_active = True
+        self.current_submenu_name = "spectrum_toggle"
+
+        # Build sub-menu based on current setting
+        # Just two items to choose from: Off or On
+        self.display_items = ["Spectrum: Off", "Spectrum: On"]
+        # Pre-select whichever is current
+        current_val = self.mode_manager.config.get("cava_enabled", False)
+        self.current_index = 1 if current_val else 0
+
+        self.show_items_list()
+
+    def _handle_spectrum_toggle(self, selected_name):
+        """
+        If user picks "Spectrum: On," we set cava_enabled = True,
+        else cava_enabled = False.
+        """
+        if selected_name == "Spectrum: On":
+            self.mode_manager.config["cava_enabled"] = True
+            self.logger.info("DisplayMenu: Spectrum enabled globally.")
+        else:
+            self.mode_manager.config["cava_enabled"] = False
+            self.logger.info("DisplayMenu: Spectrum disabled globally.")
+
+        self.mode_manager.save_preferences()
+
+        # If you manage the CAVA service yourself, you can start/stop here:
+        """
+        import subprocess
+        if self.mode_manager.config["cava_enabled"]:
+            subprocess.run(["sudo", "systemctl", "start", "cava"])
+        else:
+            subprocess.run(["sudo", "systemctl", "stop", "cava"])
+        """
+
+        self._close_submenu_and_return()
+
+    # -------------------------------------------------------
+    #  Closing Submenu
+    # -------------------------------------------------------
     def _close_submenu_and_return(self):
         """
         Restore the old list items from the stack, or exit if none.
