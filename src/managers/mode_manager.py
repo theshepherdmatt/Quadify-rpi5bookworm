@@ -448,6 +448,13 @@ class ModeManager:
         if self.system_info_screen and self.system_info_screen.is_active:
             self.system_info_screen.stop_mode()
 
+<<<<<<< HEAD
+=======
+    # ------------------------------------------------------------------
+    #  State Entry Methods
+    # ------------------------------------------------------------------
+
+>>>>>>> origin/main
     def enter_boot(self, event):
         self.logger.info("ModeManager: Entering 'boot' state.")
         # Potentially stop everything if needed
