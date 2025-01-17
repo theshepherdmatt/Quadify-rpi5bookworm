@@ -14,9 +14,6 @@ display:
   default_album_art: "/home/volumio/Quadify/src/assets/images/webradio.png"
   loading_gif_path: "/home/volumio/Quadify/src/assets/images/Loading.gif"  # Path for loading screen GIF
   logo_path: "/home/volumio/Quadify/src/assets/images/logo.png"
-  vu_path: "/home/volumio/Quadify/src/assets/images/vu.png"
-  needle_left_path: "/home/volumio/Quadify/src/assets/images/needle_left.png"
-  needle_right_path: "/home/volumio/Quadify/src/assets/images/needle_right.png"
 
   rotation: 2  # Set rotation if needed (0, 90, 180, 270)
 
@@ -86,6 +83,9 @@ display:
     clock_digital:
       path: "/home/volumio/Quadify/src/assets/fonts/DSEG7Classic-Light.ttf"
       size: 30
+    clock_bold:
+      path: "/home/volumio/Quadify/src/assets/fonts/Montserrat-Bold.ttf"
+      size: 42
 
     # Smaller date fonts (for optional date line)
     clockdate_sans:
@@ -97,7 +97,9 @@ display:
     clockdate_digital:
       path: "/home/volumio/Quadify/src/assets/fonts/DSEG7Classic-Light.ttf"
       size: 10
-
+    clockdate_bold:
+      path: "/home/volumio/Quadify/src/assets/fonts/Montserrat-Regular.ttf"
+      size: 10
 
   refresh_rate: 60  # Display refresh rate in Hz
 

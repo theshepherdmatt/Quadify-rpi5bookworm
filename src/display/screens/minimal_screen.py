@@ -207,7 +207,7 @@ class MinimalScreen(BaseManager):
         vol_w, vol_h = draw.textsize(vol_str, font=self.font_volume)
 
         vol_x = width - vol_w - 40  # offset from the right
-        vol_y = (height - vol_h) // 3
+        vol_y = (height - vol_h) // 5
 
         draw.text(
             (vol_x, vol_y),
@@ -268,3 +268,15 @@ class MinimalScreen(BaseManager):
         except Exception as e:
             self.logger.error(f"MinimalScreen: error adjusting volume => {e}")
 
+
+    def toggle_play_pause(self):
+        """Emit Volumio play/pause toggle if connected."""
+        self.logger.info("ModernScreen: Toggling play/pause.")
+        if not self.volumio_listener or not self.volumio_listener.is_connected():
+            self.logger.warning("ModernScreen: Not connected to Volumio => cannot toggle.")
+            return
+        try:
+            self.volumio_listener.socketIO.emit("toggle", {})
+            self.logger.debug("ModernScreen: Emitted 'toggle' event.")
+        except Exception as e:
+            self.logger.error(f"ModernScreen: toggle_play_pause failed => {e}")

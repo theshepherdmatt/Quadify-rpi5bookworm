@@ -8,7 +8,7 @@ class Clock:
         """
         :param display_manager:  Your DisplayManager controlling the OLED.
         :param config:           Dictionary with user toggles like:
-                                  - 'clock_font_key' (e.g. 'clock_sans', 'clock_dots', 'clock_digital')
+                                  - 'clock_font_key' (e.g. 'clock_sans', 'clock_dots', 'clock_digital', 'clock_bold')
                                   - 'show_seconds'   (bool)
                                   - 'show_date'      (bool)
                                 You can also add more toggles if needed.
@@ -22,14 +22,16 @@ class Clock:
         self.font_y_offsets = {
             "clock_sans":    -15,
             "clock_dots":    -10,
-            "clock_digital":  0
+            "clock_digital":  0,
+            "clock_bold":  -5
         }
 
         # Additional spacing between time and date lines
         self.font_line_spacing = {
             "clock_sans":    15,
             "clock_dots":    10,
-            "clock_digital":  8
+            "clock_digital":  8,
+            "clock_bold":  12
         }
 
         # If you have separate date fonts:
@@ -37,7 +39,8 @@ class Clock:
         self.date_font_map = {
             "clock_sans":    "clockdate_sans",
             "clock_dots":    "clockdate_dots",
-            "clock_digital": "clockdate_digital"
+            "clock_digital": "clockdate_digital",
+            "clock_bold": "clockdate_bold"
         }
 
     def draw_clock(self):

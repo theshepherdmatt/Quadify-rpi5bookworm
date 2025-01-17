@@ -1,189 +1,106 @@
-# src/managers/menus/clock_menu.py
-
 import logging
 import time
 from PIL import ImageFont
-
 from managers.menus.base_manager import BaseManager
 
 class ClockMenu(BaseManager):
     """
-    A text-based sub-menu manager for 'Clock' settings,
-    similar to how RadioManager or any text-list approach works.
+    A scrollable 'Clock' settings menu:
 
-    Items might include:
-      - Show Seconds (toggle)
-      - Show Date (toggle)
-      - Select Font => [Sans, Dots, Digital]
+      Main Menu:
+        1) Show Seconds  -> Sub-menu: [On, Off]
+        2) Show Date     -> Sub-menu: [On, Off]
+        3) Select Font   -> Sub-menu: [Sans, Dots, Digital, Bold, Back]
+        4) Back          -> returns to Display Menu
+
+      The On/Off sub-menus have no 'Back' item; selecting On or Off
+      updates the config and returns you to the main clock menu.
+      The Font sub-menu has 'Back' to let you exit without changing.
     """
 
     def __init__(
         self,
         display_manager,
         mode_manager,
-        window_size=4,    # Must be an integer for the visible lines
+        window_size=4,  # number of lines visible
         y_offset=2,
         line_spacing=15
     ):
-        """
-        :param display_manager: The DisplayManager (controls the OLED).
-        :param mode_manager:    The ModeManager (for global transitions, config storage, etc.).
-        :param window_size:     Number of text lines to display at once in the text-list.
-        :param y_offset:        Vertical offset for first line.
-        :param line_spacing:    Spacing in pixels between lines of text.
-        """
         super().__init__(display_manager, None, mode_manager)
-
-        self.mode_name = "clock_menu"
-        self.display_manager = display_manager
-        self.mode_manager = mode_manager
-
-        # Logger
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.logger.setLevel(logging.DEBUG)
 
-        # Font details
-        self.font_key = "menu_font"
-        self.font = self.display_manager.fonts.get(self.font_key, ImageFont.load_default())
+        # Menu states
+        self.is_active = False
+        self.current_menu = "main"  # "main", "seconds", "date", or "fonts"
 
-        # Layout config
+        # Debounce
+        self.last_action_time = 0
+        self.debounce_interval = 0.3
+
+        # Layout
         self.window_size = window_size
         self.y_offset = y_offset
         self.line_spacing = line_spacing
 
-        # Define the main items (top-level) & the font sub-menu
+        # Font
+        self.font_key = "menu_font"
+        self.font = display_manager.fonts.get(self.font_key, ImageFont.load_default())
+
+        # Main menu
         self.main_items = [
             "Show Seconds",
             "Show Date",
-            "Select Font"
+            "Select Font",
+            "Back"  # => return to Display Menu
         ]
-        self.font_items = ["Sans", "Dots", "Digital"]
 
-        self.current_menu = "clock_main"   # or 'fonts'
-        self.current_items = list(self.main_items)
+        # Sub-menus
+        # No 'Back' for Show Seconds or Show Date => On/Off only
+        self.seconds_items = ["On", "Off"]
+        self.date_items = ["On", "Off"]
+
+        # Font sub-menu does include 'Back'
+        self.font_items = ["Sans", "Dots", "Digital", "Bold", "Back"]
+
+        # Current data
+        self.current_items = self.main_items
         self.current_selection_index = 0
         self.window_start_index = 0
 
-        self.is_active = False
-
-        # Simple debouncing
-        self.last_action_time = 0
-        self.debounce_interval = 0.3
-
-        # Menu stack for optional back navigation
-        self.menu_stack = []
-
+    # ----------------------------------------------------------------
+    # Start / Stop
+    # ----------------------------------------------------------------
     def start_mode(self):
-        """Activate this ClockMenu."""
+        """Activate the clock menu and display the main items."""
         if self.is_active:
             self.logger.debug("ClockMenu: Already active.")
             return
-        self.logger.info("ClockMenu: Starting Clock Menu mode.")
-
         self.is_active = True
-        self.current_menu = "clock_main"
-        self.current_items = list(self.main_items)
+        self.logger.info("ClockMenu: Starting clock menu.")
+
+        self.current_menu = "main"
+        self.current_items = self.main_items
         self.current_selection_index = 0
         self.window_start_index = 0
-        self.menu_stack.clear()
-
-        # Immediately display
-        self.display_current_menu()
+        self._draw_current_menu()
 
     def stop_mode(self):
-        """Deactivate the ClockMenu and clear the screen."""
-        self.logger.info("ClockMenu: Stopping Clock Menu mode.")
-        if not self.is_active:
-            self.logger.warning("ClockMenu: Already inactive.")
-            return
+        """Deactivate and clear the display."""
+        if self.is_active:
+            self.is_active = False
+            self.display_manager.clear_screen()
+            self.logger.info("ClockMenu: Stopped clock menu.")
 
-        self.is_active = False
-        self.display_manager.clear_screen()
-
-    def display_current_menu(self):
-        """
-        Display items based on self.current_menu (either 'clock_main' or 'fonts').
-        """
-        if self.current_menu == "clock_main":
-            self.display_text_list(self.current_items)
-        elif self.current_menu == "fonts":
-            self.display_text_list(self.current_items)
-        else:
-            self.logger.warning(f"ClockMenu: Unknown current_menu '{self.current_menu}'")
-            self.display_text_list(["[Unknown Menu]"])
-
-    def display_text_list(self, items):
-        """
-        Draw a simple text-based menu list, highlighting the current selection.
-        """
-        if not items:
-            self.display_empty_message("No Items")
-            return
-
-        def draw(draw_obj):
-            visible = self.get_visible_window(items)
-            x_offset = 5
-            for i, item_name in enumerate(visible):
-                actual_index = self.window_start_index + i
-                arrow = "-> " if actual_index == self.current_selection_index else "   "
-                fill_color = "white" if actual_index == self.current_selection_index else "gray"
-                y_pos = self.y_offset + i * self.line_spacing
-                draw_obj.text(
-                    (x_offset, y_pos),
-                    f"{arrow}{item_name}",
-                    font=self.font,
-                    fill=fill_color
-                )
-
-        self.display_manager.draw_custom(draw)
-        self.logger.debug(f"ClockMenu: Displayed menu items: {items}")
-
-    def get_visible_window(self, all_items):
-        """
-        Return the subset of items in the window_size range,
-        centering on self.current_selection_index if possible.
-        """
-        total = len(all_items)
-        half_window = self.window_size // 2
-
-        # Attempt to center the selection
-        tentative_start = self.current_selection_index - half_window
-
-        # Clamp to valid range
-        if tentative_start < 0:
-            self.window_start_index = 0
-        elif tentative_start + self.window_size > total:
-            self.window_start_index = max(total - self.window_size, 0)
-        else:
-            self.window_start_index = tentative_start
-
-        visible = all_items[self.window_start_index : self.window_start_index + self.window_size]
-        self.logger.debug(
-            f"ClockMenu: Visible window from {self.window_start_index} "
-            f"to {self.window_start_index + len(visible) - 1}, selection={self.current_selection_index}"
-        )
-        return visible
-
-    def display_empty_message(self, text):
-        """
-        If no items are available, show a message on-screen.
-        """
-        def draw(draw_obj):
-            font = self.font
-            w, h = draw_obj.im.size
-            tw, th = draw_obj.textsize(text, font=font)
-            x = (w - tw) // 2
-            y = (h - th) // 2
-            draw_obj.text((x, y), text, font=font, fill="white")
-
-        self.display_manager.draw_custom(draw)
-
+    # ----------------------------------------------------------------
+    # Scrolling
+    # ----------------------------------------------------------------
     def scroll_selection(self, direction):
         """
-        Scroll up or down the menu (direction>0 => down, <0 => up).
+        Anchored scrolling: the highlight stays near the middle row
+        until reaching top/bottom.
         """
         if not self.is_active:
-            self.logger.warning("ClockMenu: Attempted scroll while inactive.")
+            self.logger.warning("ClockMenu: Scroll attempted while inactive.")
             return
 
         now = time.time()
@@ -192,28 +109,29 @@ class ClockMenu(BaseManager):
             return
         self.last_action_time = now
 
-        items = self.current_items
-        if not items:
-            self.logger.warning("ClockMenu: No items to scroll.")
-            return
-
         old_index = self.current_selection_index
-        # Move selection up or down
-        if direction > 0 and self.current_selection_index < len(items) - 1:
+        total_items = len(self.current_items)
+
+        # Move up/down
+        if direction > 0 and self.current_selection_index < total_items - 1:
             self.current_selection_index += 1
         elif direction < 0 and self.current_selection_index > 0:
             self.current_selection_index -= 1
 
-        if old_index != self.current_selection_index:
+        if self.current_selection_index != old_index:
             self.logger.debug(f"ClockMenu: Scrolled from {old_index} to {self.current_selection_index}")
-            self.display_current_menu()
+            self._draw_current_menu()
 
+    # ----------------------------------------------------------------
+    # Selection
+    # ----------------------------------------------------------------
     def select_item(self):
         """
-        Handle short-press to select the current item.
+        Main menu => 'Show Seconds', 'Show Date', 'Select Font', 'Back'.
+        Sub-menus => On/Off or Font choices.
         """
         if not self.is_active:
-            self.logger.warning("ClockMenu: Attempted select while inactive.")
+            self.logger.warning("ClockMenu: Select attempted while inactive.")
             return
 
         now = time.time()
@@ -222,106 +140,166 @@ class ClockMenu(BaseManager):
             return
         self.last_action_time = now
 
-        if not self.current_items:
-            self.logger.warning("ClockMenu: No items to select.")
-            return
-
         selected = self.current_items[self.current_selection_index]
-        self.logger.info(f"ClockMenu: Selected item => {selected}")
+        self.logger.info(f"ClockMenu: Selected => {selected} (menu={self.current_menu})")
 
-        if self.current_menu == "clock_main":
-            self.handle_clock_main_selection(selected)
+        # MAIN menu
+        if self.current_menu == "main":
+            if selected == "Show Seconds":
+                # Go to the On/Off sub-menu
+                self.current_menu = "seconds"
+                self.current_items = self.seconds_items
+                self.current_selection_index = 0
+                self.window_start_index = 0
+                self._draw_current_menu()
+
+            elif selected == "Show Date":
+                # On/Off sub-menu
+                self.current_menu = "date"
+                self.current_items = self.date_items
+                self.current_selection_index = 0
+                self.window_start_index = 0
+                self._draw_current_menu()
+
+            elif selected == "Select Font":
+                self.current_menu = "fonts"
+                self.current_items = self.font_items
+                self.current_selection_index = 0
+                self.window_start_index = 0
+                self._draw_current_menu()
+
+            elif selected == "Back":
+                # Return to Display Menu
+                self.logger.info("ClockMenu: 'Back' => to Display Menu")
+                self.stop_mode()
+                self.mode_manager.to_displaymenu()
+
+            else:
+                self.logger.warning(f"ClockMenu: Unknown main item => {selected}")
+
+        # SUB-MENU: Show Seconds => ["On", "Off"]
+        elif self.current_menu == "seconds":
+            if selected == "On":
+                self.logger.info("ClockMenu: 'Show Seconds' => On")
+                self.mode_manager.config["show_seconds"] = True
+                self.mode_manager.save_preferences()
+            elif selected == "Off":
+                self.logger.info("ClockMenu: 'Show Seconds' => Off")
+                self.mode_manager.config["show_seconds"] = False
+                self.mode_manager.save_preferences()
+            else:
+                self.logger.warning(f"ClockMenu: Unknown item => {selected}")
+
+            # After selection, go back to main clock menu
+            self._return_to_main()
+
+        # SUB-MENU: Show Date => ["On", "Off"]
+        elif self.current_menu == "date":
+            if selected == "On":
+                self.logger.info("ClockMenu: 'Show Date' => On")
+                self.mode_manager.config["show_date"] = True
+                self.mode_manager.save_preferences()
+            elif selected == "Off":
+                self.logger.info("ClockMenu: 'Show Date' => Off")
+                self.mode_manager.config["show_date"] = False
+                self.mode_manager.save_preferences()
+            else:
+                self.logger.warning(f"ClockMenu: Unknown item => {selected}")
+
+            self._return_to_main()
+
+        # SUB-MENU: Fonts => ["Sans", "Dots", "Digital", "Bold", "Back"]
         elif self.current_menu == "fonts":
-            self.handle_font_selection(selected)
-        else:
-            self.logger.warning(f"ClockMenu: Unknown menu '{self.current_menu}'")
-
-    def handle_clock_main_selection(self, item):
-        """
-        Process an item from the main clock menu:
-         - Show Seconds
-         - Show Date
-         - Select Font
-        """
-        if item == "Show Seconds":
-            current_val = self.mode_manager.config.get("show_seconds", False)
-            new_val = not current_val
-            self.mode_manager.config["show_seconds"] = new_val
-            self.logger.info(f"ClockMenu: show_seconds toggled to {new_val}")
-
-            self.mode_manager.save_preferences()
-            self.mode_manager.to_clock()
-
-        elif item == "Show Date":
-            current_val = self.mode_manager.config.get("show_date", False)
-            new_val = not current_val
-            self.mode_manager.config["show_date"] = new_val
-            self.logger.info(f"ClockMenu: show_date toggled to {new_val}")
-
-            self.mode_manager.save_preferences()
-            self.mode_manager.to_clock()
-
-        elif item == "Select Font":
-            # Switch to the fonts sub-menu
-            self.menu_stack.append(
-                (self.current_menu, list(self.current_items), self.current_selection_index)
-            )
-            self.current_menu = "fonts"
-            self.current_items = self.font_items
-            self.current_selection_index = 0
-            self.window_start_index = 0
-            self.display_current_menu()
+            if selected == "Back":
+                self._return_to_main()
+            else:
+                self._handle_font_selection(selected)
+                self._return_to_main()
 
         else:
-            self.logger.warning(f"ClockMenu: Unknown clock_main item '{item}'")
+            self.logger.warning(f"ClockMenu: Unknown current_menu => {self.current_menu}")
 
-    def handle_font_selection(self, item):
-        """
-        e.g. 'Sans', 'Dots', 'Digital'
-        """
-        if item == "Sans":
-            self.mode_manager.config["clock_font_key"] = "clock_sans"
-            self.logger.info("ClockMenu: Font changed to clock_sans")
-        elif item == "Dots":
-            self.mode_manager.config["clock_font_key"] = "clock_dots"
-            self.logger.info("ClockMenu: Font changed to clock_dots")
-        elif item == "Digital":
-            self.mode_manager.config["clock_font_key"] = "clock_digital"
-            self.logger.info("ClockMenu: Font changed to clock_digital")
-        else:
-            self.logger.warning(f"ClockMenu: Unknown font item '{item}'")
-
-        # Save the updated config to JSON so it's persisted
-        self.mode_manager.save_preferences()
-
-        # Return to normal clock
-        self.mode_manager.to_clock()
-
-    def navigate_back(self):
-        """
-        If you add a 'Back' item in sub-menus, or want to revert to main menu,
-        you can pop from self.menu_stack here.
-        """
-        if not self.is_active:
-            self.logger.warning("ClockMenu: Attempted back while inactive.")
-            return
-
-        now = time.time()
-        if now - self.last_action_time < self.debounce_interval:
-            self.logger.debug("ClockMenu: Back debounced.")
-            return
-        self.last_action_time = now
-
-        if not self.menu_stack:
-            # At top-level => stop or revert to main
-            self.logger.info("ClockMenu: No previous menu in stack, stopping mode.")
-            self.stop_mode()
-            return
-
-        # Pop from stack
-        prev_menu, prev_items, prev_index = self.menu_stack.pop()
-        self.current_menu = prev_menu
-        self.current_items = prev_items
-        self.current_selection_index = prev_index
+    # ----------------------------------------------------------------
+    # Return to main
+    # ----------------------------------------------------------------
+    def _return_to_main(self):
+        """Go back to the main clock menu from any sub-menu."""
+        self.current_menu = "main"
+        self.current_items = self.main_items
+        self.current_selection_index = 0
         self.window_start_index = 0
-        self.display_current_menu()
+        self._draw_current_menu()
+
+    # ----------------------------------------------------------------
+    # Drawing
+    # ----------------------------------------------------------------
+    def _draw_current_menu(self):
+        """Draw the current list with the anchored window approach."""
+        if not self.is_active:
+            return
+
+        visible_slice = self._get_visible_slice(self.current_items)
+
+        def draw(draw_obj):
+            for i, item_name in enumerate(visible_slice):
+                actual_index = self.window_start_index + i
+                is_selected = (actual_index == self.current_selection_index)
+
+                # Show "<- " if selected and item is "Back"
+                if is_selected and item_name == "Back":
+                    arrow = "<- "
+                elif is_selected:
+                    arrow = "-> "
+                else:
+                    arrow = "   "
+
+                fill_color = "white" if is_selected else "gray"
+                y_pos = self.y_offset + i * self.line_spacing
+                draw_obj.text((5, y_pos), f"{arrow}{item_name}", font=self.font, fill=fill_color)
+
+        self.display_manager.draw_custom(draw)
+        self.logger.debug(
+            f"ClockMenu: current_menu={self.current_menu}, "
+            f"items={self.current_items}, "
+            f"index={self.current_selection_index}, window_start={self.window_start_index}"
+        )
+
+    def _get_visible_slice(self, items):
+        """
+        Keep the selection near the middle if possible.
+        """
+        total = len(items)
+        half_window = self.window_size // 2
+
+        tentative_start = self.current_selection_index - half_window
+
+        if tentative_start < 0:
+            self.window_start_index = 0
+        elif tentative_start + self.window_size > total:
+            self.window_start_index = max(total - self.window_size, 0)
+        else:
+            self.window_start_index = tentative_start
+
+        end_index = self.window_start_index + self.window_size
+        return items[self.window_start_index:end_index]
+
+    # ----------------------------------------------------------------
+    # Font Setting
+    # ----------------------------------------------------------------
+    def _handle_font_selection(self, selected):
+        """
+        E.g. "Sans" => 'clock_sans', "Dots" => 'clock_dots', "Digital" => 'clock_digital'.
+        """
+        mapping = {
+            "Sans": "clock_sans",
+            "Dots": "clock_dots",
+            "Digital": "clock_digital",
+            "Bold": "clock_bold"
+        }
+        chosen = mapping.get(selected)
+        if chosen:
+            self.mode_manager.config["clock_font_key"] = chosen
+            self.logger.info(f"ClockMenu: Set font => {chosen}")
+            self.mode_manager.save_preferences()
+        else:
+            self.logger.warning(f"ClockMenu: Unknown font => {selected}")

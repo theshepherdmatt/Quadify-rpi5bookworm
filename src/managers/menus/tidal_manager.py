@@ -7,7 +7,7 @@ import threading
 import time
 
 class TidalManager(BaseManager):
-    def __init__(self, display_manager, volumio_listener, mode_manager, window_size=4, y_offset=5, line_spacing=15):
+    def __init__(self, display_manager, volumio_listener, mode_manager, window_size=4, y_offset=2, line_spacing=15):
         super().__init__(display_manager, volumio_listener, mode_manager)
         self.mode_name = "tidal"
         self.tidal_playlists = []
@@ -267,39 +267,28 @@ class TidalManager(BaseManager):
         self.navigate_to(uri)
 
     def play_song(self, uri):
-        """Emit commands to Volumio to play the selected song directly."""
-        self.logger.info(f"TidalManager: Sending play commands for URI: {uri}")
+        """
+        Emit a single 'replaceAndPlay' command to Volumio for this Tidal track.
+        Avoid suppressing state changes so we can see 'status=play' pushState.
+        """
+        self.logger.info(f"TidalManager: Sending replaceAndPlay for URI: {uri}")
         if self.volumio_listener.is_connected():
             try:
-                # Suppress state changes
-                self.mode_manager.suppress_state_change()
-
-                # Step 1: Clear the current queue
-                self.volumio_listener.socketIO.emit('clearQueue')
-                self.logger.info("TidalManager: Cleared Volumio queue.")
-
-                # Step 2: Add the selected track to the queue
-                selected_item = self.current_menu_items[self.current_selection_index]
-                song_title = selected_item.get("title", "Untitled")
-                self.volumio_listener.socketIO.emit('addToQueue', {
-                    "service": "tidal",
-                    "uri": uri,
-                    "title": song_title
+                self.volumio_listener.socketIO.emit('replaceAndPlay', {
+                    "item": {
+                        "service": "tidal",
+                        "uri": uri
+                    }
                 })
-                self.logger.info(f"TidalManager: Added '{song_title}' to Volumio queue.")
+                self.logger.info(f"TidalManager: Emitted replaceAndPlay for Tidal track '{uri}'.")
 
-                # Step 3: Start playback
-                self.volumio_listener.socketIO.emit('play')
-                self.logger.info("TidalManager: Sent play command to Volumio.")
-
-                # Allow state changes after a short delay
-                threading.Timer(1.0, self.mode_manager.allow_state_change).start()
             except Exception as e:
-                self.logger.error(f"TidalManager: Failed to play track {uri}: {e}")
+                self.logger.error(f"TidalManager: Failed to replaceAndPlay track {uri}: {e}")
                 self.display_error_message("Playback Error", f"Could not play track: {e}")
         else:
             self.logger.warning("TidalManager: Cannot play song - not connected to Volumio.")
             self.display_error_message("Connection Error", "Not connected to Volumio.")
+
 
     def navigate_to(self, uri):
         """Navigate into a submenu or playlist."""
