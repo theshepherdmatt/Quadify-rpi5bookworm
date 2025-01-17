@@ -15,39 +15,33 @@ MCP23017_GPIOB  = 0x13
 MCP23017_GPPUA  = 0x0C
 MCP23017_GPPUB  = 0x0D
 
-# Default MCP23017 address if not provided in config.yaml
 DEFAULT_MCP23017_ADDRESS = 0x20
-
-# Toggle if your play/pause columns are physically reversed
 SWAP_COLUMNS = True
 
-# Define LED constants (GPIOA bits). Example bit usage:
 class LED(IntEnum):
-    LED1 = 0b10000000  # GPIOA7 => Play LED
-    LED2 = 0b01000000  # GPIOA6 => Pause LED
-    LED3 = 0b00100000  # GPIOA5 => Previous Button LED
-    LED4 = 0b00010000  # GPIOA4 => Next Button LED
-    LED5 = 0b00001000  # GPIOA3 => Repeat Button LED
-    LED6 = 0b00000100  # GPIOA2 => Random Button LED
+    LED1 = 0b10000000  # GPIOA7 => "Play" LED
+    LED2 = 0b01000000  # GPIOA6 => "Pause/Stop" LED
+    LED3 = 0b00100000  # GPIOA5 => e.g. Previous button LED
+    LED4 = 0b00010000  # GPIOA4 => e.g. Next button LED
+    LED5 = 0b00001000  # GPIOA3 => e.g. Repeat LED
+    LED6 = 0b00000100  # GPIOA2 => e.g. Random LED
     LED7 = 0b00000010  # GPIOA1 => spare/custom
     LED8 = 0b00000001  # GPIOA0 => spare/custom
 
 class ButtonsLEDController:
     """
     A hardware controller for an MCP23017 expander:
-      - Writes to GPIOA for controlling LEDs.
-      - Reads a 4x2 button matrix from GPIOB pins.
-      - On each button press, calls `mpc` commands to control MPD.
-      - Continuously polls MPD to keep the Play or Pause LED lit even if user
-        controls playback externally (like from a phone).
+      - Writes to GPIOA (LEDs).
+      - Reads a 4x2 button matrix from GPIOB (pins).
+      - On each button press, calls 'volumio' CLI commands.
+      - Continuously polls 'volumio status' to keep Play/Pause LED up to date.
     """
 
     def __init__(self, config_path='config.yaml', debounce_delay=0.1):
-        # Setup logger
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.logger.setLevel(logging.ERROR)  # change to DEBUG if needed
+        self.logger.setLevel(logging.ERROR)
 
-        # Add console handler in debug mode
+        # Optional: console handler
         ch = logging.StreamHandler()
         ch.setLevel(logging.DEBUG)
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -57,7 +51,6 @@ class ButtonsLEDController:
 
         self.logger.debug("Initializing ButtonsLEDController.")
 
-        # Attempt I2C bus init
         try:
             self.bus = smbus2.SMBus(1)
             self.logger.debug("I2C bus initialized successfully.")
@@ -66,11 +59,7 @@ class ButtonsLEDController:
             self.bus = None
 
         self.debounce_delay = debounce_delay
-
-        # 4x2 matrix => '1' => not pressed, '0' => pressed
         self.prev_button_state = [[1, 1], [1, 1], [1, 1], [1, 1]]
-
-        # Button map: row/col => button_id
         self.button_map = [
             [1, 2],
             [3, 4],
@@ -78,19 +67,15 @@ class ButtonsLEDController:
             [7, 8],
         ]
 
-        # LED states
         self.status_led_state = 0
         self.current_button_led_state = 0
         self.current_led_state = 0
 
-        # Read config for MCP address
         self.mcp23017_address = self._load_mcp_address(config_path)
-
-        # Initialize the MCP
         self._initialize_mcp23017()
 
-        # Control threads
         self.running = False
+        self.thread = None
         self.monitor_thread = None
 
     def _load_mcp_address(self, config_path):
@@ -111,13 +96,11 @@ class ButtonsLEDController:
         return DEFAULT_MCP23017_ADDRESS
 
     def _initialize_mcp23017(self):
-        """Configure MCP23017 directions and pull-ups."""
         if not self.bus:
             self.logger.error("I2C bus not initialized; cannot init MCP23017.")
             return
         try:
-            # GPIOA => outputs for LEDs
-            self.bus.write_byte_data(self.mcp23017_address, MCP23017_IODIRA, 0x00)
+            self.bus.write_byte_data(self.mcp23017_address, MCP23017_IODIRA, 0x00)  # GPIOA => outputs
             self.logger.debug("GPIOA => outputs for LEDs.")
 
             # GPIOB => B0/B1 outputs (columns), B2-B7 inputs (rows)
@@ -128,13 +111,11 @@ class ButtonsLEDController:
             self.bus.write_byte_data(self.mcp23017_address, MCP23017_GPPUB, 0xFC)
             self.logger.debug("Enabled pull-ups on B2-B7.")
 
-            # Initialize GPIOA => 0 => all LEDs off
+            # Initially turn off all LEDs
             self.bus.write_byte_data(self.mcp23017_address, MCP23017_GPIOA, 0x00)
-            self.logger.debug("All LEDs off initially.")
 
             # B0/B1 high => columns inactive
             self.bus.write_byte_data(self.mcp23017_address, MCP23017_GPIOB, 0x03)
-            self.logger.debug("GPIOB0/B1 set high (columns inactive).")
 
             self.logger.info("MCP23017 init complete.")
         except Exception as e:
@@ -142,52 +123,42 @@ class ButtonsLEDController:
             self.bus = None
 
     def start(self):
-        """
-        Start the button-monitor thread and the MPD monitor thread
-        so that LED states are continuously updated.
-        """
         self.logger.debug("Starting ButtonsLEDController threads.")
         self.running = True
 
-        # 1) Thread for reading button matrix
+        # 1) Button scanning thread
         self.thread = threading.Thread(target=self._monitor_buttons_loop, name="ButtonMonitorThread")
         self.thread.start()
 
-        # 2) Thread for polling MPD status => keep play/pause LED in sync
-        self.monitor_thread = threading.Thread(target=self._monitor_mpd_loop, name="MPDMonitorThread")
+        # 2) Volumio status thread
+        self.monitor_thread = threading.Thread(target=self._monitor_volumio_loop, name="VolumioMonitorThread")
         self.monitor_thread.start()
 
         self.logger.info("ButtonsLEDController started.")
 
     def stop(self):
-        """Stop both threads."""
         self.logger.debug("Stopping ButtonsLEDController threads.")
         self.running = False
 
-        if hasattr(self, 'thread') and self.thread.is_alive():
+        if self.thread and self.thread.is_alive():
             self.thread.join()
             self.logger.debug("ButtonMonitorThread joined.")
 
         if self.monitor_thread and self.monitor_thread.is_alive():
             self.monitor_thread.join()
-            self.logger.debug("MPDMonitorThread joined.")
+            self.logger.debug("VolumioMonitorThread joined.")
 
         self.logger.info("ButtonsLEDController stopped.")
 
-    # -----------------------------------------------------------
-    #  Threads
-    # -----------------------------------------------------------
+    # ------------------------------
+    #  Buttons
+    # ------------------------------
     def _monitor_buttons_loop(self):
-        """
-        Continuously polls the button matrix and triggers handle_button_press
-        on transitions from '1' (not pressed) to '0' (pressed).
-        """
         self.logger.debug("Button monitoring loop started.")
         while self.running:
             if not self.bus:
                 self.logger.error("I2C bus not available; stopping button loop.")
                 break
-
             try:
                 matrix = self._read_button_matrix()
                 for row in range(4):
@@ -196,53 +167,30 @@ class ButtonsLEDController:
                         curr_state = matrix[row][col]
                         prev_state = self.prev_button_state[row][col]
 
-                        # Check for newly pressed
-                        if curr_state == 0 and prev_state != curr_state:
+                        # 1 => not pressed, 0 => pressed
+                        if curr_state == 0 and prev_state == 1:
                             self.logger.info(f"Button {btn_id} pressed.")
                             self.handle_button_press(btn_id)
 
                         self.prev_button_state[row][col] = curr_state
-                time.sleep(self.debounce_delay)
 
+                time.sleep(self.debounce_delay)
             except Exception as e:
                 self.logger.error(f"Error in _monitor_buttons_loop: {e}")
                 time.sleep(1)
         self.logger.debug("Button monitoring loop ended.")
 
-    def _monitor_mpd_loop(self):
-        """
-        Periodically checks MPD status to keep LED1 or LED2 lit
-        depending on playback state, even if user controls MPD externally.
-        """
-        self.logger.debug("MPD monitor loop started.")
-        while self.running:
-            try:
-                self.update_play_pause_led()
-            except Exception as e:
-                self.logger.error(f"Exception in MPD monitor loop: {e}")
-            time.sleep(2)  # check every 2 seconds
-        self.logger.debug("MPD monitor loop ended.")
-
-    # -----------------------------------------------------------
-    #  Reading Buttons
-    # -----------------------------------------------------------
     def _read_button_matrix(self):
-        """
-        Return a 4x2 array of 1/0 states for each button,
-        1 => not pressed, 0 => pressed.
-        """
         default_state = [[1, 1], [1, 1], [1, 1], [1, 1]]
         if not self.bus:
             return default_state
 
         matrix_state = [[1, 1], [1, 1], [1, 1], [1, 1]]
-
         try:
             for col in range(2):
-                col_output = ~(1 << col) & 0x03  # col=0 => 0b10; col=1 => 0b01
+                col_output = ~(1 << col) & 0x03  # col=0 => 0b10, col=1 => 0b01
                 self.bus.write_byte_data(self.mcp23017_address, MCP23017_GPIOB, col_output | 0xFC)
                 time.sleep(0.005)
-
                 row_in = self.bus.read_byte_data(self.mcp23017_address, MCP23017_GPIOB)
                 for row in range(4):
                     bit_val = (row_in >> (row + 2)) & 0x01
@@ -250,53 +198,52 @@ class ButtonsLEDController:
                         matrix_state[row][1 - col] = bit_val
                     else:
                         matrix_state[row][col] = bit_val
-
         except Exception as e:
             self.logger.error(f"Error reading button matrix: {e}")
         return matrix_state
 
-    # -----------------------------------------------------------
-    #  Button Press Handling
-    # -----------------------------------------------------------
     def handle_button_press(self, button_id):
         """
-        For each button, run an 'mpc' command or ephemeral LED, etc.
+        Now calls 'volumio' instead of 'mpc'.
         """
-        # Clear ephemeral LED
         self.current_button_led_state = 0
 
         try:
             if button_id == 1:
-                # "mpc toggle" => sets either playing or paused
-                subprocess.run(["mpc", "toggle"], check=False)
-                self.logger.debug("Executed 'mpc toggle'.")
-                # We'll let the mpd monitor thread handle LED1 or LED2.
+                # volumio toggle => toggles play/pause
+                subprocess.run(["volumio", "toggle"], check=False)
+                self.logger.debug("Executed 'volumio toggle'.")
 
             elif button_id == 2:
-                # "mpc stop" => sets paused LED
-                subprocess.run(["mpc", "stop"], check=False)
-                self.logger.debug("Executed 'mpc stop'.")
+                # volumio stop => sets paused LED
+                subprocess.run(["volumio", "stop"], check=False)
+                self.logger.debug("Executed 'volumio stop'.")
+                # Force the LED2 on
                 self.status_led_state = LED.LED2.value
                 self.control_leds()
 
             elif button_id == 3:
-                subprocess.run(["mpc", "next"], check=False)
-                self.logger.debug("Executed 'mpc next'.")
+                # volumio next
+                subprocess.run(["volumio", "next"], check=False)
+                self.logger.debug("Executed 'volumio next'.")
                 self.light_button_led_for(LED.LED4, 0.5)
 
             elif button_id == 4:
-                subprocess.run(["mpc", "prev"], check=False)
-                self.logger.debug("Executed 'mpc prev'.")
+                # volumio previous
+                subprocess.run(["volumio", "previous"], check=False)
+                self.logger.debug("Executed 'volumio previous'.")
                 self.light_button_led_for(LED.LED3, 0.5)
 
             elif button_id == 5:
-                subprocess.run(["mpc", "repeat"], check=False)
-                self.logger.debug("Executed 'mpc repeat'.")
+                # volumio repeat => toggles repeat
+                subprocess.run(["volumio", "repeat"], check=False)
+                self.logger.debug("Executed 'volumio repeat'.")
                 self.light_button_led_for(LED.LED5, 0.5)
 
             elif button_id == 6:
-                subprocess.run(["mpc", "random"], check=False)
-                self.logger.debug("Executed 'mpc random'.")
+                # volumio random => toggles shuffle
+                subprocess.run(["volumio", "random"], check=False)
+                self.logger.debug("Executed 'volumio random'.")
                 self.light_button_led_for(LED.LED6, 0.5)
 
             elif button_id == 7:
@@ -315,63 +262,71 @@ class ButtonsLEDController:
         except Exception as e:
             self.logger.error(f"Error handling button {button_id}: {e}")
 
-    # -----------------------------------------------------------
-    #  MPD State => LED1 or LED2
-    # -----------------------------------------------------------
+    # ------------------------------
+    #  Volumio Monitor
+    # ------------------------------
+    def _monitor_volumio_loop(self):
+        """
+        Checks 'volumio status' every 2 seconds to keep LED1 or LED2 lit
+        depending on playback state (play vs pause/stop).
+        """
+        self.logger.debug("Volumio monitor loop started.")
+        while self.running:
+            try:
+                self.update_play_pause_led()
+            except Exception as e:
+                self.logger.error(f"Exception in Volumio monitor loop: {e}")
+            time.sleep(2)
+        self.logger.debug("Volumio monitor loop ended.")
+
     def update_play_pause_led(self):
         """
-        Reads MPD status. If playing => LED1 on. If paused/stopped => LED2 on.
+        Uses 'volumio status' => parse 'status': 'play' or 'pause' or 'stop'.
+        Then sets LED1 if playing, else LED2.
         """
         try:
-            res = subprocess.run(["mpc", "status"], capture_output=True, text=True)
+            # Run volumio status command
+            res = subprocess.run(["volumio", "status"], capture_output=True, text=True)
             if res.returncode == 0:
                 out = res.stdout.lower()
-                if "[playing]" in out:
-                    self.logger.debug("MPD => playing => LED1 on.")
+
+                # Looking for something like:  "status: play"
+                # or "status: pause", etc.  You might have to adapt if volumio CLI differs.
+                if "status: play" in out:
+                    self.logger.debug("Volumio => playing => LED1 on.")
                     self.status_led_state = LED.LED1.value
-                elif "[paused]" in out or "[pause]" in out or "[stopped]" in out:
-                    self.logger.debug("MPD => paused/stopped => LED2 on.")
+                elif "status: pause" in out or "status: stop" in out:
+                    self.logger.debug("Volumio => paused/stopped => LED2 on.")
                     self.status_led_state = LED.LED2.value
                 else:
-                    # No recognized state => turn both off or pick one
-                    self.logger.debug("MPD => unknown => no LED.")
+                    self.logger.debug("Volumio => unknown => no LED lit.")
                     self.status_led_state = 0
 
                 self.control_leds()
             else:
-                self.logger.warning("mpc status command failed; no LED update.")
+                self.logger.warning("volumio status command failed; no LED update.")
         except Exception as e:
             self.logger.error(f"update_play_pause_led: {e}")
 
-    # -----------------------------------------------------------
-    #  Ephemeral Button LED
-    # -----------------------------------------------------------
+    # ------------------------------
+    #  LED Helpers
+    # ------------------------------
     def light_button_led_for(self, led, duration):
-        """
-        Turn on a button LED for 'duration' seconds; revert to main LED state.
-        """
         self.current_button_led_state = led.value
         self.control_leds()
         threading.Timer(duration, self.reset_button_led).start()
 
     def reset_button_led(self):
-        self.logger.debug("Resetting ephemeral button LED.")
         self.current_button_led_state = 0
         self.control_leds()
 
-    # -----------------------------------------------------------
-    #  LED Writing
-    # -----------------------------------------------------------
     def control_leds(self):
-        """
-        Combine status_led_state & ephemeral, write to MCP23017 GPIOA.
-        """
+        """Combine status_led_state & ephemeral, write to MCP23017 GPIOA."""
         total_state = self.status_led_state | self.current_button_led_state
         self.logger.debug(
             f"LED states => status: {bin(self.status_led_state)}, "
             f"button: {bin(self.current_button_led_state)}, total: {bin(total_state)}"
         )
-
         if total_state != self.current_led_state:
             if self.bus:
                 try:
