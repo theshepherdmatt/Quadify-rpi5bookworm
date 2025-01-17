@@ -16,7 +16,7 @@ class ConfigMenu(BaseManager):
         self,
         display_manager,
         mode_manager,
-        window_size=5,
+        window_size=4,
         y_offset=2,
         line_spacing=15
     ):
@@ -44,6 +44,7 @@ class ConfigMenu(BaseManager):
             "Display Settings",
             "Clock Settings",
             "Screensaver Settings",
+            "System Info",
             "Back"
         ]
 
@@ -150,6 +151,9 @@ class ConfigMenu(BaseManager):
         elif selected == "Screensaver Settings":
             self.stop_mode()
             self.mode_manager.to_screensavermenu()
+        elif selected == "System Info":
+            self.stop_mode()
+            self.mode_manager.to_systeminfo()
         elif selected == "Back":
             self.stop_mode()
             self.mode_manager.to_menu()  # Or wherever "Back" should lead

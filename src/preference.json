@@ -2,10 +2,10 @@
   "display_mode": "minimal",
   "clock_font_key": "clock_bold",
   "show_seconds": false,
-  "show_date": true,
+  "show_date": false,
   "screensaver_enabled": true,
   "screensaver_type": "stars",
   "screensaver_timeout": 120,
   "oled_brightness": 50,
-  "cava_enabled": true
+  "cava_enabled": false
 }
