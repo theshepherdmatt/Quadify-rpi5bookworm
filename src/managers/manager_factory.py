@@ -223,14 +223,16 @@ class ManagerFactory:
                 display_manager=self.display_manager,
                 update_interval=0.04
             )
-        elif screensaver_type in ("stars"):
-            from display.screensavers.starfield_screensaver import StarfieldScreensaver
-            self.logger.info("ManagerFactory: Using StarfieldScreensaver.")
-            return StarfieldScreensaver(
+        
+        elif screensaver_type in ("geo"):
+            from display.screensavers.geo_screensaver import GeoScreensaver
+            self.logger.info("ManagerFactory: Using GeoScreensaver.")
+            return GeoScreensaver(
                 display_manager=self.display_manager,
-                num_stars=40,
-                update_interval=0.05
+                update_interval=0.06
             )
+
+
         elif screensaver_type in ("quadify", "bouncing_text"):
             from display.screensavers.bouncing_text_screensaver import BouncingTextScreensaver
             self.logger.info("ManagerFactory: Using BouncingTextScreensaver.")

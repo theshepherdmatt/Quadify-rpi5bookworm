@@ -20,7 +20,7 @@ class MenuManager:
 
         # Menu initialization
         self.menu_stack = []
-        self.current_menu_items = ["Stream", "Library", "Radio", "Playlists", "Display", "Config"]
+        self.current_menu_items = ["Stream", "Library", "Playlists", "Radio", "Config"]
         self.stream_menu_items = ["Tidal", "Qobuz", "Spotify"]
         self.library_menu_items = ["NAS", "USB"]
         self.display_menu_items = ["Display", "Screensavers", "Clock", "Contrast"]
@@ -62,7 +62,7 @@ class MenuManager:
     def start_mode(self):
         self.is_active = True
         # Reset to top-level menu items
-        self.current_menu_items = ["Stream", "Library", "Radio", "Playlists", "Config"]
+        self.current_menu_items = ["Stream", "Library", "Playlists", "Radio", "Config"]
         self.current_selection_index = 0
         self.window_start_index = 0
         # Schedule display_menu without blocking
@@ -133,7 +133,7 @@ class MenuManager:
                 # Calculate text size
                 text_width, text_height = draw_obj.textsize(label, font=font)
                 text_x = x + (icon_size - text_width) // 2
-                text_y = y_position + icon_size + 5  # Position text slightly below the icon
+                text_y = y_position + icon_size + 2  # Position text slightly below the icon
 
                 # Draw the label
                 draw_obj.text((text_x, text_y), label, font=font, fill=text_color)

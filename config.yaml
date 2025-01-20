@@ -12,7 +12,8 @@ volumio:
 display:
   icon_dir: "/home/volumio/Quadify/src/assets/images"
   default_album_art: "/home/volumio/Quadify/src/assets/images/webradio.png"
-  loading_gif_path: "/home/volumio/Quadify/src/assets/images/Loading.gif"  # Path for loading screen GIF
+  loading_gif_path: "/home/volumio/Quadify/src/assets/images/Loading.gif"
+  screensaver_gif_path: "/home/volumio/Quadify/src/assets/images/geo.gif"  
   logo_path: "/home/volumio/Quadify/src/assets/images/logo.png"
 
   rotation: 2  # Set rotation if needed (0, 90, 180, 270)

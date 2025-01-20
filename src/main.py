@@ -18,7 +18,7 @@ from display.screens.modern_screen import ModernScreen
 from display.screens.minimal_screen import MinimalScreen
 from display.screens.system_info_screen import SystemInfoScreen
 from display.screensavers.snake_screensaver import SnakeScreensaver
-from display.screensavers.starfield_screensaver import StarfieldScreensaver
+from display.screensavers.geo_screensaver import GeoScreensaver
 from display.screensavers.bouncing_text_screensaver import BouncingTextScreensaver
 from display.display_manager import DisplayManager
 from display.screens.clock import Clock

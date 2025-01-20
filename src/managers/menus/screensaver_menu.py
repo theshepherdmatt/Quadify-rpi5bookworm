@@ -5,14 +5,14 @@ from managers.menus.base_manager import BaseManager
 
 class ScreensaverMenu(BaseManager):
     """
-    A scrollable menu for choosing a screensaver (None, Snake, Stars, Quadify, Timer),
+    A scrollable menu for choosing a screensaver (None, Snake, Geo, Quadify, Timer),
     plus a sub-menu (Timer) to pick your idle timeout. The sub-menu has no 'Back' item;
     picking a time automatically returns to the main menu.
 
     Main Items (6 total):
       1) None
       2) Snake
-      3) Stars
+      3) Geo
       4) Quadify
       5) Timer
       6) Back  (goes to Config Menu)
@@ -54,7 +54,7 @@ class ScreensaverMenu(BaseManager):
         self.main_items = [
             "None",
             "Snake",
-            "Stars",
+            "Geo",
             "Quadify",
             "Timer",
             "Back"
@@ -175,7 +175,7 @@ class ScreensaverMenu(BaseManager):
         saver_map = {
             "None":    "none",
             "Snake":   "snake",
-            "Stars":   "stars",
+            "Geo":     "geo",
             "Quadify": "quadify"
         }
         chosen = saver_map.get(selected_name, "none")
