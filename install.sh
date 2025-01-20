@@ -68,7 +68,7 @@ check_root() {
 # ============================
 TIPS=(
   "Long-press any button to return home to the clock mode."
-  "Under 'Config', you can switch display modes—Modern, Original, or VU-Screen."
+  "Under 'Config', you can switch display modes—Modern, Original, or Minimal-Screen."
   "Don’t forget to explore different screensaver types under 'Screensaver' in Config!"
   "Brightness can be tweaked in Config -> Display for late-night listening."
   "Quadify: Where code meets Hi-Fi. Check new clock faces in 'Clock' menu!"
