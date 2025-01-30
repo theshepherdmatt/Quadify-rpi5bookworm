@@ -20,8 +20,8 @@ class SystemInfoScreen(BaseManager):
         CPU: 12.3%   MEM: 45%   WIFI: 78.9%   CPU temp: 39c
     """
 
-    def __init__(self, display_manager, moode_listener, mode_manager):
-        super().__init__(display_manager, moode_listener, mode_manager)
+    def __init__(self, display_manager, volumio_listener, mode_manager):
+        super().__init__(display_manager, volumio_listener, mode_manager)
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(logging.DEBUG)
 

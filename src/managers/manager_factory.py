@@ -53,6 +53,7 @@ class ManagerFactory:
         screensaver_menu     = self.create_screensaver_menu()
         screensaver          = self.create_screensaver()
         system_info_screen   = self.create_system_info_screen()
+        system_update_menu   = self.create_system_update_menu()
 
         # ----- Assign them to ModeManager via the set_* methods -----
         self.mode_manager.set_menu_manager(menu_manager)
@@ -75,6 +76,7 @@ class ManagerFactory:
         self.mode_manager.set_screensaver_menu(screensaver_menu)
         self.mode_manager.set_screensaver(screensaver)
         self.mode_manager.set_system_info_screen(system_info_screen)
+        self.mode_manager.set_system_update_menu(system_update_menu)
 
         self.logger.info("ManagerFactory: ModeManager fully configured with managers & screens.")
 
@@ -255,6 +257,13 @@ class ManagerFactory:
         from display.screens.system_info_screen import SystemInfoScreen
         return SystemInfoScreen(
             display_manager   = self.display_manager,
-            moode_listener    = self.volumio_listener,  # or rename param if needed
+            volumio_listener    = self.volumio_listener,  # or rename param if needed
             mode_manager      = self.mode_manager
+        )
+
+    def create_system_update_menu(self):
+        from .menus.system_update_menu import SystemUpdateMenu
+        return SystemUpdateMenu(
+            display_manager = self.display_manager,
+            mode_manager    = self.mode_manager
         )

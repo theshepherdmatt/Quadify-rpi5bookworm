@@ -45,6 +45,7 @@ class ConfigMenu(BaseManager):
             "Clock Settings",
             "Screensaver Settings",
             "System Info",
+            "System Update",
             "Back"
         ]
 
@@ -154,6 +155,9 @@ class ConfigMenu(BaseManager):
         elif selected == "System Info":
             self.stop_mode()
             self.mode_manager.to_systeminfo()
+        elif selected == "System Update":
+            self.stop_mode()
+            self.mode_manager.to_systemupdate()
         elif selected == "Back":
             self.stop_mode()
             self.mode_manager.to_menu()  # Or wherever "Back" should lead

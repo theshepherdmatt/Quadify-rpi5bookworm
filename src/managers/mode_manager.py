@@ -27,6 +27,8 @@ class ModeManager:
         {'name': 'minimal',          'on_enter': 'enter_minimal'},
         {'name': 'systeminfo',      'on_enter': 'enter_systeminfo'},
         {'name': 'configmenu',      'on_enter': 'enter_configmenu'},
+        {'name': 'systemupdate',    'on_enter': 'enter_systemupdate'},
+
 
         {'name': 'radiomanager',    'on_enter': 'enter_radiomanager'},
         {'name': 'menu',            'on_enter': 'enter_menu'},
@@ -107,6 +109,7 @@ class ModeManager:
         self.display_menu           = None
         self.clock_menu             = None
         self.system_info_screen     = None
+        self.system_update_menu     = None
 
         # Screensaver / idle logic
         self.idle_timer       = None
@@ -293,6 +296,9 @@ class ModeManager:
     def set_system_info_screen(self, system_info_screen):
         self.system_info_screen = system_info_screen
 
+    def set_system_update_menu(self, system_update_menu):
+        self.system_update_menu = system_update_menu
+
     # ------------------------------------------------------------------
     #  State-suppression logic (if we want to temporarily block transitions)
     # ------------------------------------------------------------------
@@ -366,6 +372,8 @@ class ModeManager:
         self.machine.add_transition('to_modern',       source='*', dest='modern')
         self.machine.add_transition('to_minimal',       source='*', dest='minimal')
         self.machine.add_transition('to_systeminfo',   source='*', dest='systeminfo')
+        self.machine.add_transition('to_systemupdate', source='*', dest='systemupdate')
+
 
         # Quadify-like
         self.machine.add_transition('to_radiomanager',   source='*', dest='radiomanager')        
@@ -447,6 +455,8 @@ class ModeManager:
             self.webradio_screen.stop_mode()
         if self.system_info_screen and self.system_info_screen.is_active:
             self.system_info_screen.stop_mode()
+        if self.system_update_menu and self.system_update_menu.is_active:
+            self.system_update_menu.stop_mode()
 
     # ------------------------------------------------------------------
     #  State Entry Methods
@@ -569,6 +579,19 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No system_info_screen set.")
         self.reset_idle_timer()
+
+    def enter_systemupdate(self, event):
+        self.logger.info("ModeManager: Entering 'systemupdate' mode.")
+        self.stop_all_screens()
+
+        if self.system_update_menu:
+            self.system_update_menu.start_mode()
+            self.logger.info("ModeManager: SystemUpdateMenu started.")
+        else:
+            self.logger.warning("ModeManager: No system_update_menu set.")
+
+        self.reset_idle_timer()
+
 
     def enter_menu(self, event):
         self.logger.info("ModeManager: Entering 'menu' state.")

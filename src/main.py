@@ -203,6 +203,9 @@ def main():
         elif current_mode == 'configmenu':
             mode_manager.config_menu.scroll_selection(direction)
 
+        elif current_mode == 'systemupdate':
+            mode_manager.system_update_menu.scroll_selection(direction)
+
         # If we're in screensaver mode, exit on any rotation
         elif current_mode == 'screensaver':
             mode_manager.exit_screensaver()
@@ -252,6 +255,9 @@ def main():
 
         elif current_mode == 'configmenu':
             mode_manager.config_menu.select_item()
+
+        elif current_mode == 'systemupdate':
+            mode_manager.system_update_menu.select_item()
 
         elif current_mode == 'screensavermenu':
             mode_manager.screensaver_menu.select_item()
