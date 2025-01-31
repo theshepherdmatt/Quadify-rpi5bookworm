@@ -153,7 +153,8 @@ class SystemUpdateMenu(BaseManager):
             if selected_item == "Yes":
                 self.stop_mode()
                 # Optionally draw a quick "Updating..." text or not
-                subprocess.Popen(["/home/volumio/Quadify/quadify_autoupdate.sh"])
+                subprocess.Popen(["bash", "/home/volumio/Quadify/quadify_autoupdate.sh"])
+
 
             else:
                 # "No" => go back to main
