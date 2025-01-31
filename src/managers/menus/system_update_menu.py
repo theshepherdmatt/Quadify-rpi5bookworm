@@ -155,12 +155,6 @@ class SystemUpdateMenu(BaseManager):
                 # Optionally draw a quick "Updating..." text or not
                 subprocess.Popen(["/home/volumio/Quadify/quadify_autoupdate.sh"])
 
-                # 3) Trigger the actual update script in SystemUpdateScreen
-                #    (assuming you have set systemUpdateScreen in ModeManager)
-                if self.mode_manager.system_update_menu:
-                    self.mode_manager.system_update_menu.trigger_quadify_update()
-                else:
-                    self.logger.warning("SystemUpdateMenu: No system_update_screen set.")
             else:
                 # "No" => go back to main
                 self.current_menu = "main"
