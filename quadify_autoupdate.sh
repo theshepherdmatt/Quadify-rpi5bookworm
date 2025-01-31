@@ -34,7 +34,6 @@ fi
 # 7) Remove old folder (optional: only if you don’t need a backup)
 rm -rf /home/volumio/Quadify_old
 
-# 8) Restart Quadify
-sudo systemctl start quadify
-
-echo "Update complete!"
+# 8) Reboot the system
+echo "Rebooting the system..."
+sudo reboot
