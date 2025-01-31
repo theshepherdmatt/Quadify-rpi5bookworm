@@ -213,28 +213,29 @@ detect_i2c_address() {
         log_message "warning" "No MCP23017 detected. Check wiring."
     else
         log_message "success" "MCP23017 found at I2C: 0x$address."
-        update_buttonsleds_address "$address"
+        update_config_i2c_address "$address"
     fi
     show_random_tip
 }
 
-update_buttonsleds_address() {
+update_config_i2c_address() {
     local detected_address="$1"
-    BUTTONSLEDS_FILE="/home/volumio/Quadify/src/hardware/buttonsleds.py"
+    CONFIG_FILE="/home/volumio/Quadify/config.yaml"
 
-    if [[ -f "$BUTTONSLEDS_FILE" ]]; then
-        if grep -q "mcp23017_address" "$BUTTONSLEDS_FILE"; then
-            run_command "sed -i \"s/mcp23017_address = 0x[0-9a-fA-F]\\{2\\}/mcp23017_address = 0x$detected_address/\" \"$BUTTONSLEDS_FILE\""
-            log_message "success" "Updated MCP23017 address in $BUTTONSLEDS_FILE => 0x$detected_address."
+    if [[ -f "$CONFIG_FILE" ]]; then
+        if grep -q "mcp23017_address:" "$CONFIG_FILE"; then
+            run_command "sed -i \"s/mcp23017_address: 0x[0-9a-fA-F]\\{2\\}/mcp23017_address: 0x$detected_address/\" \"$CONFIG_FILE\""
+            log_message "success" "Updated MCP23017 address in config.yaml to 0x$detected_address."
         else
-            run_command "echo \"mcp23017_address = 0x$detected_address\" >> \"$BUTTONSLEDS_FILE\""
-            log_message "success" "Added MCP23017 address line to $BUTTONSLEDS_FILE => 0x$detected_address."
+            echo "mcp23017_address: 0x$detected_address" >> "$CONFIG_FILE"
+            log_message "success" "Added MCP23017 address to config.yaml as 0x$detected_address."
         fi
     else
-        log_message "error" "buttonsleds.py not found at $BUTTONSLEDS_FILE."
+        log_message "error" "config.yaml not found at $CONFIG_FILE."
         exit 1
     fi
 }
+
 
 # ============================
 #   Samba Setup
