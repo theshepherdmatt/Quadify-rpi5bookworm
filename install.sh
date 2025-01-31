@@ -200,6 +200,7 @@ enable_i2c_spi() {
 # ============================
 #   Detect/Set MCP23017 Address
 # ============================
+
 detect_i2c_address() {
     log_progress "Detecting MCP23017 I2C address..."
 
@@ -235,7 +236,6 @@ update_config_i2c_address() {
         exit 1
     fi
 }
-
 
 # ============================
 #   Samba Setup
