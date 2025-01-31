@@ -147,22 +147,39 @@ class SystemUpdateMenu(BaseManager):
 
             else:
                 self.logger.warning(f"SystemUpdateMenu: Unknown main item => {selected_item}")
+                
 
         elif self.current_menu == "confirm":
-            # Pseudocode inside select_item():
             if selected_item == "Yes":
+                # Display update message before executing the script
+                self.display_manager.clear_screen()
+                
+                def draw(draw_obj):
+                    text = "Updating from GitHub\nRebooting in 10 sec..."
+                    draw_obj.text((10, 20), text, font=self.font, fill="white")
+
+                self.display_manager.draw_custom(draw)
+
+                self.logger.info("SystemUpdateMenu: Displayed update message.")
+                
+                # Wait for 10 seconds so user can see message
+                time.sleep(10)
+
+                # Stop the menu mode
                 self.stop_mode()
-                # Optionally draw a quick "Updating..." text or not
+
+                # Run the update script and allow reboot
+                self.logger.info("SystemUpdateMenu: Running update script and rebooting.")
                 subprocess.Popen(["bash", "/home/volumio/Quadify/quadify_autoupdate.sh"])
 
-
             else:
-                # "No" => go back to main
+                # "No" => go back to the main menu
                 self.current_menu = "main"
                 self.current_list = self.main_items
                 self.current_selection_index = 0
                 self.window_start_index = 0
                 self._display_current_menu()
+
 
         else:
             self.logger.warning(f"SystemUpdateMenu: Unrecognized menu => {self.current_menu}")
