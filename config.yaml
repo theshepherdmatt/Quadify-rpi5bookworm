@@ -66,7 +66,7 @@ display:
       # Minimal fonts
     minimal_volume:
       path: "/home/volumio/Quadify/src/assets/fonts/Montserrat-Bold.ttf"
-      size: 42
+      size: 15
     minimal_service:
       path: "/home/volumio/Quadify/src/assets/fonts/Montserrat-Regular.ttf"
       size: 27
@@ -120,7 +120,7 @@ display:
     - "/home/volumio/Quadify/src/assets/images/volume.png"
     - "/home/volumio/Quadify/src/assets/images/config.png"
 
-mcp23017_address: 0x27
+mcp23017_address: 0x20
 
 logging:
   level: "DEBUG"  # Options: DEBUG, INFO, WARNING, ERROR
