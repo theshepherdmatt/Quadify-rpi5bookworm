@@ -7,6 +7,8 @@ import time
 import threading
 import logging
 import yaml
+import socket
+import lirc
 import os
 import sys
 from PIL import Image, ImageSequence
@@ -328,7 +330,123 @@ def main():
         long_press_callback   = on_long_press,
         long_press_threshold  = 2.5
     )
-    rotary_control.start()
+
+    threading.Thread(target=rotary_control.start, daemon=True).start()
+
+
+    def quadify_command_server(mode_manager):
+        """
+        A Unix socket server that listens on /tmp/quadify.sock for commands
+        from the IR listener and processes them using the provided mode_manager.
+        """
+        sock_path = "/tmp/quadify.sock"
+        try:
+            os.remove(sock_path)
+        except OSError:
+            pass
+
+        server_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        server_socket.bind(sock_path)
+        server_socket.listen(1)
+        print(f"Quadify command server listening on {sock_path}")
+
+        # Create mapping dictionaries for commands that depend on the current mode.
+        select_mapping = {
+            "menu": lambda: mode_manager.menu_manager.select_item(),
+            "tidal": lambda: mode_manager.tidal_manager.select_item(),
+            "qobuz": lambda: mode_manager.qobuz_manager.select_item(),
+            "library": lambda: mode_manager.library_manager.select_item(),
+            "radiomanager": lambda: mode_manager.radio_manager.select_item(),
+            "playlists": lambda: mode_manager.playlist_manager.select_item(),
+            "configmenu": lambda: mode_manager.config_menu.select_item(),
+            "displaymenu": lambda: mode_manager.display_menu.select_item(),
+            "clockmenu": lambda: mode_manager.clock_menu.select_item(),
+            "screensavermenu": lambda: mode_manager.screensaver_menu.select_item(),
+            "systeminfo": lambda: mode_manager.system_info_screen.select_item(),
+        }
+
+        scroll_mapping = {
+            "scroll_up": {
+                "tidal": lambda: mode_manager.tidal_manager.scroll_selection(-1),
+                "qobuz": lambda: mode_manager.qobuz_manager.scroll_selection(-1),
+                "library": lambda: mode_manager.library_manager.scroll_selection(-1),
+                "radiomanager": lambda: mode_manager.radio_manager.scroll_selection(-1),
+                "playlists": lambda: mode_manager.playlist_manager.scroll_selection(-1),
+                "configmenu": lambda: mode_manager.config_menu.scroll_selection(-1),
+                "displaymenu": lambda: mode_manager.display_menu.scroll_selection(-1),
+                "clockmenu": lambda: mode_manager.clock_menu.scroll_selection(-1),
+                "screensavermenu": lambda: mode_manager.screensaver_menu.scroll_selection(-1),
+                "systeminfo": lambda: mode_manager.system_info_screen.scroll_selection(-1),
+            },
+            "scroll_down": {
+                "tidal": lambda: mode_manager.tidal_manager.scroll_selection(1),
+                "qobuz": lambda: mode_manager.qobuz_manager.scroll_selection(1),
+                "library": lambda: mode_manager.library_manager.scroll_selection(1),
+                "radiomanager": lambda: mode_manager.radio_manager.scroll_selection(1),
+                "playlists": lambda: mode_manager.playlist_manager.scroll_selection(1),
+                "configmenu": lambda: mode_manager.config_menu.scroll_selection(1),
+                "displaymenu": lambda: mode_manager.display_menu.scroll_selection(1),
+                "clockmenu": lambda: mode_manager.clock_menu.scroll_selection(1),
+                "screensavermenu": lambda: mode_manager.screensaver_menu.scroll_selection(1),
+                "systeminfo": lambda: mode_manager.system_info_screen.scroll_selection(1),
+            }
+        }
+
+        while True:
+            try:
+                conn, _ = server_socket.accept()
+                with conn:
+                    data = conn.recv(1024)
+                    if not data:
+                        continue
+                    command = data.decode("utf-8").strip()
+                    print(f"Command received: {command}")
+                    current_mode = mode_manager.get_mode()
+
+                    # Handle generic commands first
+                    if command == "home":
+                        mode_manager.to_clock()
+                    elif command == "menu":
+                        if current_mode == "clock":
+                            mode_manager.to_menu()
+                    elif command == "toggle":
+                        mode_manager.toggle_play_pause()
+                    elif command == "repeat":
+                        print("Repeat command received. (Implement as needed)")
+                    elif command == "shutdown":
+                        mode_manager.shutdown()  # Implement shutdown as desired.
+                    # Handle "select" using mapping
+                    elif command == "select":
+                        if current_mode in select_mapping:
+                            select_mapping[current_mode]()
+                        else:
+                            print(f"No select mapping for mode: {current_mode}")
+                    # Handle scrolling using mapping dictionaries
+                    elif command in ["scroll_up", "scroll_down"]:
+                        if current_mode in scroll_mapping[command]:
+                            scroll_mapping[command][current_mode]()
+                        else:
+                            print(f"No scroll mapping for command: {command} in mode: {current_mode}")
+                    # Handle left/right keys that might be specific to the menu
+                    elif command == "scroll_left":
+                        if current_mode == "menu":
+                            mode_manager.menu_manager.scroll_selection(-1)
+                    elif command == "scroll_right":
+                        if current_mode == "menu":
+                            mode_manager.menu_manager.scroll_selection(1)
+                    else:
+                        print(f"No mapping for command: {command}")
+            except Exception as e:
+                print(f"Error in command server: {e}")
+
+
+
+
+
+    # Start the command server in a daemon thread (ensure 'mode_manager' is defined)
+    threading.Thread(target=quadify_command_server, args=(mode_manager,), daemon=True).start()
+    print("Quadify command server thread started.")
+
 
     # 15) Main application loop
     try:

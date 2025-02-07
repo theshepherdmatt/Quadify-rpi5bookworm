@@ -484,6 +484,7 @@ class ModeManager:
 
         # 3) reset idle timer
         self.reset_idle_timer()
+        self.update_current_mode()  # Write the current mode to file
 
     def enter_modern(self, event):
         self.logger.info("ModeManager: Entering 'modern' playback mode.")
@@ -499,6 +500,7 @@ class ModeManager:
             self.logger.info("ModeManager: Modern screen started.")
         else:
             self.logger.warning("ModeManager: No modern_screen set.")
+        self.update_current_mode()  # Update the current mode file
 
     def enter_minimal(self, event):
         self.logger.info("ModeManager: Entering 'minimal' playback mode.")
@@ -511,6 +513,7 @@ class ModeManager:
             self.logger.info("ModeManager: Minimal screen started.")
         else:
             self.logger.warning("ModeManager: No minimal_screen set.")
+        self.update_current_mode()  # Update the current mode file
 
 
     def enter_radiomanager(self, event):
@@ -522,6 +525,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No radio_manager set.")
         self.reset_idle_timer()
+        self.update_current_mode()  # Write the current mode to file
 
     def enter_screensaver(self, event):
         self.logger.info("ModeManager: Entering 'screensaver' state.")
@@ -531,6 +535,7 @@ class ModeManager:
             self.logger.info("ModeManager: Screensaver started.")
         else:
             self.logger.warning("ModeManager: screensaver is None.")
+        self.update_current_mode()  # Update the current mode file
 
     def enter_screensavermenu(self, event):
         self.logger.info("ModeManager: Entering 'screensavermenu' state.")
@@ -540,6 +545,7 @@ class ModeManager:
             self.logger.info("ModeManager: Screensaver menu started.")
         else:
             self.logger.warning("ModeManager: No screensaver_menu set.")
+        self.update_current_mode()  # Update the current mode file
 
     def enter_displaymenu(self, event):
         self.logger.info("ModeManager: Entering 'displaymenu' state.")
@@ -550,6 +556,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No display_menu set.")
         self.reset_idle_timer()
+        self.update_current_mode()  # Write the current mode to file
 
     def enter_clockmenu(self, event):
         self.logger.info("ModeManager: Entering 'clockmenu' state.")
@@ -560,6 +567,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No clock_menu set.")
         self.reset_idle_timer()
+        self.update_current_mode()  # Write the current mode to file
 
     def enter_original(self, event):
         self.logger.info("ModeManager: Entering 'original' playback mode.")
@@ -569,6 +577,8 @@ class ModeManager:
             self.logger.info("ModeManager: Original screen started.")
         else:
             self.logger.warning("ModeManager: No original_screen set.")
+        self.update_current_mode()  # Update the current mode file
+
 
     def enter_systeminfo(self, event):
         self.logger.info("ModeManager: Entering 'systeminfo' mode.")
@@ -579,6 +589,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No system_info_screen set.")
         self.reset_idle_timer()
+        self.update_current_mode()  # Write the current mode to file
 
     def enter_systemupdate(self, event):
         self.logger.info("ModeManager: Entering 'systemupdate' mode.")
@@ -591,6 +602,7 @@ class ModeManager:
             self.logger.warning("ModeManager: No system_update_menu set.")
 
         self.reset_idle_timer()
+        self.update_current_mode()  # Write the current mode to file
 
 
     def enter_menu(self, event):
@@ -603,6 +615,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No menu_manager set.")
         self.reset_idle_timer()
+        self.update_current_mode()  # Write the current mode to file
 
     def enter_playlists(self, event):
         self.logger.info("ModeManager: Entering 'playlists' state.")
@@ -613,6 +626,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No playlist_manager set.")
         self.reset_idle_timer()
+        self.update_current_mode()  # Write the current mode to file
 
     def enter_tidal(self, event):
         self.logger.info("ModeManager: Entering 'tidal' state.")
@@ -623,6 +637,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No tidal_manager set.")
         self.reset_idle_timer()
+        self.update_current_mode()  # Write the current mode to file
 
     def enter_qobuz(self, event):
         self.logger.info("ModeManager: Entering 'qobuz' state.")
@@ -633,6 +648,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No qobuz_manager set.")
         self.reset_idle_timer()
+        self.update_current_mode()  # Write the current mode to file
 
     def enter_library(self, event):
         self.logger.info("ModeManager: Entering 'library' state.")
@@ -644,6 +660,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No library_manager set.")
         self.reset_idle_timer()
+        self.update_current_mode()  # Write the current mode to file
 
     def enter_usb_library(self, event):
         self.logger.info("ModeManager: Entering 'usblibrary' state.")
@@ -655,6 +672,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No usb_library_manager set.")
         self.reset_idle_timer()
+        self.update_current_mode()  # Write the current mode to file
 
     def enter_spotify(self, event):
         self.logger.info("ModeManager: Entering 'spotify' state.")
@@ -664,6 +682,7 @@ class ModeManager:
             self.logger.info("ModeManager: SpotifyManager started.")
         else:
             self.logger.warning("ModeManager: No spotify_manager set.")
+        self.update_current_mode()  # Update the current mode file
 
     def enter_webradio(self, event):
         self.logger.info("ModeManager: Entering 'webradio' state.")
@@ -673,7 +692,7 @@ class ModeManager:
             self.logger.info("ModeManager: WebRadioScreen started.")
         else:
             self.logger.warning("ModeManager: No webradio_screen set.")
-
+        self.update_current_mode()  # Update the current mode file
 
     def enter_configmenu(self, event):
         self.logger.info("ModeManager: Entering 'configmenu'.")
@@ -685,7 +704,7 @@ class ModeManager:
             self.logger.info("ModeManager: Config menu started.")
         else:
             self.logger.warning("ModeManager: No config_menu set.")
-
+        self.update_current_mode()  # Update the current mode file
 
     def exit_screensaver(self):
         self.logger.info("ModeManager: Exiting screensaver mode.")
@@ -749,7 +768,7 @@ class ModeManager:
             current_mode = self.get_mode()
 
             # 2) If the service is WebRadio, switch to webradio mode
-            if service == "webradio":
+            if service in ["webradio", "motherearthradio", "radio_paradise"]:
                 if current_mode != "webradio":
                     self.to_webradio()
                     self.last_mode_change_time = now
@@ -820,6 +839,42 @@ class ModeManager:
                 self.logger.debug("ModeManager: Playback resumed or changed; staying in current mode.")
             self.pause_stop_timer = None
 
+    def update_current_mode(self):
+        """Write the current mode to /tmp/quadify_mode for external listeners."""
+        try:
+            with open("/tmp/quadify_mode", "w") as f:
+                f.write(self.get_mode())
+        except Exception as e:
+            self.logger.error(f"Failed to update mode file: {e}")
 
-
-
+    def toggle_play_pause(self):
+        """
+        Toggle play/pause based on the current playback mode.
+        Delegates the action to the appropriate screen object.
+        If in clock mode, either toggle play/pause if supported,
+        or transition to a playback mode (e.g., 'original') and then toggle.
+        """
+        current_mode = self.get_mode()
+        if current_mode in ['clock', 'original', 'modern', 'minimal']:
+            if current_mode == 'clock':
+                # Option 1: If your clock has its own toggle, use it:
+                if hasattr(self.clock, "toggle_play_pause"):
+                    self.clock.toggle_play_pause()
+                else:
+                    # Option 2: Switch from clock to a playback mode and toggle.
+                    self.logger.info("Clock mode does not support direct toggling; switching to 'original'.")
+                    self.to_original()
+                    if self.original_screen:
+                        self.original_screen.toggle_play_pause()
+                    else:
+                        self.logger.warning("No original screen available for toggling play/pause.")
+            elif current_mode == 'original' and self.original_screen:
+                self.original_screen.toggle_play_pause()
+            elif current_mode == 'modern' and self.modern_screen:
+                self.modern_screen.toggle_play_pause()
+            elif current_mode == 'minimal' and self.minimal_screen:
+                self.minimal_screen.toggle_play_pause()
+            else:
+                self.logger.warning(f"No screen available to toggle play/pause in mode: {current_mode}")
+        else:
+            self.logger.info("Toggle play/pause is not applicable in the current mode.")

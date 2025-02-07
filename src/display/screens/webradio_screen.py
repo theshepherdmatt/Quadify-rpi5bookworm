@@ -77,8 +77,8 @@ class WebRadioScreen:
             self.logger.debug("WebRadioScreen: ignoring state change; not in webradio mode.")
             return
 
-        if state.get("service") != "webradio":
-            self.logger.debug("WebRadioScreen: ignoring state change; service != webradio.")
+        if state.get("service") not in ["webradio", "motherearthradio", "radio_paradise"]:
+            self.logger.debug("WebRadioScreen: ignoring state change; service not in allowed list.")
             return
 
         self.logger.debug(f"WebRadioScreen: state changed => {state}")
