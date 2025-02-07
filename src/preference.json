@@ -2,7 +2,7 @@
   "display_mode": "minimal",
   "clock_font_key": "clock_sans",
   "show_seconds": false,
-  "show_date": true,
+  "show_date": false,
   "screensaver_enabled": true,
   "screensaver_type": "snake",
   "screensaver_timeout": 60,

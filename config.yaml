@@ -11,7 +11,7 @@ volumio:
 
 display:
   icon_dir: "/home/volumio/Quadify/src/assets/images"
-  default_album_art: "/home/volumio/Quadify/src/assets/images/webradio.png"
+  default_album_art: "/home/volumio/Quadify/src/assets/images/albumart.jpg"
   loading_gif_path: "/home/volumio/Quadify/src/assets/images/Loading.gif"
   screensaver_gif_path: "/home/volumio/Quadify/src/assets/images/geo.gif"  
   logo_path: "/home/volumio/Quadify/src/assets/images/logo.png"

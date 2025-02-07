@@ -259,12 +259,29 @@ class WebRadioScreen:
             return title
         else:
             return "Radio"
+        
 
     def get_albumart(self, url):
         """
         Download and return an Image object from the given album art URL.
-        Returns None if the image cannot be downloaded.
+        If no URL is provided or downloading fails, load the default album art
+        specified in the display configuration.
         """
+        # If no URL is provided, try to load the default album art.
+        if not url:
+            default_path = self.display_manager.config.get("default_album_art")
+            if default_path and os.path.exists(default_path):
+                try:
+                    img = Image.open(default_path)
+                    return img.convert("RGB")
+                except Exception as e:
+                    self.logger.error(f"Failed to load default album art from {default_path}: {e}")
+                    return None
+            else:
+                self.logger.error("No album art URL provided and default album art not found.")
+                return None
+
+        # Attempt to download the album art.
         try:
             response = requests.get(url, timeout=3)
             response.raise_for_status()
@@ -272,7 +289,17 @@ class WebRadioScreen:
             return img.convert("RGB")
         except Exception as e:
             self.logger.error(f"Failed to load album art from {url}: {e}")
+            # Fallback to default album art if download fails.
+            default_path = self.display_manager.config.get("default_album_art")
+            if default_path and os.path.exists(default_path):
+                try:
+                    img = Image.open(default_path)
+                    return img.convert("RGB")
+                except Exception as e:
+                    self.logger.error(f"Failed to load default album art from {default_path}: {e}")
+                    return None
             return None
+
 
     def display_radioplayback_info(self):
         """
