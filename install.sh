@@ -457,7 +457,7 @@ configure_buttons_leds() {
 
 install_lircrc() {
     log_progress "Installing LIRC configuration (lircrc) from repository..."
-    LOCAL_LIRCRC="/home/volumio/Quadify/lircr/lircrc"
+    LOCAL_LIRCRC="/home/volumio/Quadify/lirc/lircrc"
     DESTINATION="/etc/lirc/lircrc"
     
     if [ -f "$LOCAL_LIRCRC" ]; then
