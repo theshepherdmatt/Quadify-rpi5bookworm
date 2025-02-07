@@ -112,23 +112,24 @@ install_system_dependencies() {
 
     run_command "apt-get update"
     run_command "apt-get install -y \
-        python3.7 \
-        python3.7-dev \
-        python3-pip \
-        libjpeg-dev \
-        zlib1g-dev \
-        libfreetype6-dev \
-        i2c-tools \
-        python3-smbus \
-        libgirepository1.0-dev \
-        pkg-config \
-        libcairo2-dev \
-        libffi-dev \
-        build-essential \
-        libxml2-dev \
-        libxslt1-dev \
-        libssl-dev \
-        lsof"
+            python3.7 \
+            python3.7-dev \
+            python3-pip \
+            libjpeg-dev \
+            zlib1g-dev \
+            libfreetype6-dev \
+            i2c-tools \
+            python3-smbus \
+            libgirepository1.0-dev \
+            pkg-config \
+            libcairo2-dev \
+            libffi-dev \
+            build-essential \
+            libxml2-dev \
+            libxslt1-dev \
+            libssl-dev \
+            lsof"
+
 
     log_message "success" "System-level dependencies installed. (ᵔᴥᵔ)"
     show_random_tip
@@ -181,6 +182,7 @@ enable_i2c_spi() {
     run_command "modprobe i2c-dev"
     run_command "modprobe spi-bcm2835"
 
+
     if [ -e /dev/i2c-1 ]; then
         log_message "success" "/dev/i2c-1 is present."
     else
@@ -195,6 +197,24 @@ enable_i2c_spi() {
         fi
     fi
     show_random_tip
+}
+
+enable_gpio_ir() {
+    log_progress "Configuring GPIO IR overlay in userconfig.txt..."
+    CONFIG_FILE="/boot/userconfig.txt"
+    
+    # Ensure the config file exists.
+    if [ ! -f "$CONFIG_FILE" ]; then
+        run_command "touch \"$CONFIG_FILE\""
+    fi
+
+    # Check if the IR overlay is already set
+    if ! grep -q "^dtoverlay=gpio-ir" "$CONFIG_FILE"; then
+        echo "dtoverlay=gpio-ir,gpio_pin=26" >> "$CONFIG_FILE"
+        log_message "success" "GPIO IR overlay added to $CONFIG_FILE."
+    else
+        log_message "info" "GPIO IR overlay already present in $CONFIG_FILE."
+    fi
 }
 
 # ============================
@@ -432,6 +452,80 @@ configure_buttons_leds() {
 }
 
 # ============================
+#   IR controller
+# ============================
+
+install_lircrc() {
+    log_progress "Installing LIRC configuration (lircrc) from repository..."
+    LOCAL_LIRCRC="/home/volumio/Quadify/lircr/lircrc"
+    DESTINATION="/etc/lirc/lircrc"
+    
+    if [ -f "$LOCAL_LIRCRC" ]; then
+        run_command "cp $LOCAL_LIRCRC $DESTINATION"
+        log_message "success" "LIRC configuration (lircrc) copied to $DESTINATION."
+    else
+        log_message "error" "Local lircrc not found at $LOCAL_LIRCRC. Please ensure it is present."
+        exit 1
+    fi
+}
+
+install_lirc_configs() {
+    log_progress "Installing LIRC configuration files..."
+    
+    # Paths to your local copies in your Quadify repo
+    LOCAL_LIRCRC="/home/volumio/Quadify/lirc/lircrc"
+    LOCAL_LIRCD_CONF="/home/volumio/Quadify/lirc/lircd.conf"
+    
+    # Destination paths on the system
+    DEST_LIRCRC="/etc/lirc/lircrc"
+    DEST_LIRCD_CONF="/etc/lirc/lircd.conf"
+
+    if [ -f "$LOCAL_LIRCRC" ]; then
+        run_command "cp $LOCAL_LIRCRC $DEST_LIRCRC"
+        log_message "success" "Copied lircrc to $DEST_LIRCRC."
+    else
+        log_message "error" "lircrc file not found at $LOCAL_LIRCRC."
+        exit 1
+    fi
+
+    if [ -f "$LOCAL_LIRCD_CONF" ]; then
+        run_command "cp $LOCAL_LIRCD_CONF $DEST_LIRCD_CONF"
+        log_message "success" "Copied lircd.conf to $DEST_LIRCD_CONF."
+    else
+        log_message "error" "lircd.conf file not found at $LOCAL_LIRCD_CONF."
+        exit 1
+    fi
+
+    show_random_tip
+}
+
+setup_ir_listener_service() {
+    log_progress "Setting up IR Listener service..."
+    IR_SERVICE_FILE="/etc/systemd/system/ir_listener.service"
+    LOCAL_IR_SERVICE="/home/volumio/Quadify/service/ir_listener.service"
+
+    if [[ -f "$LOCAL_IR_SERVICE" ]]; then
+        run_command "cp \"$LOCAL_IR_SERVICE\" \"$IR_SERVICE_FILE\""
+        run_command "systemctl daemon-reload"
+        run_command "systemctl enable ir_listener.service"
+        run_command "systemctl start ir_listener.service"
+        log_message "success" "ir_listener.service installed and started."
+    else
+        log_message "error" "ir_listener.service not found in /home/volumio/Quadify/service."
+        exit 1
+    fi
+    show_random_tip
+}
+
+update_lirc_options() {
+    log_progress "Updating LIRC options: setting driver to default..."
+    sed -i 's|^driver\s*=.*|driver          = default|' /etc/lirc/lirc_options.conf
+    log_message "success" "LIRC options updated: driver set to default."
+    show_random_tip
+}
+
+
+# ============================
 #   Permissions
 # ============================
 set_permissions() {
@@ -472,6 +566,8 @@ main() {
     install_system_dependencies
     # 3) Enable i2c/spi (only truly needed if using Buttons/LEDs, but safe to keep)
     enable_i2c_spi
+    # 3.5) Enable GPIO IR overlay
+    enable_gpio_ir
     # 4) Upgrade pip
     upgrade_pip
     # 5) Install python dependencies
@@ -492,10 +588,18 @@ main() {
     install_cava_from_fork
     # 10) Setup CAVA service
     setup_cava_service
+    # 10.5) Setup IR Listener service
+    setup_ir_listener_service
     # 11) Configure Buttons & LEDs (comment/uncomment lines in main.py)
     configure_buttons_leds
     # 12) Setup Samba
     setup_samba
+    # 12.5) Install LIRC configuration (lircrc) from your 'lircr' folder
+    install_lircrc
+    # 12.5) Install LIRC configuration files
+    install_lirc_configs
+    # 12.6) Update LIRC options to set driver to default
+    update_lirc_options
     # 13) Permissions
     set_permissions
 
