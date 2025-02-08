@@ -128,6 +128,7 @@ install_system_dependencies() {
             libxml2-dev \
             libxslt1-dev \
             libssl-dev \
+            lirc \
             lsof"
 
 
@@ -461,7 +462,7 @@ install_lircrc() {
     DESTINATION="/etc/lirc/lircrc"
     
     if [ -f "$LOCAL_LIRCRC" ]; then
-        run_command "cp $LOCAL_LIRCRC $DESTINATION"
+        run_command "cp \"$LOCAL_LIRCRC\" \"$DESTINATION\""
         log_message "success" "LIRC configuration (lircrc) copied to $DESTINATION."
     else
         log_message "error" "Local lircrc not found at $LOCAL_LIRCRC. Please ensure it is present."
@@ -481,7 +482,7 @@ install_lirc_configs() {
     DEST_LIRCD_CONF="/etc/lirc/lircd.conf"
 
     if [ -f "$LOCAL_LIRCRC" ]; then
-        run_command "cp $LOCAL_LIRCRC $DEST_LIRCRC"
+        run_command "cp \"$LOCAL_LIRCRC\" \"$DEST_LIRCRC\""
         log_message "success" "Copied lircrc to $DEST_LIRCRC."
     else
         log_message "error" "lircrc file not found at $LOCAL_LIRCRC."
@@ -489,7 +490,7 @@ install_lirc_configs() {
     fi
 
     if [ -f "$LOCAL_LIRCD_CONF" ]; then
-        run_command "cp $LOCAL_LIRCD_CONF $DEST_LIRCD_CONF"
+        run_command "cp \"$LOCAL_LIRCD_CONF\" \"$DEST_LIRCD_CONF\""
         log_message "success" "Copied lircd.conf to $DEST_LIRCD_CONF."
     else
         log_message "error" "lircd.conf file not found at $LOCAL_LIRCD_CONF."
@@ -504,7 +505,7 @@ setup_ir_listener_service() {
     IR_SERVICE_FILE="/etc/systemd/system/ir_listener.service"
     LOCAL_IR_SERVICE="/home/volumio/Quadify/service/ir_listener.service"
 
-    if [[ -f "$LOCAL_IR_SERVICE" ]]; then
+    if [ -f "$LOCAL_IR_SERVICE" ]; then
         run_command "cp \"$LOCAL_IR_SERVICE\" \"$IR_SERVICE_FILE\""
         run_command "systemctl daemon-reload"
         run_command "systemctl enable ir_listener.service"
@@ -519,11 +520,11 @@ setup_ir_listener_service() {
 
 update_lirc_options() {
     log_progress "Updating LIRC options: setting driver to default..."
+    # Update the driver line to "default" in /etc/lirc/lirc_options.conf
     sed -i 's|^driver\s*=.*|driver          = default|' /etc/lirc/lirc_options.conf
     log_message "success" "LIRC options updated: driver set to default."
     show_random_tip
 }
-
 
 # ============================
 #   Permissions
@@ -538,6 +539,7 @@ set_permissions() {
 # ============================
 #   Main Installation
 # ============================
+
 main() {
     check_root
 
@@ -564,12 +566,16 @@ main() {
 
     # 2) Install system dependencies (includes i2c-tools, etc.)
     install_system_dependencies
+
     # 3) Enable i2c/spi (only truly needed if using Buttons/LEDs, but safe to keep)
     enable_i2c_spi
+
     # 3.5) Enable GPIO IR overlay
     enable_gpio_ir
+
     # 4) Upgrade pip
     upgrade_pip
+
     # 5) Install python dependencies
     install_python_dependencies
 
@@ -582,24 +588,31 @@ main() {
 
     # 7) Setup main Quadify service
     setup_main_service
+
     # 8) Configure MPD
     configure_mpd
+
     # 9) Install CAVA from fork
     install_cava_from_fork
+
     # 10) Setup CAVA service
     setup_cava_service
-    # 10.5) Setup IR Listener service
-    setup_ir_listener_service
+
     # 11) Configure Buttons & LEDs (comment/uncomment lines in main.py)
     configure_buttons_leds
+
     # 12) Setup Samba
     setup_samba
-    # 12.5) Install LIRC configuration (lircrc) from your 'lircr' folder
+
+    # 12.5) Install LIRC configuration (lircrc) from your repository folder
     install_lircrc
-    # 12.5) Install LIRC configuration files
+
+    # 12.6) Install LIRC configuration files (lircrc and lircd.conf)
     install_lirc_configs
-    # 12.6) Update LIRC options to set driver to default
+
+    # 12.7) Update LIRC options to set driver to default
     update_lirc_options
+
     # 13) Permissions
     set_permissions
 
