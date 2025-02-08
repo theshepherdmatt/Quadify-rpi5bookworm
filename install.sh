@@ -610,7 +610,10 @@ main() {
     # 12.6) Install LIRC configuration files (lircrc and lircd.conf)
     install_lirc_configs
 
-    # 12.7) Update LIRC options to set driver to default
+    # 12.7) Install LIRC service files
+    setup_ir_listener_service
+
+    # 12.8) Update LIRC options to set driver to default
     update_lirc_options
 
     # 13) Permissions
