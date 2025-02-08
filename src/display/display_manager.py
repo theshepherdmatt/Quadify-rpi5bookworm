@@ -10,7 +10,7 @@ class DisplayManager:
     def __init__(self, config):
         # Initialize SPI connection for the SSD1322 OLED display
         self.serial = spi(device=0, port=0)  # Default SPI device
-        self.oled = ssd1322(self.serial, width=256, height=64, rotate=2)
+        self.oled = ssd1322(self.serial, width=256, height=64, rotate=0)
 
         self.config = config
         self.lock = threading.Lock()
