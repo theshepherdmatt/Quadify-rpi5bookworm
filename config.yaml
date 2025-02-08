@@ -16,7 +16,7 @@ display:
   screensaver_gif_path: "/home/volumio/Quadify/src/assets/images/geo.gif"  
   logo_path: "/home/volumio/Quadify/src/assets/images/logo.png"
 
-  rotation: 2  # Set rotation if needed (0, 90, 180, 270)
+  rotation: 0  # Set rotation if needed (0, 90, 180, 270)
 
 
   fonts:
@@ -120,7 +120,7 @@ display:
     - "/home/volumio/Quadify/src/assets/images/volume.png"
     - "/home/volumio/Quadify/src/assets/images/config.png"
 
-mcp23017_address: 0x20
+mcp23017_address: 0x27
 
 logging:
   level: "DEBUG"  # Options: DEBUG, INFO, WARNING, ERROR
