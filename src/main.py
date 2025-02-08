@@ -319,6 +319,7 @@ def main():
             "configmenu": lambda: mode_manager.config_menu.select_item(),
             "displaymenu": lambda: mode_manager.display_menu.select_item(),
             "clockmenu": lambda: mode_manager.clock_menu.select_item(),
+            "systemupdate": lambda: mode_manager.system_update_menu.select_item(),
             "screensavermenu": lambda: mode_manager.screensaver_menu.select_item(),
             "systeminfo": lambda: mode_manager.system_info_screen.select_item(),
         }
@@ -334,6 +335,7 @@ def main():
                 "configmenu": lambda: mode_manager.config_menu.scroll_selection(-1),
                 "displaymenu": lambda: mode_manager.display_menu.scroll_selection(-1),
                 "clockmenu": lambda: mode_manager.clock_menu.scroll_selection(-1),
+                "systemupdate": lambda: mode_manager.system_update_menu.scroll_selection(-1),
                 "screensavermenu": lambda: mode_manager.screensaver_menu.scroll_selection(-1),
                 "systeminfo": lambda: mode_manager.system_info_screen.scroll_selection(-1),
             },
@@ -347,6 +349,7 @@ def main():
                 "configmenu": lambda: mode_manager.config_menu.scroll_selection(1),
                 "displaymenu": lambda: mode_manager.display_menu.scroll_selection(1),
                 "clockmenu": lambda: mode_manager.clock_menu.scroll_selection(1),
+                "systemupdate": lambda: mode_manager.system_update_menu.scroll_selection(1),
                 "screensavermenu": lambda: mode_manager.screensaver_menu.scroll_selection(1),
                 "systeminfo": lambda: mode_manager.system_info_screen.scroll_selection(1),
             }
