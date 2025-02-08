@@ -312,6 +312,22 @@ class ButtonsLEDController:
         else:
             self.logger.debug("No LED change needed.")
 
+    def shutdown_leds(self):
+        """
+        Turns off all LED outputs on the MCP23017.
+        Note: This only resets the outputs; it does not remove power from the board.
+        """
+        if self.bus:
+            try:
+                # Clear LED outputs on port A (assuming LEDs are connected to GPIOA)
+                self.bus.write_byte_data(self.mcp23017_address, MCP23017_GPIOA, 0x00)
+                # Optionally, you could also reset GPIOB if needed (e.g. setting columns to their inactive state)
+                self.bus.write_byte_data(self.mcp23017_address, MCP23017_GPIOB, 0x03)
+                self.logger.info("MCP23017 shutdown: All LEDs turned off.")
+            except Exception as e:
+                self.logger.error(f"Error turning off LEDs on MCP23017: {e}")
+
+
     def close(self):
         if self.bus:
             self.bus.close()

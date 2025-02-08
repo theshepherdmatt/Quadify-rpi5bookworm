@@ -70,6 +70,10 @@ def process_key(key, current_mode):
             send_command("scroll_down")
         else:
             print("No mapping for KEY_DOWN in current mode.")
+    
+    elif key == "KEY_BACK":
+        send_command("back")
+
     elif key == "KEY_POWER":
         send_command("shutdown")
     else:

@@ -453,3 +453,15 @@ class WebRadioScreen:
         # 5) Display the final composed image.
         self.display_manager.oled.display(base_image)
         self.logger.debug("WebRadioScreen: Display updated with webradio UI (minimal layout).")
+
+    def toggle_play_pause(self):
+        """Emit Volumio play/pause toggle if connected."""
+        self.logger.info("WebradioScreen: Toggling play/pause.")
+        if not self.volumio_listener or not self.volumio_listener.is_connected():
+            self.logger.warning("WebradioScreen: Not connected to Volumio => cannot toggle.")
+            return
+        try:
+            self.volumio_listener.socketIO.emit("toggle", {})
+            self.logger.debug("WebradioScreen: Emitted 'toggle' event.")
+        except Exception as e:
+            self.logger.error(f"WebradioScreen: toggle_play_pause failed => {e}")

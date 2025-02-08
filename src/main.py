@@ -15,6 +15,7 @@ from PIL import Image, ImageSequence
 
 from display.screens.clock import Clock
 from hardware.buttonsleds import ButtonsLEDController
+from hardware.shutdown_system import shutdown_system
 from display.screens.original_screen import OriginalScreen
 from display.screens.modern_screen import ModernScreen
 from display.screens.minimal_screen import MinimalScreen
@@ -28,7 +29,6 @@ from managers.menu_manager import MenuManager
 from managers.mode_manager import ModeManager
 from managers.manager_factory import ManagerFactory
 from controls.rotary_control import RotaryControl
-from hardware.buttonsleds import ButtonsLEDController
 from network.volumio_listener import VolumioListener
 
 def load_config(config_path='/config.yaml'):
@@ -142,6 +142,7 @@ def main():
     clock.logger.setLevel(logging.INFO)
 
     # 9) Initialize ModeManager (Quadify style)
+    # Use trigger() calls later for transitions.
     mode_manager = ModeManager(
         display_manager   = display_manager,
         clock             = clock,
@@ -159,14 +160,11 @@ def main():
     )
     manager_factory.setup_mode_manager()
 
-
-    # Similarly for clock_menu, display_menu, system_info_screen, screensaver_menu, screensaver
-    # if you want direct references. Or you can just rely on mode_manager.* if it’s set.
-
     # 11) Assign the ModeManager to volumio_listener
     volumio_listener.mode_manager = mode_manager
 
-    mode_manager.to_clock()
+    # Use the trigger() method for transitions so the mode stack gets updated.
+    mode_manager.trigger("to_clock")
     logger.info("Forced system into 'clock' mode after all initialization.")
 
     # 12) ButtonsLEDs
@@ -176,103 +174,72 @@ def main():
     # 13) Define RotaryControl callbacks
     def on_rotate(direction):
         current_mode = mode_manager.get_mode()
-
-        # For Original + Modern => adjust volume
-        
         if current_mode == 'original':
             volume_change = 40 if direction == 1 else -40
             mode_manager.original_screen.adjust_volume(volume_change)
-
         elif current_mode == 'modern':
             volume_change = 10 if direction == 1 else -20
             mode_manager.modern_screen.adjust_volume(volume_change)
             logger.debug(f"ModernScreen: Adjusted volume by {volume_change}")
-
         elif current_mode == 'minimal':
             volume_change = 10 if direction == 1 else -20
             mode_manager.minimal_screen.adjust_volume(volume_change)
             logger.debug(f"MinimalScreen: Adjusted volume by {volume_change}")
-
         elif current_mode == 'webradio':
             volume_change = 10 if direction == 1 else -20
             mode_manager.webradio_screen.adjust_volume(volume_change)
             logger.debug(f"WebRadioScreen: Adjusted volume by {volume_change}")
-
         elif current_mode == 'menu':
             mode_manager.menu_manager.scroll_selection(direction)
             logger.debug(f"Scrolled menu with direction: {direction}")
-
         elif current_mode == 'configmenu':
             mode_manager.config_menu.scroll_selection(direction)
-
         elif current_mode == 'systemupdate':
             mode_manager.system_update_menu.scroll_selection(direction)
-
-        # If we're in screensaver mode, exit on any rotation
         elif current_mode == 'screensaver':
             mode_manager.exit_screensaver()
-
         elif current_mode == 'clockmenu':
             mode_manager.clock_menu.scroll_selection(direction)
-
         elif current_mode == 'screensavermenu':
             mode_manager.screensaver_menu.scroll_selection(direction)
-
         elif current_mode == 'displaymenu':
             mode_manager.display_menu.scroll_selection(direction)
-
         elif current_mode == 'tidal':
             mode_manager.tidal_manager.scroll_selection(direction)
-
         elif current_mode == 'qobuz':
             mode_manager.qobuz_manager.scroll_selection(direction)
-
         elif current_mode == 'spotify':
             mode_manager.spotify_manager.scroll_selection(direction)
-
         elif current_mode == 'playlists':
             mode_manager.playlist_manager.scroll_selection(direction)
-
         elif current_mode == 'radiomanager':
             mode_manager.radio_manager.scroll_selection(direction)
-
         elif current_mode == 'library':
             mode_manager.library_manager.scroll_selection(direction)
-
         elif current_mode == 'usblibrary':
             mode_manager.usb_library_manager.scroll_selection(direction)
         else:
             logger.warning(f"Unhandled mode: {current_mode}; no rotary action performed.")
 
-
-
     def on_button_press_inner():
         current_mode = mode_manager.get_mode()
-
         if current_mode == 'clock':
-            mode_manager.to_menu()
-
+            # Use trigger to go to menu
+            mode_manager.trigger("to_menu")
         elif current_mode == 'menu':
             mode_manager.menu_manager.select_item()
-
         elif current_mode == 'configmenu':
             mode_manager.config_menu.select_item()
-
         elif current_mode == 'systemupdate':
             mode_manager.system_update_menu.select_item()
-
         elif current_mode == 'screensavermenu':
             mode_manager.screensaver_menu.select_item()
-
         elif current_mode == 'displaymenu':
             mode_manager.display_menu.select_item()
-
         elif current_mode == 'clockmenu':
             mode_manager.clock_menu.select_item()
-
         elif current_mode in ['original', 'modern', 'minimal']:
             logger.info(f"Button pressed in {current_mode} mode; toggling playback.")
-
             if current_mode == 'original':
                 screen = mode_manager.original_screen
             elif current_mode == 'modern':
@@ -281,47 +248,35 @@ def main():
                 screen = mode_manager.minimal_screen
             else:
                 screen = None
-
             if screen:
                 screen.toggle_play_pause()
             else:
                 logger.warning(f"No screen instance found for mode: {current_mode}")
-
-
         elif current_mode == 'playlists':
             mode_manager.playlist_manager.select_item()
-
         elif current_mode == 'tidal':
             mode_manager.tidal_manager.select_item()
-
         elif current_mode == 'qobuz':
             mode_manager.qobuz_manager.select_item()
-
         elif current_mode == 'spotify':
             mode_manager.spotify_manager.select_item()
-
         elif current_mode == 'library':
             mode_manager.library_manager.select_item()
-
         elif current_mode == 'radiomanager':
             mode_manager.radio_manager.select_item()
-
         elif current_mode == 'usblibrary':
             mode_manager.usb_library_manager.select_item()
-
         elif current_mode == 'screensaver':
-            # Pressing button in screensaver => exit screensaver
             mode_manager.exit_screensaver()
-
         else:
             logger.warning(f"Unhandled mode: {current_mode}; no button action performed.")
 
     def on_long_press():
         logger.info("Long button press detected.")
         current_mode = mode_manager.get_mode()
-        # Example: go back to clock if not already
-        if current_mode != 'clock':
-            mode_manager.to_clock()
+        # For a long press, we can choose to go back if the navigation stack is not empty.
+        # Here we use our back() method:
+        mode_manager.trigger("back")
 
     # 14) Initialize RotaryControl
     rotary_control = RotaryControl(
@@ -332,7 +287,6 @@ def main():
     )
 
     threading.Thread(target=rotary_control.start, daemon=True).start()
-
 
     def quadify_command_server(mode_manager):
         """
@@ -350,7 +304,6 @@ def main():
         server_socket.listen(1)
         print(f"Quadify command server listening on {sock_path}")
 
-        # Create mapping dictionaries for commands that depend on the current mode.
         select_mapping = {
             "menu": lambda: mode_manager.menu_manager.select_item(),
             "tidal": lambda: mode_manager.tidal_manager.select_item(),
@@ -403,50 +356,40 @@ def main():
                     print(f"Command received: {command}")
                     current_mode = mode_manager.get_mode()
 
-                    # Handle generic commands first
                     if command == "home":
-                        mode_manager.to_clock()
+                        mode_manager.trigger("to_clock")
+                    elif command == "shutdown":
+                        shutdown_system(display_manager, buttons_leds, mode_manager)
                     elif command == "menu":
                         if current_mode == "clock":
-                            mode_manager.to_menu()
+                            mode_manager.trigger("to_menu")
                     elif command == "toggle":
                         mode_manager.toggle_play_pause()
                     elif command == "repeat":
                         print("Repeat command received. (Implement as needed)")
-                    elif command == "shutdown":
-                        mode_manager.shutdown()  # Implement shutdown as desired.
-                    # Handle "select" using mapping
                     elif command == "select":
                         if current_mode in select_mapping:
                             select_mapping[current_mode]()
                         else:
                             print(f"No select mapping for mode: {current_mode}")
-                    # Handle scrolling using mapping dictionaries
                     elif command in ["scroll_up", "scroll_down"]:
                         if current_mode in scroll_mapping[command]:
                             scroll_mapping[command][current_mode]()
                         else:
                             print(f"No scroll mapping for command: {command} in mode: {current_mode}")
-                    # Handle left/right keys that might be specific to the menu
                     elif command == "scroll_left":
                         if current_mode == "menu":
                             mode_manager.menu_manager.scroll_selection(-1)
                     elif command == "scroll_right":
                         if current_mode == "menu":
                             mode_manager.menu_manager.scroll_selection(1)
-                    else:
-                        print(f"No mapping for command: {command}")
+                    elif command == "back":
+                        mode_manager.trigger("back")
             except Exception as e:
                 print(f"Error in command server: {e}")
 
-
-
-
-
-    # Start the command server in a daemon thread (ensure 'mode_manager' is defined)
     threading.Thread(target=quadify_command_server, args=(mode_manager,), daemon=True).start()
     print("Quadify command server thread started.")
-
 
     # 15) Main application loop
     try:
