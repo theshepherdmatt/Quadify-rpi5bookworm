@@ -35,14 +35,16 @@ def process_key(key, current_mode):
     
     if key == "KEY_HOME":
         send_command("home")
+
     elif key == "KEY_OK":
         # In menu or tidal mode, KEY_OK selects the item.
-        if current_mode in ["menu", "tidal", "qobuz", "library", "radiomanager", "playlists", "configmenu", "displaymenu", "clockmenu", "screensavermenu", "systeminfo", "systemupdate"]:
+        if current_mode in ["menu", "tidal", "qobuz", "spotify", "library", "radiomanager", "playlists", "configmenu", "displaymenu", "clockmenu", "screensavermenu", "systeminfo", "systemupdate"]:
             send_command("select")
         elif current_mode == "clock":
             send_command("toggle")
         else:
             send_command("toggle")
+
     elif key == "KEY_MENU":
         if current_mode == "screensaver":
             send_command("exit_screensaver")
@@ -50,23 +52,34 @@ def process_key(key, current_mode):
             send_command("menu")
         else:
             send_command("repeat")
+
     elif key == "KEY_LEFT":
-        if current_mode == "menu":
+        if current_mode in ["original", "minimal", "modern", "webradio"]:
+            send_command("skip_previous")
+        elif current_mode == "menu":
             send_command("scroll_left")
-        else:
-            send_command("volume_minus")
+
     elif key == "KEY_RIGHT":
-        if current_mode == "menu":
+        if current_mode in ["original", "minimal", "modern", "webradio"]:
+            send_command("skip_next")
+        elif current_mode == "menu":
             send_command("scroll_right")
-        else:
-            send_command("volume_plus")
+
+
+    elif key == "KEY_VOLUMEUP":
+        send_command("volume_plus")
+
+    elif key == "KEY_VOLUMEDOWN":
+        send_command("volume_minus")
+
+
     elif key == "KEY_UP":
-        if current_mode in ["tidal", "qobuz", "library", "playlists", "radiomanager", "configmenu", "displaymenu", "clockmenu", "screensavermenu", "systeminfo", "systemupdate"]:
+        if current_mode in ["tidal", "qobuz", "spotify", "library", "playlists", "radiomanager", "configmenu", "displaymenu", "clockmenu", "screensavermenu", "systeminfo", "systemupdate"]:
             send_command("scroll_up")
         else:
             print("No mapping for KEY_UP in current mode.")
     elif key == "KEY_DOWN":
-        if current_mode in ["tidal", "qobuz", "library", "playlists", "radiomanager", "configmenu", "displaymenu", "clockmenu", "screensavermenu", "systeminfo", "systemupdate"]:
+        if current_mode in ["tidal", "qobuz", "spotify", "library", "playlists", "radiomanager", "configmenu", "displaymenu", "clockmenu", "screensavermenu", "systeminfo", "systemupdate"]:
             send_command("scroll_down")
         else:
             print("No mapping for KEY_DOWN in current mode.")

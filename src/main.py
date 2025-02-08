@@ -137,7 +137,7 @@ def main():
 
     # 8) Initialize Clock
     clock_config = config.get('clock', {})
-    clock = Clock(display_manager, clock_config)
+    clock = Clock(display_manager, clock_config, volumio_listener)
     clock.logger = logging.getLogger("Clock")
     clock.logger.setLevel(logging.INFO)
 
@@ -288,11 +288,15 @@ def main():
 
     threading.Thread(target=rotary_control.start, daemon=True).start()
 
-    def quadify_command_server(mode_manager):
+
+    def quadify_command_server(mode_manager, volumio_listener):
         """
         A Unix socket server that listens on /tmp/quadify.sock for commands
-        from the IR listener and processes them using the provided mode_manager.
+        from the IR listener and processes them using the provided mode_manager
+        and volumio_listener.
         """
+        import os
+        import socket
         sock_path = "/tmp/quadify.sock"
         try:
             os.remove(sock_path)
@@ -308,6 +312,7 @@ def main():
             "menu": lambda: mode_manager.menu_manager.select_item(),
             "tidal": lambda: mode_manager.tidal_manager.select_item(),
             "qobuz": lambda: mode_manager.qobuz_manager.select_item(),
+            "spotify": lambda: mode_manager.spotify_manager.select_item(),
             "library": lambda: mode_manager.library_manager.select_item(),
             "radiomanager": lambda: mode_manager.radio_manager.select_item(),
             "playlists": lambda: mode_manager.playlist_manager.select_item(),
@@ -322,6 +327,7 @@ def main():
             "scroll_up": {
                 "tidal": lambda: mode_manager.tidal_manager.scroll_selection(-1),
                 "qobuz": lambda: mode_manager.qobuz_manager.scroll_selection(-1),
+                "spotify": lambda: mode_manager.spotify_manager.scroll_selection(-1),
                 "library": lambda: mode_manager.library_manager.scroll_selection(-1),
                 "radiomanager": lambda: mode_manager.radio_manager.scroll_selection(-1),
                 "playlists": lambda: mode_manager.playlist_manager.scroll_selection(-1),
@@ -334,6 +340,7 @@ def main():
             "scroll_down": {
                 "tidal": lambda: mode_manager.tidal_manager.scroll_selection(1),
                 "qobuz": lambda: mode_manager.qobuz_manager.scroll_selection(1),
+                "spotify": lambda: mode_manager.spotify_manager.scroll_selection(1),
                 "library": lambda: mode_manager.library_manager.scroll_selection(1),
                 "radiomanager": lambda: mode_manager.radio_manager.scroll_selection(1),
                 "playlists": lambda: mode_manager.playlist_manager.scroll_selection(1),
@@ -377,19 +384,43 @@ def main():
                             scroll_mapping[command][current_mode]()
                         else:
                             print(f"No scroll mapping for command: {command} in mode: {current_mode}")
+
                     elif command == "scroll_left":
                         if current_mode == "menu":
                             mode_manager.menu_manager.scroll_selection(-1)
+                        else:
+                            print(f"No mapping for scroll_left in mode: {current_mode}")
+
                     elif command == "scroll_right":
                         if current_mode == "menu":
                             mode_manager.menu_manager.scroll_selection(1)
+                        else:
+                            print(f"No mapping for scroll_right in mode: {current_mode}")
+
+                    elif command == "skip_next":
+                        # Assuming you want to use your VolumioListener's socketIO to skip to the next track:
+                        print("Skipping to next track.")
+                        volumio_listener.socketIO.emit('skip', {'value': 'next'})
+
+                    elif command == "skip_previous":
+                        print("Skipping to previous track.")
+                        volumio_listener.socketIO.emit('skip', {'value': 'previous'})
+                           
+                    elif command == "volume_plus":
+                        volumio_listener.increase_volume()
+                    elif command == "volume_minus":
+                        volumio_listener.decrease_volume()
                     elif command == "back":
                         mode_manager.trigger("back")
+                    else:
+                        print(f"No mapping for command: {command}")
             except Exception as e:
                 print(f"Error in command server: {e}")
 
-    threading.Thread(target=quadify_command_server, args=(mode_manager,), daemon=True).start()
+
+    threading.Thread(target=quadify_command_server, args=(mode_manager, volumio_listener), daemon=True).start()
     print("Quadify command server thread started.")
+
 
     # 15) Main application loop
     try:

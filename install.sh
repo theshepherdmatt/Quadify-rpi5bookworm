@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e  # Exit immediately if a command exits with a non-zero status
-set -x  # Uncomment to enable debugging
+#set -x  # Uncomment to enable debugging
 
 # ============================
 #   Colour Code Definitions
@@ -88,7 +88,6 @@ show_random_tip() {
 run_command() {
     local cmd="$1"
     echo "Running: $cmd" >> "$LOG_FILE"
-
     echo -e "${MAGENTA}Running command...${NC}"
     bash -c "$cmd" >> "$LOG_FILE" 2>&1
     local exit_status=$?
@@ -109,7 +108,6 @@ banner
 # ============================
 install_system_dependencies() {
     log_progress "Installing system-level dependencies, this might take a while so put the kettle on..."
-
     run_command "apt-get update"
     run_command "apt-get install -y \
             python3.7 \
@@ -130,8 +128,6 @@ install_system_dependencies() {
             libssl-dev \
             lirc \
             lsof"
-
-
     log_message "success" "System-level dependencies installed. (ᵔᴥᵔ)"
     show_random_tip
 }
@@ -145,10 +141,8 @@ upgrade_pip() {
 
 install_python_dependencies() {
     log_progress "Installing Python dependencies, please wait..."
-
     # Force-install pycairo first
     run_command "python3.7 -m pip install --upgrade --ignore-installed pycairo"
-
     # Then the rest from requirements.txt
     run_command "python3.7 -m pip install --upgrade --ignore-installed -r /home/volumio/Quadify/requirements.txt"
     log_message "success" "Python dependencies installed. (•‿•)"
@@ -157,12 +151,10 @@ install_python_dependencies() {
 
 enable_i2c_spi() {
     log_progress "Enabling I2C and SPI in config.txt..."
-
     CONFIG_FILE="/boot/userconfig.txt"
     if [ ! -f "$CONFIG_FILE" ]; then
         run_command "touch \"$CONFIG_FILE\""
     fi
-
     # SPI
     if ! grep -q "^dtparam=spi=on" "$CONFIG_FILE"; then
         echo "dtparam=spi=on" >> "$CONFIG_FILE"
@@ -170,7 +162,6 @@ enable_i2c_spi() {
     else
         log_message "info" "SPI is already enabled."
     fi
-
     # I2C
     if ! grep -q "^dtparam=i2c_arm=on" "$CONFIG_FILE"; then
         echo "dtparam=i2c_arm=on" >> "$CONFIG_FILE"
@@ -178,12 +169,9 @@ enable_i2c_spi() {
     else
         log_message "info" "I2C is already enabled."
     fi
-
     log_progress "Loading I2C and SPI kernel modules..."
     run_command "modprobe i2c-dev"
     run_command "modprobe spi-bcm2835"
-
-
     if [ -e /dev/i2c-1 ]; then
         log_message "success" "/dev/i2c-1 is present."
     else
@@ -203,13 +191,9 @@ enable_i2c_spi() {
 enable_gpio_ir() {
     log_progress "Configuring GPIO IR overlay in userconfig.txt..."
     CONFIG_FILE="/boot/userconfig.txt"
-    
-    # Ensure the config file exists.
     if [ ! -f "$CONFIG_FILE" ]; then
         run_command "touch \"$CONFIG_FILE\""
     fi
-
-    # Check if the IR overlay is already set
     if ! grep -q "^dtoverlay=gpio-ir" "$CONFIG_FILE"; then
         echo "dtoverlay=gpio-ir,gpio_pin=26" >> "$CONFIG_FILE"
         log_message "success" "GPIO IR overlay added to $CONFIG_FILE."
@@ -221,16 +205,12 @@ enable_gpio_ir() {
 # ============================
 #   Detect/Set MCP23017 Address
 # ============================
-
 detect_i2c_address() {
     log_progress "Detecting MCP23017 I2C address..."
-
     i2c_output=$(/usr/sbin/i2cdetect -y 1)
     echo "$i2c_output" >> "$LOG_FILE"
     echo "$i2c_output"
-
     address=$(echo "$i2c_output" | grep -oE '\b(20|21|22|23|24|25|26|27)\b' | head -n 1)
-
     if [[ -z "$address" ]]; then
         log_message "warning" "No MCP23017 detected. Check wiring."
     else
@@ -243,7 +223,6 @@ detect_i2c_address() {
 update_config_i2c_address() {
     local detected_address="$1"
     CONFIG_FILE="/home/volumio/Quadify/config.yaml"
-
     if [[ -f "$CONFIG_FILE" ]]; then
         if grep -q "mcp23017_address:" "$CONFIG_FILE"; then
             run_command "sed -i \"s/mcp23017_address: 0x[0-9a-fA-F]\\{2\\}/mcp23017_address: 0x$detected_address/\" \"$CONFIG_FILE\""
@@ -263,13 +242,11 @@ update_config_i2c_address() {
 # ============================
 setup_samba() {
     log_progress "Configuring Samba for Quadify..."
-
     SMB_CONF="/etc/samba/smb.conf"
     if [ ! -f "$SMB_CONF.bak" ]; then
         run_command "cp $SMB_CONF $SMB_CONF.bak"
         log_message "info" "Backup of $SMB_CONF created."
     fi
-
     if ! grep -q "\[Quadify\]" "$SMB_CONF"; then
         cat <<EOF >> "$SMB_CONF"
 
@@ -287,10 +264,8 @@ EOF
     else
         log_message "info" "Quadify section already in smb.conf."
     fi
-
     run_command "systemctl restart smbd"
     log_message "success" "Samba restarted."
-
     run_command "chown -R volumio:volumio /home/volumio/Quadify"
     run_command "chmod -R 777 /home/volumio/Quadify"
     log_message "success" "Permissions set for /home/volumio/Quadify."
@@ -302,10 +277,8 @@ EOF
 # ============================
 setup_main_service() {
     log_progress "Setting up Main Quadify Service..."
-
     SERVICE_FILE="/etc/systemd/system/quadify.service"
     LOCAL_SERVICE="/home/volumio/Quadify/service/quadify.service"
-
     if [[ -f "$LOCAL_SERVICE" ]]; then
         run_command "cp \"$LOCAL_SERVICE\" \"$SERVICE_FILE\""
         run_command "systemctl daemon-reload"
@@ -324,7 +297,6 @@ setup_main_service() {
 # ============================
 configure_mpd() {
     log_progress "Configuring MPD for FIFO..."
-
     MPD_CONF_FILE="/volumio/app/plugins/music_service/mpd/mpd.conf.tmpl"
     FIFO_OUTPUT="
 audio_output {
@@ -333,14 +305,12 @@ audio_output {
     path            \"/tmp/cava.fifo\"
     format          \"44100:16:2\"
 }"
-
     if grep -q "/tmp/cava.fifo" "$MPD_CONF_FILE"; then
         log_message "info" "FIFO output config already in MPD conf."
     else
         echo "$FIFO_OUTPUT" | tee -a "$MPD_CONF_FILE" >> "$LOG_FILE"
         log_message "success" "Added FIFO output to MPD conf."
     fi
-
     run_command "systemctl restart mpd"
     log_message "success" "MPD restarted with updated FIFO config."
     show_random_tip
@@ -359,16 +329,12 @@ check_cava_installed() {
 
 install_cava_from_fork() {
     log_progress "Installing CAVA from the fork..."
-
     CAVA_REPO="https://github.com/theshepherdmatt/cava.git"
     CAVA_INSTALL_DIR="/home/volumio/cava"
-
     if check_cava_installed; then
         log_message "info" "CAVA already installed. Skipping."
         return
     fi
-
-    # Dependencies
     log_message "info" "Installing build dependencies for CAVA..."
     run_command "apt-get install -y \
         libfftw3-dev \
@@ -382,13 +348,11 @@ install_cava_from_fork() {
         make \
         pkg-config \
         libiniparser-dev"
-
     if [[ ! -d "$CAVA_INSTALL_DIR" ]]; then
         run_command "git clone $CAVA_REPO $CAVA_INSTALL_DIR"
     else
         run_command "cd $CAVA_INSTALL_DIR && git pull"
     fi
-
     run_command "cd $CAVA_INSTALL_DIR && ./autogen.sh"
     run_command "cd $CAVA_INSTALL_DIR && ./configure"
     run_command "cd $CAVA_INSTALL_DIR && make"
@@ -399,15 +363,14 @@ install_cava_from_fork() {
 
 setup_cava_service() {
     log_progress "Setting up CAVA service..."
-
     CAVA_SERVICE_FILE="/etc/systemd/system/cava.service"
     LOCAL_CAVA_SERVICE="/home/volumio/Quadify/service/cava.service"
-
     if [[ -f "$LOCAL_CAVA_SERVICE" ]]; then
         run_command "cp \"$LOCAL_CAVA_SERVICE\" \"$CAVA_SERVICE_FILE\""
         run_command "systemctl daemon-reload"
         run_command "systemctl enable cava.service"
-        # run_command "systemctl start cava.service"  # Optionally start here
+        # Optionally start the service here:
+        # run_command "systemctl start cava.service"
         log_message "success" "CAVA service installed."
     else
         log_message "error" "cava.service not found in /home/volumio/Quadify/service."
@@ -415,23 +378,17 @@ setup_cava_service() {
     show_random_tip
 }
 
-
 # ============================
 #   Buttons + LEDs Handling
 # ============================
 configure_buttons_leds() {
-    # If user doesn't want buttons/LEDs, we just comment them out
-    # If user wants them, we do detection + uncomment
-
     MAIN_PY_PATH="/home/volumio/Quadify/src/main.py"
     if [[ ! -f "$MAIN_PY_PATH" ]]; then
         log_message "error" "Could not find main.py at $MAIN_PY_PATH."
         exit 1
     fi
-
     if [ "$BUTTONSLEDS_ENABLED" = false ]; then
         log_message "info" "Disabling 'buttons_leds' usage in main.py..."
-        # Comment out lines in main.py:
         if grep -qE "^[^#]*\s*buttons_leds\s*=\s*ButtonsLEDController" "$MAIN_PY_PATH"; then
             sed -i.bak '/buttons_leds\s*=\s*ButtonsLEDController/ s/^\(\s*\)/\1#/' "$MAIN_PY_PATH"
         fi
@@ -441,7 +398,6 @@ configure_buttons_leds() {
         log_message "success" "Buttons/LEDs lines commented out."
     else
         log_message "info" "Enabling 'buttons_leds' usage in main.py..."
-        # Uncomment lines in main.py:
         if grep -qE "^[#]*\s*buttons_leds\s*=\s*ButtonsLEDController" "$MAIN_PY_PATH"; then
             sed -i.bak '/buttons_leds\s*=\s*ButtonsLEDController/ s/^#//' "$MAIN_PY_PATH"
         fi
@@ -453,14 +409,12 @@ configure_buttons_leds() {
 }
 
 # ============================
-#   IR controller
+#   IR Controller
 # ============================
-
 install_lircrc() {
     log_progress "Installing LIRC configuration (lircrc) from repository..."
     LOCAL_LIRCRC="/home/volumio/Quadify/lirc/lircrc"
     DESTINATION="/etc/lirc/lircrc"
-    
     if [ -f "$LOCAL_LIRCRC" ]; then
         run_command "cp \"$LOCAL_LIRCRC\" \"$DESTINATION\""
         log_message "success" "LIRC configuration (lircrc) copied to $DESTINATION."
@@ -472,15 +426,10 @@ install_lircrc() {
 
 install_lirc_configs() {
     log_progress "Installing LIRC configuration files..."
-    
-    # Paths to your local copies in your Quadify repo
     LOCAL_LIRCRC="/home/volumio/Quadify/lirc/lircrc"
     LOCAL_LIRCD_CONF="/home/volumio/Quadify/lirc/lircd.conf"
-    
-    # Destination paths on the system
     DEST_LIRCRC="/etc/lirc/lircrc"
     DEST_LIRCD_CONF="/etc/lirc/lircd.conf"
-
     if [ -f "$LOCAL_LIRCRC" ]; then
         run_command "cp \"$LOCAL_LIRCRC\" \"$DEST_LIRCRC\""
         log_message "success" "Copied lircrc to $DEST_LIRCRC."
@@ -488,7 +437,6 @@ install_lirc_configs() {
         log_message "error" "lircrc file not found at $LOCAL_LIRCRC."
         exit 1
     fi
-
     if [ -f "$LOCAL_LIRCD_CONF" ]; then
         run_command "cp \"$LOCAL_LIRCD_CONF\" \"$DEST_LIRCD_CONF\""
         log_message "success" "Copied lircd.conf to $DEST_LIRCD_CONF."
@@ -496,7 +444,6 @@ install_lirc_configs() {
         log_message "error" "lircd.conf file not found at $LOCAL_LIRCD_CONF."
         exit 1
     fi
-
     show_random_tip
 }
 
@@ -504,7 +451,6 @@ setup_ir_listener_service() {
     log_progress "Setting up IR Listener service..."
     IR_SERVICE_FILE="/etc/systemd/system/ir_listener.service"
     LOCAL_IR_SERVICE="/home/volumio/Quadify/service/ir_listener.service"
-
     if [ -f "$LOCAL_IR_SERVICE" ]; then
         run_command "cp \"$LOCAL_IR_SERVICE\" \"$IR_SERVICE_FILE\""
         run_command "systemctl daemon-reload"
@@ -520,7 +466,6 @@ setup_ir_listener_service() {
 
 update_lirc_options() {
     log_progress "Updating LIRC options: setting driver to default..."
-    # Update the driver line to "default" in /etc/lirc/lirc_options.conf
     sed -i 's|^driver\s*=.*|driver          = default|' /etc/lirc/lirc_options.conf
     log_message "success" "LIRC options updated: driver set to default."
     show_random_tip
@@ -537,37 +482,27 @@ set_permissions() {
 }
 
 # ============================
-#   Main Installation
+#   Main Quadify Installation
 # ============================
-
 main() {
     check_root
-
     log_message "info" "Starting Quadify Installer..."
-
+    
     # 1) Ask user about Buttons & LEDs with MCP23017
     BUTTONSLEDS_ENABLED=false
     while true; do
         read -rp "Enable Buttons & LEDs with MCP23017? (y/n): " answer
         case $answer in
-            [Yy]* )
-                BUTTONSLEDS_ENABLED=true
-                break
-                ;;
-            [Nn]* )
-                BUTTONSLEDS_ENABLED=false
-                break
-                ;;
-            * )
-                log_message "warning" "Please answer y or n."
-                ;;
+            [Yy]* ) BUTTONSLEDS_ENABLED=true; break ;;
+            [Nn]* ) BUTTONSLEDS_ENABLED=false; break ;;
+            * ) log_message "warning" "Please answer y or n." ;;
         esac
     done
 
-    # 2) Install system dependencies (includes i2c-tools, etc.)
+    # 2) Install system dependencies
     install_system_dependencies
 
-    # 3) Enable i2c/spi (only truly needed if using Buttons/LEDs, but safe to keep)
+    # 3) Enable I2C/SPI
     enable_i2c_spi
 
     # 3.5) Enable GPIO IR overlay
@@ -576,10 +511,10 @@ main() {
     # 4) Upgrade pip
     upgrade_pip
 
-    # 5) Install python dependencies
+    # 5) Install Python dependencies
     install_python_dependencies
 
-    # 6) If user chose Buttons/LEDs, detect I2C address
+    # 6) Detect I2C address if Buttons/LEDs enabled
     if [ "$BUTTONSLEDS_ENABLED" = true ]; then
         detect_i2c_address
     else
@@ -598,22 +533,25 @@ main() {
     # 10) Setup CAVA service
     setup_cava_service
 
-    # 11) Configure Buttons & LEDs (comment/uncomment lines in main.py)
+    # 11) Configure Buttons & LEDs (modify main.py)
     configure_buttons_leds
 
     # 12) Setup Samba
     setup_samba
 
-    # 12.5) Install LIRC configuration (lircrc) from your repository folder
+    # 12.5) Install LIRC configuration (lircrc) from repository folder
     install_lircrc
 
     # 12.6) Install LIRC configuration files (lircrc and lircd.conf)
     install_lirc_configs
 
-    # 12.7) Update LIRC options to set driver to default
+    # 12.7) Install LIRC configuration files (lircrc and lircd.conf)
+    setup_ir_listener_service
+
+    # 12.8) Update LIRC options to set driver to default
     update_lirc_options
 
-    # 13) Permissions
+    # 13) Set Permissions
     set_permissions
 
     log_message "success" "Quadify installation complete! A reboot is required."
@@ -631,13 +569,9 @@ main() {
                 log_message "info" "Installation finished. Please reboot manually later."
                 break
                 ;;
-            * )
-                log_message "warning" "Please answer y or n."
-                ;;
+            * ) log_message "warning" "Please answer y or n." ;;
         esac
     done
 }
 
 main
-
-

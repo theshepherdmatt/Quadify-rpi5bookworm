@@ -718,28 +718,11 @@ class ModeManager:
         self.logger.debug("toggle_play_pause: Current mode before toggling: %s", current_mode)
         if current_mode in ['clock', 'original', 'modern', 'minimal', 'webradio']:
             if current_mode == 'clock':
+                # Now that Clock implements toggle_play_pause, use it directly.
                 if hasattr(self.clock, "toggle_play_pause"):
                     self.clock.toggle_play_pause()
                 else:
-                    # Check if the current service is webradio.
-                    # (Assuming that self.volumio_listener.current_state contains the latest state.)
-                    current_service = None
-                    if self.volumio_listener and hasattr(self.volumio_listener, "current_state"):
-                        current_service = self.volumio_listener.current_state.get("service", "").lower()
-                    if current_service == "webradio":
-                        self.logger.info("Clock mode doesn't support toggling and service is webradio; switching directly to 'webradio'.")
-                        self.to_webradio()
-                        if self.webradio_screen:
-                            self.webradio_screen.toggle_play_pause()
-                        else:
-                            self.logger.warning("No webradio screen available for toggling play/pause.")
-                    else:
-                        self.logger.info("Clock mode does not support toggling; switching to 'original'.")
-                        self.to_original()
-                        if self.original_screen:
-                            self.original_screen.toggle_play_pause()
-                        else:
-                            self.logger.warning("No original screen available for toggling play/pause.")
+                    self.logger.warning("Clock mode does not support toggling play/pause.")
             elif current_mode == 'original' and self.original_screen:
                 self.original_screen.toggle_play_pause()
             elif current_mode == 'modern' and self.modern_screen:
@@ -753,7 +736,6 @@ class ModeManager:
         else:
             self.logger.info("Toggle play/pause is not applicable in the current mode.")
         self.logger.debug("toggle_play_pause: Current mode after toggling: %s", self.get_mode())
-
 
 
     def back(self):

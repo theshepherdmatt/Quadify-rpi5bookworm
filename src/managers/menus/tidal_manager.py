@@ -15,9 +15,9 @@ class TidalManager(BaseManager):
         self.font_key = 'menu_font'  # Define in config.yaml under fonts
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(logging.INFO)
-        self.logger.info("TidalManager initialized.")
+        self.logger.info("TidalManager initialised.")
 
-        # Initialize state
+        # Initialise state
         self.menu_stack = []
         self.current_menu_items = []
         self.is_active = False
@@ -32,6 +32,9 @@ class TidalManager(BaseManager):
 
         # Font settings
         self.font_key = 'menu_font'
+
+        # Timeout timer attribute
+        self.timeout_timer = None
 
         # Register mode change callback
         if hasattr(self.mode_manager, "add_on_mode_change_callback"):
@@ -53,12 +56,37 @@ class TidalManager(BaseManager):
         self.volumio_listener.toast_message_received.connect(self.handle_toast_message)
         self.logger.debug("TidalManager: Connected to 'tidal_navigation_received' and 'toast_message_received' signals.")
         self.volumio_listener.navigation_received.connect(self.handle_navigation)
-
         self.volumio_listener.state_changed.connect(self.handle_state_change)
         self.volumio_listener.track_changed.connect(self.handle_track_change)
 
         self.display_loading_screen()
         self.fetch_tidal_navigation()  # Fetch Tidal root navigation
+
+        # Start timeout timer (e.g. 5 seconds)
+        self.timeout_timer = threading.Timer(5.0, self.tidal_timeout)
+        self.timeout_timer.start()
+
+    def tidal_timeout(self):
+        """Called when Tidal navigation has not loaded within the timeout period."""
+        if not self.current_menu_items:
+            self.logger.warning("TidalManager: Timeout reached, no navigation data received.")
+
+            def draw(draw_obj):
+                draw_obj.text(
+                    (10, self.y_offset),
+                    "Tidal is not loading...",
+                    font=self.display_manager.fonts.get(self.font_key, ImageFont.load_default()),
+                    fill="white"
+                )
+                draw_obj.text(
+                    (10, self.y_offset + self.line_spacing),
+                    "Have you logged in via Volumio?",
+                    font=self.display_manager.fonts.get(self.font_key, ImageFont.load_default()),
+                    fill="white"
+                )
+
+            self.display_manager.draw_custom(draw)
+
 
     def stop_mode(self):
         """Stop Tidal mode and clear the display."""
@@ -73,10 +101,13 @@ class TidalManager(BaseManager):
         self.volumio_listener.tidal_navigation_received.disconnect(self.update_tidal_menu)
         self.volumio_listener.toast_message_received.disconnect(self.handle_toast_message)
         self.logger.debug("TidalManager: Disconnected from 'tidal_navigation_received' and 'toast_message_received' signals.")
-
         self.volumio_listener.state_changed.disconnect(self.handle_state_change)
         self.volumio_listener.track_changed.disconnect(self.handle_track_change)
 
+        # Cancel the timeout timer if it is still running
+        if self.timeout_timer:
+            self.timeout_timer.cancel()
+            self.timeout_timer = None
 
     def handle_state_change(self, sender, state, **kwargs):
         if state.get('service') == 'tidal':
@@ -90,10 +121,10 @@ class TidalManager(BaseManager):
             self.update_song_info(track)
 
     def handle_navigation(self, sender, navigation, service, uri, **kwargs):
-            if service != 'tidal':
-                return  # Ignore navigation data not related to Tidal
-            self.logger.info("TidalManager: Received navigation data.")
-            self.update_tidal_menu(sender, navigation)
+        if service != 'tidal':
+            return  # Ignore navigation data not related to Tidal
+        self.logger.info("TidalManager: Received navigation data.")
+        self.update_tidal_menu(sender, navigation)
 
     def fetch_tidal_navigation(self, uri="tidal://"):
         """Fetch navigation data for the given URI."""
@@ -120,7 +151,7 @@ class TidalManager(BaseManager):
         self.window_start_index = min(self.window_start_index, max(0, len(items) - self.window_size))
 
         visible_items = items[self.window_start_index:self.window_start_index + self.window_size]
-        self.logger.debug(f"TidalManager: Visible window indices {self.window_start_index} to {self.window_start_index + self.window_size -1}")
+        self.logger.debug(f"TidalManager: Visible window indices {self.window_start_index} to {self.window_start_index + self.window_size - 1}")
         return visible_items
 
     def handle_mode_change(self, current_mode):
@@ -149,13 +180,17 @@ class TidalManager(BaseManager):
 
     def update_tidal_menu(self, sender, navigation, **kwargs):
         """Handle the 'tidal_navigation_received' signal and update the Tidal menu."""
+        # Cancel the timeout timer if it is still running
+        if self.timeout_timer:
+            self.timeout_timer.cancel()
+            self.timeout_timer = None
+
         if not navigation:
             self.logger.warning("TidalManager: No navigation data received.")
             self.display_no_items()
             return
 
         lists = navigation.get("lists", [])
-
         if not lists or not isinstance(lists, list):
             self.logger.warning("TidalManager: Navigation data has no valid lists.")
             self.display_no_items()
@@ -281,14 +316,12 @@ class TidalManager(BaseManager):
                     }
                 })
                 self.logger.info(f"TidalManager: Emitted replaceAndPlay for Tidal track '{uri}'.")
-
             except Exception as e:
                 self.logger.error(f"TidalManager: Failed to replaceAndPlay track {uri}: {e}")
                 self.display_error_message("Playback Error", f"Could not play track: {e}")
         else:
             self.logger.warning("TidalManager: Cannot play song - not connected to Volumio.")
             self.display_error_message("Connection Error", "Not connected to Volumio.")
-
 
     def navigate_to(self, uri):
         """Navigate into a submenu or playlist."""
@@ -340,14 +373,14 @@ class TidalManager(BaseManager):
         self.logger.info(f"TidalManager: Displaying error message: {title} - {message}")
 
         def draw(draw_obj):
-            # Display title
+            # Display title in white
             draw_obj.text(
                 (10, self.y_offset),
                 f"Error: {title}",
                 font=self.display_manager.fonts.get(self.font_key, ImageFont.load_default()),
-                fill="red"
+                fill="white"
             )
-            # Display message
+            # Display message in white
             draw_obj.text(
                 (10, self.y_offset + self.line_spacing),
                 message,
@@ -356,6 +389,7 @@ class TidalManager(BaseManager):
             )
 
         self.display_manager.draw_custom(draw)
+
 
     def update_song_info(self, state):
         """Update the playback metrics display based on the current state."""

@@ -25,6 +25,9 @@ class SpotifyManager(BaseManager):
         self.line_spacing = line_spacing
         self.font_key = 'menu_font'
 
+        # Timeout timer attribute
+        self.timeout_timer = None
+
         # Register mode change callback
         if hasattr(self.mode_manager, "add_on_mode_change_callback"):
             self.mode_manager.add_on_mode_change_callback(self.handle_mode_change)
@@ -50,6 +53,29 @@ class SpotifyManager(BaseManager):
         self.display_loading_screen()
         self.fetch_spotify_navigation()  # Fetch Spotify root navigation
 
+        # Start a timeout timer (e.g. 5 seconds)
+        self.timeout_timer = threading.Timer(5.0, self.spotify_timeout)
+        self.timeout_timer.start()
+
+    def spotify_timeout(self):
+        """Called when Spotify navigation has not produced any menu items within the timeout period."""
+        if not self.current_menu_items:
+            self.logger.warning("SpotifyManager: Timeout reached, no valid navigation data received.")
+            def draw(draw_obj):
+                draw_obj.text(
+                    (10, self.y_offset),
+                    "Spotify is not loading...",
+                    font=self.display_manager.fonts.get(self.font_key, ImageFont.load_default()),
+                    fill="white"
+                )
+                draw_obj.text(
+                    (10, self.y_offset + self.line_spacing),
+                    "Check your connection to Volumio.",
+                    font=self.display_manager.fonts.get(self.font_key, ImageFont.load_default()),
+                    fill="white"
+                )
+            self.display_manager.draw_custom(draw)
+
     def stop_mode(self):
         if not self.is_active:
             self.logger.debug("SpotifyManager: Spotify mode already inactive.")
@@ -64,6 +90,11 @@ class SpotifyManager(BaseManager):
         self.volumio_listener.state_changed.disconnect(self.handle_state_change)
         self.volumio_listener.track_changed.disconnect(self.handle_track_change)
         self.logger.debug("SpotifyManager: Disconnected from Volumio signals.")
+
+        # Cancel timeout timer if still running
+        if self.timeout_timer:
+            self.timeout_timer.cancel()
+            self.timeout_timer = None
 
     def handle_navigation(self, sender, navigation, service, uri, **kwargs):
         if service not in ['spop', 'spotify']:  # Ensure service is 'spop' or 'spotify' for Spotify
@@ -160,6 +191,11 @@ class SpotifyManager(BaseManager):
             self.display_no_items()
             return
 
+        # Cancel the timeout timer if valid navigation data is received.
+        if self.timeout_timer:
+            self.timeout_timer.cancel()
+            self.timeout_timer = None
+
         self.current_menu_items = [
             {
                 "title": item.get("title", "Untitled"),
@@ -229,7 +265,6 @@ class SpotifyManager(BaseManager):
         self.logger.info(f"SpotifyManager: Selected item: {selected_item}")
 
         uri = selected_item.get("uri")
-
         if not uri:
             self.logger.warning("SpotifyManager: Selected item has no URI.")
             self.display_error_message("Invalid Selection", "Selected item has no URI.")
@@ -330,7 +365,7 @@ class SpotifyManager(BaseManager):
 
     def update_song_info(self, state):
         """Update the playback metrics display based on the current state."""
-        self.logger.info("SpotiyManager: Updating playback metrics display.")
+        self.logger.info("SpotifyManager: Updating playback metrics display.")
 
         # Extract relevant playback information
         sample_rate = state.get("samplerate", "Unknown Sample Rate")
@@ -339,8 +374,3 @@ class SpotifyManager(BaseManager):
 
         # Log or display the extracted information
         self.logger.info(f"Sample Rate: {sample_rate}, Bit Depth: {bitdepth}, Volume: {volume}")
-
-        # Optional: Update the screen with this information if needed
-        # You can call methods on `self.display_manager` or another appropriate object
-
-

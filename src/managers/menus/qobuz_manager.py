@@ -5,8 +5,6 @@ from PIL import ImageFont
 import threading
 import time
 
-# src/managers/qobuz_manager.py
-
 class QobuzManager(BaseManager):
     def __init__(self, display_manager, volumio_listener, mode_manager, window_size=4, y_offset=5, line_spacing=15):
         super().__init__(display_manager, volumio_listener, mode_manager)
@@ -27,6 +25,9 @@ class QobuzManager(BaseManager):
         self.y_offset = y_offset
         self.line_spacing = line_spacing
         self.font_key = 'menu_font'
+
+        # Timeout timer attribute
+        self.timeout_timer = None
 
         # Register mode change callback
         if hasattr(self.mode_manager, "add_on_mode_change_callback"):
@@ -53,6 +54,29 @@ class QobuzManager(BaseManager):
         self.display_loading_screen()
         self.fetch_qobuz_navigation()  # Fetch Qobuz root navigation
 
+        # Start a timeout timer (e.g. 5 seconds)
+        self.timeout_timer = threading.Timer(5.0, self.qobuz_timeout)
+        self.timeout_timer.start()
+
+    def qobuz_timeout(self):
+        """Called when Qobuz navigation has not produced any menu items within the timeout period."""
+        if not self.current_menu_items:
+            self.logger.warning("QobuzManager: Timeout reached, no valid navigation data received.")
+            def draw(draw_obj):
+                draw_obj.text(
+                    (10, self.y_offset),
+                    "Qobuz is not loading...",
+                    font=self.display_manager.fonts.get(self.font_key, ImageFont.load_default()),
+                    fill="white"
+                )
+                draw_obj.text(
+                    (10, self.y_offset + self.line_spacing),
+                    "Have you logged in via Volumio?",
+                    font=self.display_manager.fonts.get(self.font_key, ImageFont.load_default()),
+                    fill="white"
+                )
+            self.display_manager.draw_custom(draw)
+
     def stop_mode(self):
         if not self.is_active:
             self.logger.debug("QobuzManager: Qobuz mode already inactive.")
@@ -68,7 +92,11 @@ class QobuzManager(BaseManager):
 
         self.volumio_listener.state_changed.disconnect(self.handle_state_change)
         self.volumio_listener.track_changed.disconnect(self.handle_track_change)
-        
+
+        # Cancel the timeout timer if it's still running
+        if self.timeout_timer:
+            self.timeout_timer.cancel()
+            self.timeout_timer = None
 
     def handle_navigation(self, sender, navigation, service, uri, **kwargs):
         if service != 'qobuz':
@@ -100,7 +128,7 @@ class QobuzManager(BaseManager):
         self.window_start_index = min(self.window_start_index, max(0, len(items) - self.window_size))
 
         visible_items = items[self.window_start_index:self.window_start_index + self.window_size]
-        self.logger.debug(f"QobuzManager: Visible window indices {self.window_start_index} to {self.window_start_index + self.window_size -1}")
+        self.logger.debug(f"QobuzManager: Visible window indices {self.window_start_index} to {self.window_start_index + self.window_size - 1}")
         return visible_items
 
     def handle_mode_change(self, current_mode):
@@ -139,46 +167,41 @@ class QobuzManager(BaseManager):
         self.display_manager.draw_custom(draw)
 
     def update_qobuz_menu(self, sender, navigation, **kwargs):
-        if not navigation:
+        # Check if the navigation data is valid (contains non-empty lists)
+        if navigation and isinstance(navigation, dict) and navigation.get("lists"):
+            lists = navigation.get("lists", [])
+            combined_items = []
+            for lst in lists:
+                list_items = lst.get("items", [])
+                if list_items:
+                    combined_items.extend(list_items)
+
+            if combined_items:
+                # We received valid data; cancel the timeout timer if it's still running.
+                if self.timeout_timer:
+                    self.timeout_timer.cancel()
+                    self.timeout_timer = None
+
+                self.current_menu_items = [
+                    {
+                        "title": item.get("title", "Untitled"),
+                        "uri": item.get("uri", ""),
+                        "type": item.get("type", "")
+                    }
+                    for item in combined_items
+                ]
+                self.logger.info(f"QobuzManager: Updated menu with {len(self.current_menu_items)} items.")
+                if self.is_active:
+                    self.display_menu()
+                return
+            else:
+                self.logger.warning("QobuzManager: Navigation data received but no items found.")
+        else:
             self.logger.warning("QobuzManager: No navigation data received.")
-            self.display_no_items()
-            return
 
-        lists = navigation.get("lists", [])
-
-        if not lists or not isinstance(lists, list):
-            self.logger.warning("QobuzManager: Navigation data has no valid lists.")
-            self.display_no_items()
-            return
-
-        # Combine items from all lists
-        combined_items = []
-        for lst in lists:
-            list_items = lst.get("items", [])
-            if list_items:
-                combined_items.extend(list_items)
-
-        self.logger.debug("QobuzManager: Displaying combined menu items from all lists.")
-
-        if not combined_items:
-            self.logger.info("QobuzManager: No items in navigation. Displaying 'No Results'.")
-            self.display_no_items()
-            return
-
-        self.current_menu_items = [
-            {
-                "title": item.get("title", "Untitled"),
-                "uri": item.get("uri", ""),
-                "type": item.get("type", "")
-            }
-            for item in combined_items
-        ]
-
-        self.logger.info(f"QobuzManager: Updated menu with {len(self.current_menu_items)} items.")
-
-        if self.is_active:
-            self.display_menu()
-
+        # If we reach here, either navigation was empty or no valid items were found.
+        # Do not cancel the timer so that qobuz_timeout will eventually be called.
+        self.display_no_items()
 
     def display_no_items(self):
         """Display a message if no items are available."""
@@ -235,20 +258,13 @@ class QobuzManager(BaseManager):
         self.logger.info(f"QobuzManager: Selected item: {selected_item}")
 
         uri = selected_item.get("uri")
-
         if not uri:
             self.logger.warning("QobuzManager: Selected item has no URI.")
             self.display_error_message("Invalid Selection", "Selected item has no URI.")
             return
 
         # Determine if the item is a song by checking the URI prefix
-        if uri.startswith("qobuz://song/"):
-            self.logger.info(f"QobuzManager: Playing song with URI: {uri}")
-            self.play_song(uri)
-            return
-
-        # Alternatively, check if the type indicates it's a song
-        if selected_item.get("type", "").lower() == "song":
+        if uri.startswith("qobuz://song/") or selected_item.get("type", "").lower() == "song":
             self.logger.info(f"QobuzManager: Playing song with URI: {uri}")
             self.play_song(uri)
             return
@@ -334,14 +350,14 @@ class QobuzManager(BaseManager):
         self.logger.info(f"QobuzManager: Displaying error message: {title} - {message}")
 
         def draw(draw_obj):
-            # Display title
+            # Draw error title in white (matching the loading screen style)
             draw_obj.text(
                 (10, self.y_offset),
                 f"Error: {title}",
                 font=self.display_manager.fonts.get(self.font_key, ImageFont.load_default()),
-                fill="red"
+                fill="white"
             )
-            # Display message
+            # Draw error message in white
             draw_obj.text(
                 (10, self.y_offset + self.line_spacing),
                 message,
@@ -360,8 +376,5 @@ class QobuzManager(BaseManager):
         bitdepth = state.get("bitdepth", "Unknown Bit Depth")
         volume = state.get("volume", "Unknown Volume")
 
-        # Log or display the extracted information
         self.logger.info(f"Sample Rate: {sample_rate}, Bit Depth: {bitdepth}, Volume: {volume}")
-
-        # Optional: Update the screen with this information if needed
-        # You can call methods on `self.display_manager` or another appropriate object
+        # Optionally update the display with this information

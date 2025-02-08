@@ -4,7 +4,7 @@ import threading
 from PIL import Image, ImageDraw
 
 class Clock:
-    def __init__(self, display_manager, config):
+    def __init__(self, display_manager, config, volumio_listener):
         """
         :param display_manager:  Your DisplayManager controlling the OLED.
         :param config:           Dictionary with user toggles like:
@@ -14,6 +14,7 @@ class Clock:
                                 You can also add more toggles if needed.
         """
         self.display_manager = display_manager
+        self.volumio_listener = volumio_listener
         self.config = config  # includes user toggles like "clock_font_key", "show_seconds", "show_date"
         self.running = False
         self.thread  = None
@@ -138,3 +139,15 @@ class Clock:
         while self.running:
             self.draw_clock()
             time.sleep(1)
+
+    def toggle_play_pause(self):
+        """Emit Volumio play/pause toggle if connected."""
+        self.logger.info("ClockScreen: Toggling play/pause.")
+        if not self.volumio_listener or not self.volumio_listener.is_connected():
+            self.logger.warning("ClockScreen: Not connected to Volumio => cannot toggle.")
+            return
+        try:
+            self.volumio_listener.socketIO.emit("toggle", {})
+            self.logger.debug("ClockScreen: Emitted 'toggle' event.")
+        except Exception as e:
+            self.logger.error(f"ClockScreen: toggle_play_pause failed => {e}")

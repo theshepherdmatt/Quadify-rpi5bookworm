@@ -23,6 +23,9 @@ class PlaylistManager(BaseManager):
         self.line_spacing = line_spacing
         self.font_key = 'menu_font'
 
+        # Timeout timer attribute
+        self.timeout_timer = None
+
         # Register mode change callback
         if hasattr(self.mode_manager, "add_on_mode_change_callback"):
             self.mode_manager.add_on_mode_change_callback(self.handle_mode_change)
@@ -64,6 +67,9 @@ class PlaylistManager(BaseManager):
         self.display_loading_screen()
         self.fetch_navigation()  # Fetch root playlists navigation
 
+        # Start a timeout timer (e.g. 5 seconds)
+        self.timeout_timer = threading.Timer(5.0, self.playlist_timeout)
+        self.timeout_timer.start()
 
     def stop_mode(self):
         if not self.is_active:
@@ -80,13 +86,16 @@ class PlaylistManager(BaseManager):
 
         self.volumio_listener.state_changed.disconnect(self.handle_state_change)
         self.volumio_listener.track_changed.disconnect(self.handle_track_change)
-        
+
+        # Cancel the timeout timer if it's still running
+        if self.timeout_timer:
+            self.timeout_timer.cancel()
+            self.timeout_timer = None
 
     def handle_state_change(self, sender, state, **kwargs):
         if state.get('service') == 'playlists':
             self.logger.info("PlaylistManager: State changed, updating display.")
             self.update_song_info(state)
-
 
     def fetch_navigation(self, uri="playlists"):
         self.logger.info(f"PlaylistManager: Fetching navigation data for URI: {uri}")
@@ -114,7 +123,6 @@ class PlaylistManager(BaseManager):
             return
 
         lists = navigation.get("lists", [])
-
         if not lists or not isinstance(lists, list):
             self.logger.warning("PlaylistManager: Navigation data has no valid lists.")
             self.display_no_items()
@@ -132,6 +140,11 @@ class PlaylistManager(BaseManager):
             self.display_no_items()
             return
 
+        # Cancel the timeout timer if valid items are received.
+        if self.timeout_timer:
+            self.timeout_timer.cancel()
+            self.timeout_timer = None
+
         self.current_menu_items = [
             {
                 "title": item.get("title", "Untitled"),
@@ -143,60 +156,31 @@ class PlaylistManager(BaseManager):
         ]
 
         self.logger.info(f"PlaylistManager: Updated menu with {len(self.current_menu_items)} items.")
-
         if self.is_active:
             self.display_menu()
 
-    def select_item(self):
-        if not self.is_active or not self.current_menu_items:
-            self.logger.warning("PlaylistManager: Select attempted while inactive or no items available.")
-            return
-
-        selected_item = self.current_menu_items[self.current_selection_index]
-        self.logger.info(f"PlaylistManager: Selected item: {selected_item}")
-
-        name = selected_item.get("title")  # Get the playlist name
-
-        if not name:
-            self.logger.warning("PlaylistManager: Selected item has no name.")
-            self.display_error_message("Invalid Selection", "Selected item has no name.")
-            return
-
-        # Determine if the item is a playlist
-        if selected_item.get("type", "").lower() == "playlist":
-            self.logger.info(f"PlaylistManager: Playing playlist with name: {name}")
-            self.play_playlist(name)
-        else:
-            # If not a playlist, display error or ignore
-            self.logger.warning(f"PlaylistManager: Selected item is not a playlist. Type: {selected_item.get('type')}")
-            self.display_error_message("Invalid Selection", "Selected item is not a playlist.")
-
-
-    def play_playlist(self, name):
-        self.logger.info(f"PlaylistManager: Sending playPlaylist command for playlist name: {name}")
-        if self.volumio_listener.is_connected():
-            try:
-                # Suppress state changes
-                self.mode_manager.suppress_state_change()
-
-                # Use playPlaylist to play the playlist by name
-                self.volumio_listener.socketIO.emit('playPlaylist', {'name': name})
-                self.logger.info(f"PlaylistManager: Sent playPlaylist command for playlist name: {name}")
-
-                # Allow state changes after a short delay
-                threading.Timer(1.0, self.mode_manager.allow_state_change).start()
-            except Exception as e:
-                self.logger.error(f"PlaylistManager: Failed to play playlist '{name}': {e}")
-                self.display_error_message("Playback Error", f"Could not play playlist: {e}")
-        else:
-            self.logger.warning("PlaylistManager: Cannot play playlist - not connected to Volumio.")
-            self.display_error_message("Connection Error", "Not connected to Volumio.")
-
+    def playlist_timeout(self):
+        """Called when no valid navigation data is received within the timeout period."""
+        if not self.current_menu_items:
+            self.logger.warning("PlaylistManager: Timeout reached, no valid navigation data received.")
+            def draw(draw_obj):
+                draw_obj.text(
+                    (10, self.y_offset),
+                    "Playlists are not loading...",
+                    font=self.display_manager.fonts.get(self.font_key, ImageFont.load_default()),
+                    fill="white"
+                )
+                draw_obj.text(
+                    (10, self.y_offset + self.line_spacing),
+                    "Have you created your playlists on Volumio?",
+                    font=self.display_manager.fonts.get(self.font_key, ImageFont.load_default()),
+                    fill="white"
+                )
+            self.display_manager.draw_custom(draw)
 
     def display_loading_screen(self):
         """Show a loading screen."""
         self.logger.info("PlaylistManager: Displaying loading screen.")
-
         def draw(draw_obj):
             draw_obj.text(
                 (10, self.y_offset),
@@ -204,14 +188,12 @@ class PlaylistManager(BaseManager):
                 font=self.display_manager.fonts.get(self.font_key, ImageFont.load_default()),
                 fill="white"
             )
-
         self.display_manager.draw_custom(draw)
 
     def display_menu(self):
         """Display the current menu."""
         self.logger.info("PlaylistManager: Displaying current menu.")
         visible_items = self.get_visible_window(self.current_menu_items)
-
         def draw(draw_obj):
             for i, item in enumerate(visible_items):
                 actual_index = self.window_start_index + i
@@ -223,7 +205,6 @@ class PlaylistManager(BaseManager):
                     font=self.display_manager.fonts.get(self.font_key, ImageFont.load_default()),
                     fill="white" if actual_index == self.current_selection_index else "gray"
                 )
-
         self.display_manager.draw_custom(draw)
 
     def get_visible_window(self, items):
@@ -232,11 +213,8 @@ class PlaylistManager(BaseManager):
             self.window_start_index = self.current_selection_index
         elif self.current_selection_index >= self.window_start_index + self.window_size:
             self.window_start_index = self.current_selection_index - self.window_size + 1
-
         self.window_start_index = max(0, self.window_start_index)
-        self.window_start_index = min(
-            self.window_start_index, max(0, len(items) - self.window_size)
-        )
+        self.window_start_index = min(self.window_start_index, max(0, len(items) - self.window_size))
         return items[self.window_start_index : self.window_start_index + self.window_size]
 
     def scroll_selection(self, direction):
@@ -244,20 +222,48 @@ class PlaylistManager(BaseManager):
         if not self.is_active or not self.current_menu_items:
             self.logger.warning("PlaylistManager: Scroll attempted with no active items.")
             return
-
         previous_index = self.current_selection_index
         self.current_selection_index += direction
-        self.current_selection_index = max(
-            0, min(self.current_selection_index, len(self.current_menu_items) - 1)
-        )
-
+        self.current_selection_index = max(0, min(self.current_selection_index, len(self.current_menu_items) - 1))
         self.logger.debug(f"PlaylistManager: Scrolled from {previous_index} to {self.current_selection_index}.")
         self.display_menu()
+
+    def select_item(self):
+        if not self.is_active or not self.current_menu_items:
+            self.logger.warning("PlaylistManager: Select attempted while inactive or no items available.")
+            return
+        selected_item = self.current_menu_items[self.current_selection_index]
+        self.logger.info(f"PlaylistManager: Selected item: {selected_item}")
+        name = selected_item.get("title")
+        if not name:
+            self.logger.warning("PlaylistManager: Selected item has no name.")
+            self.display_error_message("Invalid Selection", "Selected item has no name.")
+            return
+        if selected_item.get("type", "").lower() == "playlist":
+            self.logger.info(f"PlaylistManager: Playing playlist with name: {name}")
+            self.play_playlist(name)
+        else:
+            self.logger.warning(f"PlaylistManager: Selected item is not a playlist. Type: {selected_item.get('type')}")
+            self.display_error_message("Invalid Selection", "Selected item is not a playlist.")
+
+    def play_playlist(self, name):
+        self.logger.info(f"PlaylistManager: Sending playPlaylist command for playlist name: {name}")
+        if self.volumio_listener.is_connected():
+            try:
+                self.mode_manager.suppress_state_change()
+                self.volumio_listener.socketIO.emit('playPlaylist', {'name': name})
+                self.logger.info(f"PlaylistManager: Sent playPlaylist command for playlist name: {name}")
+                threading.Timer(1.0, self.mode_manager.allow_state_change).start()
+            except Exception as e:
+                self.logger.error(f"PlaylistManager: Failed to play playlist '{name}': {e}")
+                self.display_error_message("Playback Error", f"Could not play playlist: {e}")
+        else:
+            self.logger.warning("PlaylistManager: Cannot play playlist - not connected to Volumio.")
+            self.display_error_message("Connection Error", "Not connected to Volumio.")
 
     def display_no_items(self):
         """Display a message if no items are available."""
         self.logger.info("PlaylistManager: No items available.")
-
         def draw(draw_obj):
             draw_obj.text(
                 (10, self.y_offset),
@@ -265,7 +271,6 @@ class PlaylistManager(BaseManager):
                 font=self.display_manager.fonts.get(self.font_key, ImageFont.load_default()),
                 fill="white"
             )
-
         self.display_manager.draw_custom(draw)
 
     def handle_toast_message(self, sender, message):
@@ -273,49 +278,36 @@ class PlaylistManager(BaseManager):
         message_type = message.get("type", "")
         title = message.get("title", "")
         body = message.get("message", "")
-
         if message_type == "error":
             self.logger.error(f"PlaylistManager: Error received - {title}: {body}")
             self.display_error_message(title, body)
         elif message_type == "success":
             self.logger.info(f"PlaylistManager: Success - {title}: {body}")
-            # Optionally handle success messages (e.g., confirmations)
         else:
             self.logger.info(f"PlaylistManager: Received toast message - {title}: {body}")
 
     def display_error_message(self, title, message):
         """Display an error message on the screen."""
         self.logger.info(f"PlaylistManager: Displaying error message: {title} - {message}")
-
         def draw(draw_obj):
-            # Display title
             draw_obj.text(
                 (10, self.y_offset),
                 f"Error: {title}",
                 font=self.display_manager.fonts.get(self.font_key, ImageFont.load_default()),
                 fill="red"
             )
-            # Display message
             draw_obj.text(
                 (10, self.y_offset + self.line_spacing),
                 message,
                 font=self.display_manager.fonts.get(self.font_key, ImageFont.load_default()),
                 fill="white"
             )
-
         self.display_manager.draw_custom(draw)
 
     def update_song_info(self, state):
         """Update the playback metrics display based on the current state."""
         self.logger.info("PlaylistManager: Updating playback metrics display.")
-
-        # Extract relevant playback information
         sample_rate = state.get("samplerate", "Unknown Sample Rate")
         bitdepth = state.get("bitdepth", "Unknown Bit Depth")
         volume = state.get("volume", "Unknown Volume")
-
-        # Log or display the extracted information
         self.logger.info(f"Sample Rate: {sample_rate}, Bit Depth: {bitdepth}, Volume: {volume}")
-
-        # Optional: Update the screen with this information if needed
-        # You can call methods on `self.display_manager` or another appropriate object
