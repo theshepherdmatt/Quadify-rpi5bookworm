@@ -8,6 +8,7 @@ import threading
 import logging
 import yaml
 import socket
+import subprocess
 import lirc
 import os
 import sys
@@ -401,13 +402,13 @@ def main():
                             print(f"No mapping for scroll_right in mode: {current_mode}")
 
                     elif command == "skip_next":
-                        # Assuming you want to use your VolumioListener's socketIO to skip to the next track:
                         print("Skipping to next track.")
-                        volumio_listener.socketIO.emit('skip', {'value': 'next'})
+                        subprocess.run(["volumio", "next"], check=False)
 
                     elif command == "skip_previous":
                         print("Skipping to previous track.")
-                        volumio_listener.socketIO.emit('skip', {'value': 'previous'})
+                        subprocess.run(["volumio", "previous"], check=False)
+
                            
                     elif command == "volume_plus":
                         volumio_listener.increase_volume()
