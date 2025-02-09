@@ -56,17 +56,14 @@ class MinimalScreen(BaseManager):
     #   Volumio State Change
     # ------------------------------------------------------------------
     def on_volumio_state_change(self, sender, state):
-        """
-        Update only if:
-          - self.is_active
-          - mode_manager.get_mode() == 'minimal'
-        """
         if not self.is_active or self.mode_manager.get_mode() != 'minimal':
             self.logger.debug("MinimalScreen: ignoring state change; not active or mode != 'minimal'.")
             return
 
         self.logger.debug(f"MinimalScreen: state changed => {state}")
         with self.state_lock:
+            if "volume" in state:
+                self.current_volume = state["volume"]
             self.latest_state = state
         self.update_event.set()
 

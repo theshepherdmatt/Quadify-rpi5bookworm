@@ -77,21 +77,22 @@ class VolumioListener:
             self.logger.warning(f"[VolumioListener] Invalid volume value: {value}")
 
     def increase_volume_by(self, step=5):
-        """Increase the volume by a specified step (default is 5)."""
-        # Use a default current volume if it hasn't been set yet
-        if not hasattr(self, 'current_volume'):
-            self.current_volume = 50
+        # If current_volume is None, log a warning and do nothing
+        if self.current_volume is None:
+            self.logger.warning("Current volume not set; skipping volume increase.")
+            return
         new_volume = min(100, self.current_volume + step)
         self.logger.info(f"[VolumioListener] Increasing volume from {self.current_volume} to {new_volume}")
         self.set_volume(new_volume)
 
     def decrease_volume_by(self, step=5):
-        """Decrease the volume by a specified step (default is 5)."""
-        if not hasattr(self, 'current_volume'):
-            self.current_volume = 50
+        if self.current_volume is None:
+            self.logger.warning("Current volume not set; skipping volume decrease.")
+            return
         new_volume = max(0, self.current_volume - step)
         self.logger.info(f"[VolumioListener] Decreasing volume from {self.current_volume} to {new_volume}")
         self.set_volume(new_volume)
+
 
     # You can now update your existing methods to use the new step-based methods.
     def increase_volume(self):
@@ -163,12 +164,12 @@ class VolumioListener:
             self.connect()
 
     def on_push_state(self, data):
-        """Handle playback state changes."""
         self.logger.info("[VolumioListener] Received pushState event.")
         with self.state_lock:
             self.current_state = data  # Store the current state
-        self.state_changed.send(self, state=data)  # Emit the signal with sender and state
-
+            if "volume" in data:
+                self.current_volume = data["volume"]
+        self.state_changed.send(self, state=data)
 
     def on_push_browse_library(self, data):
         """Handle 'pushBrowseLibrary' events."""
