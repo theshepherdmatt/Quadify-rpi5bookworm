@@ -68,19 +68,39 @@ class VolumioListener:
         if isinstance(value, int) and 0 <= value <= 100:
             self.logger.info(f"[VolumioListener] Setting volume to: {value}")
             self.socketIO.emit('volume', value)
+            # Update our local volume tracker
+            self.current_volume = value
         elif value in valid_values:
             self.logger.info(f"[VolumioListener] Sending volume command: {value}")
             self.socketIO.emit('volume', value)
         else:
             self.logger.warning(f"[VolumioListener] Invalid volume value: {value}")
 
+    def increase_volume_by(self, step=5):
+        """Increase the volume by a specified step (default is 5)."""
+        # Use a default current volume if it hasn't been set yet
+        if not hasattr(self, 'current_volume'):
+            self.current_volume = 50
+        new_volume = min(100, self.current_volume + step)
+        self.logger.info(f"[VolumioListener] Increasing volume from {self.current_volume} to {new_volume}")
+        self.set_volume(new_volume)
+
+    def decrease_volume_by(self, step=5):
+        """Decrease the volume by a specified step (default is 5)."""
+        if not hasattr(self, 'current_volume'):
+            self.current_volume = 50
+        new_volume = max(0, self.current_volume - step)
+        self.logger.info(f"[VolumioListener] Decreasing volume from {self.current_volume} to {new_volume}")
+        self.set_volume(new_volume)
+
+    # You can now update your existing methods to use the new step-based methods.
     def increase_volume(self):
-        """Increase the volume by emitting '+'."""
-        self.set_volume('+')
+        """Increase the volume by 5 (by default)."""
+        self.increase_volume_by(5)
 
     def decrease_volume(self):
-        """Decrease the volume by emitting '-'."""
-        self.set_volume('-')
+        """Decrease the volume by 5 (by default)."""
+        self.decrease_volume_by(5)
 
     def mute_volume(self):
         """Mute the volume."""

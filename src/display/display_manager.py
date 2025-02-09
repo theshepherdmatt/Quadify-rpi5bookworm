@@ -39,7 +39,7 @@ class DisplayManager:
         self.icons = {}
 
         # Define the services and load their corresponding icons
-        services = ["stream", "library", "playlists", "qobuz", "tidal", "spop", "spotify", "webradio", "mpd", "default", "nas", "usb", "config", "volume"]
+        services = ["stream", "library", "playlists", "qobuz", "tidal", "spop", "spotify", "webradio", "mpd", "default", "nas", "usb", "back", "config", "volume", "displaysettings", "clocksettings", "screensaversettings", "systeminfo", "systemupdate"]
         icon_dir = self.config.get('icon_dir', "/home/volumio/Quadify/src/assets/images")
 
         for service in services:

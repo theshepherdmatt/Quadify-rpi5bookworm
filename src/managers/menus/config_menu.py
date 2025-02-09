@@ -1,25 +1,15 @@
 import logging
 import time
-from PIL import ImageFont
+import threading
+from PIL import Image, ImageDraw, ImageFont
 from managers.menus.base_manager import BaseManager
 
 class ConfigMenu(BaseManager):
     """
-    A text-list menu for configuration items, ending with "Back".
-    When "Back" is selected, it shows a left arrow "<- ".
-    For all other selected items, show "-> ".
-    Scrolling is handled simply: we move the selection up or down,
-    then adjust a window slice if needed.
+    A configuration menu displayed as a horizontal icon row.
+    It matches the style of the MenuManager's icon row menu.
     """
-
-    def __init__(
-        self,
-        display_manager,
-        mode_manager,
-        window_size=4,
-        y_offset=2,
-        line_spacing=15
-    ):
+    def __init__(self, display_manager, mode_manager, window_size=5):
         super().__init__(display_manager, None, mode_manager)
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -28,138 +18,161 @@ class ConfigMenu(BaseManager):
         self.current_index = 0
         self.window_start_index = 0
         self.window_size = window_size
-        self.y_offset = y_offset
-        self.line_spacing = line_spacing
+        self.lock = threading.Lock()
 
-        # Debounce
-        self.last_action_time = 0
-        self.debounce_interval = 0.3
+        # Fonts – use the same keys as in MenuManager
+        self.font_key = 'menu_font'
+        self.bold_font_key = 'menu_font_bold'
 
-        # Font
-        self.font_key = "menu_font"
-        self.font = display_manager.fonts.get(self.font_key, ImageFont.load_default())
-
-        # Menu items
+        # Define config menu items
         self.menu_items = [
-            "Display Settings",
-            "Clock Settings",
-            "Screensaver Settings",
-            "System Info",
-            "System Update",
+            "Display",
+            "Clock",
+            "Screen+",
+            "System",
+            "Update",
             "Back"
         ]
 
+        # Map each menu item to an icon.
+        # The keys for display_manager.icons should match your asset names.
+        self.icons = {
+            "Display": self.display_manager.icons.get("displaysettings"),
+            "Clock": self.display_manager.icons.get("clocksettings"),
+            "Screen+": self.display_manager.icons.get("screensaversettings"),
+            "System": self.display_manager.icons.get("systeminfo"),
+            "Update": self.display_manager.icons.get("systemupdate"),
+            "Back": self.display_manager.icons.get("back")  # Use an appropriate icon
+        }
+
+    def get_visible_window(self, items, window_size):
+        # Center the current selection in the visible window
+        half_window = window_size // 2
+        self.window_start_index = self.current_index - half_window
+        if self.window_start_index < 0:
+            self.window_start_index = 0
+        elif self.window_start_index + window_size > len(items):
+            self.window_start_index = max(len(items) - window_size, 0)
+        return items[self.window_start_index:self.window_start_index + window_size]
+
     def start_mode(self):
-        """Activate the config menu and draw the items."""
         if self.is_active:
             self.logger.debug("ConfigMenu: already active.")
             return
         self.is_active = True
-        self.logger.info("ConfigMenu: Starting config menu.")
-        self.display_items()
+        self.current_index = 0
+        self.window_start_index = 0
+        self.logger.info("ConfigMenu: Starting config menu (icon row mode).")
+        threading.Thread(target=self.display_menu, daemon=True).start()
 
     def stop_mode(self):
-        """Deactivate and clear the display."""
         if self.is_active:
             self.is_active = False
-            self.display_manager.clear_screen()
-            self.logger.info("ConfigMenu: Stopped and cleared display.")
+            with self.lock:
+                self.display_manager.clear_screen()
+            self.logger.info("ConfigMenu: Stopped config menu and cleared display.")
 
-    def display_items(self):
-        """
-        Show the currently visible slice of items.
-        Selected item shows "-> " unless it's "Back", which shows "<- ".
-        """
-        # Calculate which items are visible
-        end_index = self.window_start_index + self.window_size
-        visible_items = self.menu_items[self.window_start_index:end_index]
+    def display_menu(self):
+        with self.lock:
+            # Use the same horizontal layout as MenuManager's icon row
+            visible_items = self.get_visible_window(self.menu_items, self.window_size)
 
-        def draw(draw_obj):
-            for i, item_name in enumerate(visible_items):
+            # Constants for layout (matching MenuManager)
+            icon_size = 30      # Fixed icon size
+            spacing = 15        # Fixed spacing between icons
+            total_width = self.display_manager.oled.width
+            total_height = self.display_manager.oled.height
+
+            # Calculate total width for the visible icons (icon size plus spacing)
+            total_icons_width = len(visible_items) * icon_size + (len(visible_items) - 1) * spacing
+            x_offset = (total_width - total_icons_width) // 2
+            # Vertical position – centred with a slight upward adjustment
+            y_position = (total_height - icon_size) // 2 - 10
+
+            # Create an image to draw on
+            base_image = Image.new("RGB", (total_width, total_height), "black")
+            draw_obj = ImageDraw.Draw(base_image)
+
+            # Iterate over visible items and draw icons with labels
+            for i, item in enumerate(visible_items):
                 actual_index = self.window_start_index + i
-                selected = (actual_index == self.current_index)
+                icon = self.icons.get(item, self.display_manager.default_icon)
 
-                if selected:
-                    arrow = "<- " if item_name == "Back" else "-> "
-                    fill_color = "white"
-                else:
-                    arrow = "   "
-                    fill_color = "gray"
+                # Handle transparency if the icon is RGBA
+                if icon.mode == "RGBA":
+                    background = Image.new("RGB", icon.size, (0, 0, 0))
+                    background.paste(icon, mask=icon.split()[3])
+                    icon = background
 
-                y_pos = self.y_offset + i * self.line_spacing
-                draw_obj.text(
-                    (5, y_pos),
-                    f"{arrow}{item_name}",
-                    font=self.font,
-                    fill=fill_color
+                # Resize the icon
+                icon = icon.resize((icon_size, icon_size), Image.ANTIALIAS)
+
+                # Calculate the x-coordinate for this icon
+                x = x_offset + i * (icon_size + spacing)
+                # If the icon is selected, “pop it out” slightly
+                y_adjustment = -5 if actual_index == self.current_index else 0
+
+                base_image.paste(icon, (x, y_position + y_adjustment))
+
+                # Draw the label below the icon using bold font for selected items
+                label = item
+                font = self.display_manager.fonts.get(
+                    self.bold_font_key if actual_index == self.current_index else self.font_key,
+                    ImageFont.load_default()
                 )
+                text_color = "white" if actual_index == self.current_index else "black"
 
-        self.display_manager.draw_custom(draw)
-        self.logger.debug(
-            f"ConfigMenu: Displayed items {self.window_start_index} "
-            f"to {end_index - 1}, selected={self.current_index}"
-        )
+                text_width, text_height = draw_obj.textsize(label, font=font)
+                text_x = x + (icon_size - text_width) // 2
+                text_y = y_position + icon_size + 2
+                draw_obj.text((text_x, text_y), label, font=font, fill=text_color)
+
+            # Convert and display the image on the OLED
+            base_image = base_image.convert(self.display_manager.oled.mode)
+            self.display_manager.oled.display(base_image)
+            self.logger.info("ConfigMenu: Icon row menu displayed.")
 
     def scroll_selection(self, direction):
-        """Move the selection by 'direction' (+1 or -1) and redraw."""
         if not self.is_active:
             self.logger.warning("ConfigMenu: Attempted scroll while inactive.")
             return
 
-        now = time.time()
-        if now - self.last_action_time < self.debounce_interval:
-            return
-        self.last_action_time = now
-
         old_index = self.current_index
         self.current_index += direction
-        # Clamp between 0 and last index
         self.current_index = max(0, min(self.current_index, len(self.menu_items) - 1))
 
-        # Adjust window_start_index if we scroll past current window
-        if self.current_index < self.window_start_index:
-            self.window_start_index = self.current_index
-        elif self.current_index >= self.window_start_index + self.window_size:
-            self.window_start_index = self.current_index - self.window_size + 1
+        # Adjust the window to keep the selection centred if possible
+        self.window_start_index = self.current_index - self.window_size // 2
+        if self.window_start_index < 0:
+            self.window_start_index = 0
+        elif self.window_start_index + self.window_size > len(self.menu_items):
+            self.window_start_index = max(len(self.menu_items) - self.window_size, 0)
 
         if old_index != self.current_index:
-            self.logger.debug(
-                f"ConfigMenu: Scrolled from {old_index} to {self.current_index}, "
-                f"window_start_index={self.window_start_index}"
-            )
-            self.display_items()
+            self.logger.debug(f"ConfigMenu: Scrolled from {old_index} to {self.current_index}.")
+            self.display_menu()
 
     def select_item(self):
-        """Perform the action for the currently selected menu item."""
         if not self.is_active:
             self.logger.warning("ConfigMenu: Attempted select while inactive.")
             return
 
-        now = time.time()
-        if now - self.last_action_time < self.debounce_interval:
-            return
-        self.last_action_time = now
-
         selected = self.menu_items[self.current_index]
-        self.logger.info(f"ConfigMenu: Selected => {selected}")
+        self.logger.info(f"ConfigMenu: Selected {selected}.")
+        self.stop_mode()
 
-        if selected == "Display Settings":
-            self.stop_mode()
+        # Trigger the corresponding mode change
+        if selected == "Display":
             self.mode_manager.to_displaymenu()
-        elif selected == "Clock Settings":
-            self.stop_mode()
+        elif selected == "Clock":
             self.mode_manager.to_clockmenu()
-        elif selected == "Screensaver Settings":
-            self.stop_mode()
+        elif selected == "Screen+":
             self.mode_manager.to_screensavermenu()
-        elif selected == "System Info":
-            self.stop_mode()
+        elif selected == "System":
             self.mode_manager.to_systeminfo()
-        elif selected == "System Update":
-            self.stop_mode()
+        elif selected == "Update":
             self.mode_manager.to_systemupdate()
         elif selected == "Back":
-            self.stop_mode()
-            self.mode_manager.to_menu()  # Or wherever "Back" should lead
+            self.mode_manager.to_menu()
         else:
-            self.logger.warning(f"Unrecognized config option: {selected}")
+            self.logger.warning(f"ConfigMenu: Unrecognised selection: {selected}")

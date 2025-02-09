@@ -120,6 +120,12 @@ display:
     - "/home/volumio/Quadify/src/assets/images/usb.png"
     - "/home/volumio/Quadify/src/assets/images/volume.png"
     - "/home/volumio/Quadify/src/assets/images/config.png"
+    - "/home/volumio/Quadify/src/assets/images/back.png"
+    - "/home/volumio/Quadify/src/assets/images/clocksettings.png"
+    - "/home/volumio/Quadify/src/assets/images/displaysettings.png"
+    - "/home/volumio/Quadify/src/assets/images/systeminfo.png"
+    - "/home/volumio/Quadify/src/assets/images/systemupdate.png"
+    - "/home/volumio/Quadify/src/assets/images/screensaversettings.png"
 
 mcp23017_address: 0x20
 

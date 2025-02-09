@@ -390,16 +390,19 @@ def main():
                             print(f"No scroll mapping for command: {command} in mode: {current_mode}")
 
                     elif command == "scroll_left":
-                        if current_mode == "menu":
-                            mode_manager.menu_manager.scroll_selection(-1)
+                        if current_mode in ["menu", "configmenu"]:
+                            active_menu = mode_manager.menu_manager if current_mode == "menu" else mode_manager.config_menu
+                            active_menu.scroll_selection(-1)
                         else:
                             print(f"No mapping for scroll_left in mode: {current_mode}")
 
                     elif command == "scroll_right":
-                        if current_mode == "menu":
-                            mode_manager.menu_manager.scroll_selection(1)
+                        if current_mode in ["menu", "configmenu"]:
+                            active_menu = mode_manager.menu_manager if current_mode == "menu" else mode_manager.config_menu
+                            active_menu.scroll_selection(1)
                         else:
                             print(f"No mapping for scroll_right in mode: {current_mode}")
+
 
                     elif command == "skip_next":
                         print("Skipping to next track.")

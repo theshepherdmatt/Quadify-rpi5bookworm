@@ -56,13 +56,13 @@ def process_key(key, current_mode):
     elif key == "KEY_LEFT":
         if current_mode in ["original", "minimal", "modern", "webradio"]:
             send_command("skip_previous")
-        elif current_mode == "menu":
+        elif current_mode in ["menu", "configmenu"]:
             send_command("scroll_left")
 
     elif key == "KEY_RIGHT":
         if current_mode in ["original", "minimal", "modern", "webradio"]:
             send_command("skip_next")
-        elif current_mode == "menu":
+        elif current_mode in ["menu", "configmenu"]:
             send_command("scroll_right")
 
 
@@ -74,12 +74,12 @@ def process_key(key, current_mode):
 
 
     elif key == "KEY_UP":
-        if current_mode in ["tidal", "qobuz", "spotify", "library", "playlists", "radiomanager", "configmenu", "displaymenu", "clockmenu", "screensavermenu", "systeminfo", "systemupdate"]:
+        if current_mode in ["tidal", "qobuz", "spotify", "library", "playlists", "radiomanager", "displaymenu", "clockmenu", "screensavermenu", "systeminfo", "systemupdate"]:
             send_command("scroll_up")
         else:
             print("No mapping for KEY_UP in current mode.")
     elif key == "KEY_DOWN":
-        if current_mode in ["tidal", "qobuz", "spotify", "library", "playlists", "radiomanager", "configmenu", "displaymenu", "clockmenu", "screensavermenu", "systeminfo", "systemupdate"]:
+        if current_mode in ["tidal", "qobuz", "spotify", "library", "playlists", "radiomanager", "displaymenu", "clockmenu", "screensavermenu", "systeminfo", "systemupdate"]:
             send_command("scroll_down")
         else:
             print("No mapping for KEY_DOWN in current mode.")
