@@ -64,6 +64,17 @@ display:
       path: "/home/volumio/Quadify/src/assets/fonts/OpenSans-Regular.ttf"
       size: 8
 
+      # Radio fonts
+    radio_title:
+      path: "/home/volumio/Quadify/src/assets/fonts/OpenSans-Regular.ttf"
+      size: 15
+    radio_bitrate:
+      path: "/home/volumio/Quadify/src/assets/fonts/OpenSans-Regular.ttf"
+      size: 10
+    radio_small:
+      path: "/home/volumio/Quadify/src/assets/fonts/OpenSans-Regular.ttf"
+      size: 12
+
       # Minimal fonts
     minimal_volume:
       path: "/home/volumio/Quadify/src/assets/fonts/Montserrat-Bold.ttf"

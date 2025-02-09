@@ -1,22 +1,20 @@
 import os
 import logging
-from io import BytesIO
-import requests
 from PIL import Image, ImageDraw, ImageFont
 import threading
-import math
 import time
-
-FIFO_PATH = "/tmp/display.fifo"  # Path to the FIFO for CAVA data
+import requests
+from io import BytesIO
 
 class WebRadioScreen:
     """
-    A simplified, 'modern-style' WebRadio screen featuring:
-      - A single line (station/song) centered at the top
-      - A 'WebRadio' label underneath
-      - Volume and bitrate info drawn under the title (like the minimal screen)
-      - Station album art on the right (in place of a duration circle)
-      - An unusual spectrum drawn as a waveform at the bottom (Option 2)
+    A simplified WebRadio screen that displays:
+      - Line 1: Title (truncated to 20 characters)
+      - Line 2: Artist
+      - A solid horizontal separator between the top and bottom sections
+      - Line 3: Service (or stream)
+      - Line 4: "Vol: {volume} | {quality}"
+    Additionally, if album art is available it is pasted in the upper-right corner.
     """
 
     def __init__(self, display_manager, volumio_listener, mode_manager):
@@ -35,18 +33,10 @@ class WebRadioScreen:
         self.update_event = threading.Event()
         self.stop_event = threading.Event()
 
-        # Spectrum / CAVA
-        self.running_spectrum = False
-        self.spectrum_thread = None
-        self.spectrum_bars = []
-
-        # Fonts (ensure these exist in display_manager.fonts or define fallback)
-        self.font_station = display_manager.fonts.get('radio_title', ImageFont.load_default())
+        # Fonts (ensure these exist in display_manager.fonts or use fallback)
+        self.font_title = display_manager.fonts.get('radio_title', ImageFont.load_default())
         self.font_label = display_manager.fonts.get('radio_bitrate', ImageFont.load_default())
-
-        # Scrolling (optional)
-        self.scroll_offset_station = 0
-        self.scroll_speed = 2
+        self.font_small = display_manager.fonts.get('radio_small', ImageFont.load_default())
 
         # Display update thread
         self.update_thread = threading.Thread(target=self.update_display_loop, daemon=True)
@@ -56,18 +46,15 @@ class WebRadioScreen:
         # Connect to Volumio listener
         if self.volumio_listener:
             self.volumio_listener.state_changed.connect(self.on_volumio_state_change)
-        self.logger.info("WebRadioScreen initialized.")
+        self.logger.info("WebRadioScreen initialised.")
 
     # ------------------------------------------------------------------
     # Volumio State Change
     # ------------------------------------------------------------------
     def on_volumio_state_change(self, sender, state):
         """
-        Triggered whenever VolumioListener emits a state_changed signal.
-        Only update if:
-          - self.is_active is True
-          - mode_manager.get_mode() == 'webradio'
-          - service == 'webradio'
+        Update display only if the screen is active, in 'webradio' mode,
+        and the service is one of the allowed values.
         """
         if not self.is_active:
             self.logger.debug("WebRadioScreen: ignoring state change; screen not active.")
@@ -78,7 +65,7 @@ class WebRadioScreen:
             return
 
         if state.get("service") not in ["webradio", "motherearthradio", "radio_paradise"]:
-            self.logger.debug("WebRadioScreen: ignoring state change; service not in allowed list.")
+            self.logger.debug("WebRadioScreen: ignoring state change; service not allowed.")
             return
 
         self.logger.debug(f"WebRadioScreen: state changed => {state}")
@@ -91,14 +78,12 @@ class WebRadioScreen:
     # ------------------------------------------------------------------
     def update_display_loop(self):
         """
-        Runs in the background to handle display updates.
-        Waits on update_event or times out periodically so we can animate text or update the spectrum.
+        Wait for updates (or timeout periodically) and then refresh the display.
         """
         while not self.stop_event.is_set():
             triggered = self.update_event.wait(timeout=0.1)
             with self.state_lock:
                 if triggered and self.latest_state:
-                    # New state received from Volumio
                     self.current_state = self.latest_state.copy()
                     self.latest_state = None
                     self.update_event.clear()
@@ -111,15 +96,14 @@ class WebRadioScreen:
     def start_mode(self):
         """
         Called when ModeManager transitions to 'webradio' mode.
+        Forces an immediate getState from Volumio.
         """
         if self.mode_manager.get_mode() != 'webradio':
             self.logger.warning("WebRadioScreen: Attempted start, but mode != 'webradio'.")
             return
 
         self.is_active = True
-        self.reset_scrolling()
 
-        # Force immediate getState from Volumio
         try:
             if self.volumio_listener and self.volumio_listener.socketIO:
                 self.logger.debug("WebRadioScreen: Forcing getState from Volumio.")
@@ -127,17 +111,6 @@ class WebRadioScreen:
         except Exception as e:
             self.logger.warning(f"WebRadioScreen: Failed to emit 'getState'. Error => {e}")
 
-        # Start reading the FIFO if cava_enabled is True
-        if self.mode_manager.config.get("cava_enabled", False):
-            if not self.spectrum_thread or not self.spectrum_thread.is_alive():
-                self.running_spectrum = True
-                self.spectrum_thread = threading.Thread(target=self._read_fifo, daemon=True)
-                self.spectrum_thread.start()
-                self.logger.info("WebRadioScreen: Spectrum reading thread started.")
-        else:
-            self.logger.info("WebRadioScreen: Spectrum is disabled globally, skipping FIFO reading.")
-
-        # Restart update_thread if needed
         if not self.update_thread.is_alive():
             self.stop_event.clear()
             self.update_thread = threading.Thread(target=self.update_display_loop, daemon=True)
@@ -146,7 +119,7 @@ class WebRadioScreen:
 
     def stop_mode(self):
         """
-        Called when leaving 'webradio' mode in ModeManager.
+        Called when leaving 'webradio' mode.
         """
         if not self.is_active:
             self.logger.debug("WebRadioScreen: stop_mode called but not active.")
@@ -156,13 +129,6 @@ class WebRadioScreen:
         self.stop_event.set()
         self.update_event.set()
 
-        # Stop spectrum thread if running
-        self.running_spectrum = False
-        if self.spectrum_thread and self.spectrum_thread.is_alive():
-            self.spectrum_thread.join(timeout=1)
-            self.logger.info("WebRadioScreen: Spectrum thread stopped.")
-
-        # Stop update thread if running
         if self.update_thread.is_alive():
             self.update_thread.join(timeout=1)
             self.logger.debug("WebRadioScreen: display update thread stopped.")
@@ -171,55 +137,12 @@ class WebRadioScreen:
         self.logger.info("WebRadioScreen: Stopped mode and cleared screen.")
 
     # ------------------------------------------------------------------
-    # Spectrum FIFO
-    # ------------------------------------------------------------------
-    def _read_fifo(self):
-        """
-        Continuously read from the CAVA FIFO and store bars in self.spectrum_bars.
-        """
-        if not os.path.exists(FIFO_PATH):
-            self.logger.error(f"WebRadioScreen: FIFO {FIFO_PATH} not found.")
-            return
-
-        self.logger.debug("WebRadioScreen: reading from FIFO for spectrum data.")
-        try:
-            with open(FIFO_PATH, "r") as fifo:
-                while self.running_spectrum:
-                    line = fifo.readline().strip()
-                    if line:
-                        bars = [int(x) for x in line.split(";") if x.isdigit()]
-                        self.spectrum_bars = bars
-        except Exception as e:
-            self.logger.error(f"WebRadioScreen: error reading FIFO => {e}")
-
-    # ------------------------------------------------------------------
-    # Scrolling
-    # ------------------------------------------------------------------
-    def reset_scrolling(self):
-        self.logger.debug("WebRadioScreen: resetting scroll offsets.")
-        self.scroll_offset_station = 0
-
-    def update_scroll(self, text, font, max_width, scroll_offset):
-        """
-        Basic continuous scrolling logic for text that might not fit on screen.
-        """
-        text_width, _ = font.getsize(text)
-        if text_width <= max_width:
-            return text, 0, False  # no scroll needed
-
-        scroll_offset += self.scroll_speed
-        if scroll_offset > text_width:
-            scroll_offset = 0
-
-        return text, scroll_offset, True
-
-    # ------------------------------------------------------------------
     # Volume Adjustment
     # ------------------------------------------------------------------
     def adjust_volume(self, volume_change):
         """
-        Adjust volume from an external call (e.g. a rotary encoder).
-        This emits a volume change to Volumio via the socketIO connection.
+        Adjust volume via an external call (e.g. a rotary encoder).
+        Emits a volume change to Volumio via the socketIO connection.
         """
         if not self.volumio_listener:
             self.logger.error("WebRadioScreen: no volumio_listener, cannot adjust volume.")
@@ -232,7 +155,7 @@ class WebRadioScreen:
         with self.state_lock:
             curr_vol = self.latest_state.get("volume", 100)
             new_vol = max(0, min(int(curr_vol) + volume_change, 100))
-        
+
         self.logger.info(f"WebRadioScreen: Adjusting volume from {curr_vol} to {new_vol}.")
         try:
             if volume_change > 0:
@@ -244,30 +167,29 @@ class WebRadioScreen:
         except Exception as e:
             self.logger.error(f"WebRadioScreen: error adjusting volume => {e}")
 
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
-    def get_display_text(self, state):
+    def display_radioplayback_info(self):
         """
-        Decide what text to display based on Volumio's 'title' and 'artist'.
+        Manually refresh the display with the current state.
         """
-        title = state.get("title", "") or ""
-        artist = state.get("artist", "") or ""
-        if artist and artist not in title:
-            return artist
-        elif title:
-            return title
-        else:
-            return "Radio"
-        
+        if not self.is_active:
+            self.logger.info("WebRadioScreen: display_radioplayback_info called, but mode is not active.")
+            return
 
+        state = self.volumio_listener.get_current_state()
+        if state:
+            self.draw_display(state)
+        else:
+            self.logger.warning("WebRadioScreen: No current volumio state available to display.")
+
+    # ------------------------------------------------------------------
+    # Album Art Helper
+    # ------------------------------------------------------------------
     def get_albumart(self, url):
         """
         Download and return an Image object from the given album art URL.
         If no URL is provided or downloading fails, load the default album art
         specified in the display configuration.
         """
-        # If no URL is provided, try to load the default album art.
         if not url:
             default_path = self.display_manager.config.get("default_album_art")
             if default_path and os.path.exists(default_path):
@@ -281,7 +203,6 @@ class WebRadioScreen:
                 self.logger.error("No album art URL provided and default album art not found.")
                 return None
 
-        # Attempt to download the album art.
         try:
             response = requests.get(url, timeout=3)
             response.raise_for_status()
@@ -289,7 +210,6 @@ class WebRadioScreen:
             return img.convert("RGB")
         except Exception as e:
             self.logger.error(f"Failed to load album art from {url}: {e}")
-            # Fallback to default album art if download fails.
             default_path = self.display_manager.config.get("default_album_art")
             if default_path and os.path.exists(default_path):
                 try:
@@ -300,129 +220,86 @@ class WebRadioScreen:
                     return None
             return None
 
-
-    def display_radioplayback_info(self):
-        """
-        If needed, manually refresh the display with the current state.
-        """
-        if not self.is_active:
-            self.logger.info("WebRadioScreen: display_radioplayback_info called, but mode is not active.")
-            return
-
-        state = self.volumio_listener.get_current_state()
-        if state:
-            self.draw_display(state)
-        else:
-            self.logger.warning("WebRadioScreen: No current volumio state available to display.")
-
-    # ------------------------------------------------------------------
-    # Spectrum FIFO (vertical bars in a restricted region)
-    # ------------------------------------------------------------------
-    def _draw_spectrum(self, draw):
-        """
-        Draw vertical bar spectrum from self.spectrum_bars in a restricted region
-        on the left side so it doesn't overlap the album art.
-        """
-        screen_width, screen_height = self.display_manager.oled.size
-
-        # Use consistent values:
-        margin = 20
-        album_art_width = 60     # same as used for album art
-        extra_margin = 25        # extra space between spectrum and album art
-
-        region_left = margin
-        region_right = screen_width - album_art_width - extra_margin
-        region_width = region_right - region_left
-
-        # Define vertical placement of the spectrum region.
-        region_top = 38          # e.g., below the station title and info
-        region_height = 20       # Height of the spectrum region
-        region_bottom = region_top + region_height
-
-        # If spectrum is disabled or no data is available, clear only this region.
-        if (not self.running_spectrum) or (not self.mode_manager.config.get("cava_enabled", False)):
-            draw.rectangle([region_left, region_top, region_right, region_bottom], fill="black")
-            return
-
-        bars = self.spectrum_bars
-        num_bars = len(bars)
-        if num_bars < 1:
-            return
-
-        # Set fixed bar width and gap.
-        bar_width = 2
-        gap_width = 3
-        total_bars_width = num_bars * (bar_width + gap_width) - gap_width
-
-        # Center the bars within the region.
-        start_x = region_left + (region_width - total_bars_width) // 2
-        max_height = region_height
-
-        for i, bar in enumerate(bars):
-            bar_val = max(0, min(bar, 255))
-            bar_height = int((bar_val / 255.0) * max_height)
-            x1 = start_x + i * (bar_width + gap_width)
-            x2 = x1 + bar_width
-            y1 = region_bottom - bar_height
-            y2 = region_bottom
-            draw.rectangle([x1, y1, x2, y2], fill="#303030")
-
     # ------------------------------------------------------------------
     # Drawing the Screen
     # ------------------------------------------------------------------
     def draw_display(self, data):
         """
-        Render a webradio screen with a layout similar to the minimal screen:
-         - Station title (truncated if needed) on the top-left.
-         - Info text (volume, "WebRadio", and bitrate/Live) underneath the title.
-           When the spectrum is off, the info text is moved further down.
-         - Station album art on the right.
-         - Optional vertical bar spectrum drawn in a restricted region on the left.
+        Draws the following on the OLED:
+        - Line 1: Title (truncated to 20 characters; moved down by 5 pixels if service is "webradio")
+        - Line 2: Artist (if available)
+        - A solid horizontal separator between the top and bottom sections
+        - Line 3: Service (or stream)
+        - Line 4: "Vol: {volume} | {quality}"
+        Additionally, if album art is available it is pasted in the upper-right corner.
         """
+        # Create a blank image with a black background.
         base_image = Image.new("RGB", self.display_manager.oled.size, "black")
         draw = ImageDraw.Draw(base_image)
-        screen_width, screen_height = self.display_manager.oled.size
         margin = 5
+        line_height = 12  # Base line height
 
-        # Define album art width (should be the same everywhere)
-        album_art_width = 50  
-        available_width = screen_width - album_art_width - (2 * margin)
+        # Get display dimensions.
+        screen_width, screen_height = self.display_manager.oled.size
 
-        # 1) Draw the station (or title) text using font_station.
-        station_text = self.get_display_text(data)
-        max_chars = 25
-        if len(station_text) > max_chars:
-            station_text = station_text[:max_chars] + "..."
-        station_x = margin
-        station_y = margin
-        draw.text((station_x, station_y), station_text, font=self.font_station, fill="white")
-        
-        # Use a fixed title height to keep spacing consistent.
-        fixed_title_height = 15
+        # Get the data values with fallbacks.
+        title = data.get("title") or "Radio"
+        if len(title) > 20:
+            title = title[:20] + "…"
+        artist = data.get("artist") or ""
+        service = (data.get("service") or data.get("stream") or "WebRadio").strip()
 
-        # 2) Build and draw the info text (volume, "WebRadio", and bitrate/Live).
-        info_text = ""
-        if data.get("volume") is not None:
-            info_text += f"Vol: {data.get('volume')}"
-        if info_text:
-            info_text += " | "
-        info_text += "WebRadio"
-        bitrate = data.get("bitrate")
-        if bitrate:
-            info_text += " | " + bitrate
+        # If service is "webradio", add an extra offset for the title.
+        extra_title_offset = 1 if service.lower() == "webradio" else 0
+
+        # Adjust vertical offsets based on whether artist text is available.
+        if artist:
+            title_y = margin - 7 + extra_title_offset       # Title vertical position
+            artist_y = margin + line_height - 2              # Artist vertical position
+            divider_y = margin + 2 * line_height + 5         # Divider positioned after artist
         else:
-            info_text += " | Live"
-        
-        # Calculate the info text y-position.
-        info_y = station_y + fixed_title_height + 5
-        # When spectrum is off, push the info text further down.
-        if not self.mode_manager.config.get("cava_enabled", False):
-            info_y += 15  # extra offset when spectrum is off
-        info_x = margin
-        
-        draw.text((info_x, info_y), info_text, font=self.font_label, fill="white")
+            # If no artist, draw the title and move the divider up so there’s no blank artist space.
+            title_y = margin - 7 + extra_title_offset
+            # Skip drawing the artist line.
+            divider_y = margin + line_height + 5
 
-        # 3) Display the station's album art on the right.
+        # Service and volume lines remain the same.
+        service_y = divider_y + 3          # Offset for Service (or stream)
+        info_y = divider_y + line_height + 6  # Offset for Volume/Quality info
+
+        # Draw the Title.
+        draw.text((margin, title_y), title, font=self.font_title, fill="white")
+
+        # Draw the Artist only if it's not empty.
+        if artist:
+            draw.text((margin, artist_y), artist, font=self.font_small, fill="white")
+
+        # Draw a solid horizontal separator.
+        album_art_width = 60              # The width of your album art.
+        gap_between_line_and_art = 15     # Gap between the end of the line and the album art.
+        line_end_x = screen_width - margin - album_art_width - gap_between_line_and_art
+        draw.line((margin, divider_y, line_end_x, divider_y), fill="white")
+
+        # Draw the Service (or stream).
+        draw.text((margin, service_y), service, font=self.font_small, fill="white")
+
+        # Prepare the Volume and Quality info.
+        volume = str(data.get("volume") or "0")
+        quality = ""
+        if service.lower() in ["motherearthradio", "radio_paradise"]:
+            samplerate = data.get("samplerate")
+            bitdepth = data.get("bitdepth")
+            if samplerate and bitdepth:
+                quality = f"{samplerate} / {bitdepth}"
+            else:
+                quality = "High Quality"
+        else:
+            bitrate = data.get("bitrate")
+            quality = bitrate if bitrate else "Live"
+        info_line = f"Vol: {volume} | {quality}"
+        draw.text((margin, info_y), info_line, font=self.font_label, fill="white")
+
+        # Display album art on the upper-right if available.
         albumart_url = data.get("albumart")
         if albumart_url:
             albumart = self.get_albumart(albumart_url)
@@ -433,35 +310,20 @@ class WebRadioScreen:
                 art_y = margin
                 base_image.paste(albumart, (art_x, art_y))
 
-        # 4) Draw the vertical bar spectrum (or clear its region) in a restricted area on the left.
-        if self.mode_manager.config.get("cava_enabled", False):
-            # Use the same region parameters as in your _draw_spectrum.
-            self._draw_spectrum(draw)
-        else:
-            # Clear only the spectrum region without affecting the info text.
-            # We'll use the same horizontal boundaries as in _draw_spectrum:
-            extra_margin = 25
-            region_left = margin
-            region_right = screen_width - album_art_width - extra_margin
-            # For vertical placement, we place the spectrum region just below the info text.
-            # We can measure an approximate info text height (or use a fixed value).
-            _, sample_info_h = self.font_label.getsize("Vol: 100 | WebRadio | Live")
-            region_top = info_y + sample_info_h + 2  # 2 pixels below the info text
-            region_height = 25  # set the height of the spectrum region
-            draw.rectangle([region_left, region_top, region_right, region_top + region_height], fill="black")
-
-        # 5) Display the final composed image.
+        # Send the composed image to the OLED display.
         self.display_manager.oled.display(base_image)
-        self.logger.debug("WebRadioScreen: Display updated with webradio UI (minimal layout).")
+        self.logger.debug("WebRadioScreen: Display updated with adjusted vertical offsets.")
 
     def toggle_play_pause(self):
-        """Emit Volumio play/pause toggle if connected."""
-        self.logger.info("WebradioScreen: Toggling play/pause.")
+        """
+        Toggle play/pause if connected.
+        """
+        self.logger.info("WebRadioScreen: Toggling play/pause.")
         if not self.volumio_listener or not self.volumio_listener.is_connected():
-            self.logger.warning("WebradioScreen: Not connected to Volumio => cannot toggle.")
+            self.logger.warning("WebRadioScreen: Not connected to Volumio => cannot toggle.")
             return
         try:
             self.volumio_listener.socketIO.emit("toggle", {})
-            self.logger.debug("WebradioScreen: Emitted 'toggle' event.")
+            self.logger.debug("WebRadioScreen: Emitted 'toggle' event.")
         except Exception as e:
-            self.logger.error(f"WebradioScreen: toggle_play_pause failed => {e}")
+            self.logger.error(f"WebRadioScreen: toggle_play_pause failed => {e}")
