@@ -110,7 +110,6 @@ class VolumioListener:
         """Unmute the volume."""
         self.set_volume('unmute')
 
-
     def on_push_toast_message(self, data):
         """Handle 'pushToastMessage' events."""
         self.logger.info("[VolumioListener] Received pushToastMessage event.")
@@ -270,12 +269,3 @@ class VolumioListener:
             self.logger.warning(f"Unrecognized URI scheme: {uri}")
             return None
         
-    def skip_next(self):
-        """Emit a skip-next event via socketIO."""
-        self.logger.info("[VolumioListener] Emitting skip next event.")
-        self.socketIO.emit('skip', {'value': 'next'})
-
-    def skip_previous(self):
-        """Emit a skip-previous event via socketIO."""
-        self.logger.info("[VolumioListener] Emitting skip previous event.")
-        self.socketIO.emit('skip', {'value': 'previous'})

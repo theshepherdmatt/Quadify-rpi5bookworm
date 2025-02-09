@@ -298,6 +298,8 @@ def main():
         """
         import os
         import socket
+        import subprocess
+
         sock_path = "/tmp/quadify.sock"
         try:
             os.remove(sock_path)
@@ -376,6 +378,7 @@ def main():
                             mode_manager.trigger("to_menu")
                     elif command == "toggle":
                         mode_manager.toggle_play_pause()
+
                     elif command == "repeat":
                         print("Repeat command received. (Implement as needed)")
                     elif command == "select":
@@ -383,6 +386,7 @@ def main():
                             select_mapping[current_mode]()
                         else:
                             print(f"No select mapping for mode: {current_mode}")
+
                     elif command in ["scroll_up", "scroll_down"]:
                         if current_mode in scroll_mapping[command]:
                             scroll_mapping[command][current_mode]()
@@ -403,6 +407,13 @@ def main():
                         else:
                             print(f"No mapping for scroll_right in mode: {current_mode}")
 
+                    elif command == "seek_plus":
+                        print("Seeking forward 10 seconds.")
+                        subprocess.run(["volumio", "seek", "plus"], check=False)
+                        
+                    elif command == "seek_minus":
+                        print("Seeking backward 10 seconds.")
+                        subprocess.run(["volumio", "seek", "minus"], check=False)
 
                     elif command == "skip_next":
                         print("Skipping to next track.")
@@ -412,7 +423,6 @@ def main():
                         print("Skipping to previous track.")
                         subprocess.run(["volumio", "previous"], check=False)
 
-                           
                     elif command == "volume_plus":
                         volumio_listener.increase_volume()
                     elif command == "volume_minus":
@@ -427,6 +437,7 @@ def main():
 
     threading.Thread(target=quadify_command_server, args=(mode_manager, volumio_listener), daemon=True).start()
     print("Quadify command server thread started.")
+
 
 
     # 15) Main application loop
