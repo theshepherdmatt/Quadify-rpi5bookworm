@@ -5,7 +5,7 @@
   "show_date": false,
   "screensaver_enabled": true,
   "screensaver_type": "geo",
-  "screensaver_timeout": 60,
+  "screensaver_timeout": 3600,
   "oled_brightness": 150,
   "cava_enabled": false
 }
