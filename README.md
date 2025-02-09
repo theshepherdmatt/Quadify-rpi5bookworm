@@ -32,5 +32,3 @@ sudo bash install.sh
 
 ## Installation Timeframe :
 Given the diverse landscape of Linux distributions tailored for Raspberry Pi audio setups and their varying update cycles, the installation duration can significantly fluctuate. Direct compilation of certain components from their source is a necessity, affecting overall setup time. For instance, setting up OLED may take approximately 5 minutes on Volumio audio systems.
-
-Acknowledgement: All programming and tools are kindly provided by Audiophonics.
