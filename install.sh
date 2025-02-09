@@ -472,6 +472,22 @@ update_lirc_options() {
 }
 
 # ============================
+#   Set Up run_update Wrapper
+# ============================
+setup_run_update_wrapper() {
+    log_progress "Compiling and installing run_update setuid wrapper..."
+    if [ -f "/home/volumio/Quadify/run_update.c" ]; then
+        run_command "gcc -o /home/volumio/Quadify/run_update /home/volumio/Quadify/run_update.c"
+        run_command "chown root:root /home/volumio/Quadify/run_update"
+        run_command "chmod 4755 /home/volumio/Quadify/run_update"
+        log_message "success" "run_update setuid wrapper compiled and installed."
+    else
+        log_message "warning" "run_update.c not found in /home/volumio/Quadify. Skipping setuid wrapper installation."
+    fi
+    show_random_tip
+}
+
+# ============================
 #   Permissions
 # ============================
 set_permissions() {
@@ -553,6 +569,9 @@ main() {
 
     # 13) Set Permissions
     set_permissions
+
+    # 14) Set up run_update setuid wrapper for automated updates
+    setup_run_update_wrapper
 
     log_message "success" "Quadify installation complete! A reboot is required."
 
