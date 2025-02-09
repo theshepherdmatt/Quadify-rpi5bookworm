@@ -6,6 +6,6 @@
   "screensaver_enabled": true,
   "screensaver_type": "geo",
   "screensaver_timeout": 60,
-  "oled_brightness": 50,
-  "cava_enabled": true
+  "oled_brightness": 150,
+  "cava_enabled": false
 }

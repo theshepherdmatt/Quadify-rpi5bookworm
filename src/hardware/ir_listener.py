@@ -38,9 +38,9 @@ def process_key(key, current_mode):
 
     elif key == "KEY_OK":
         # In menu or tidal mode, KEY_OK selects the item.
-        if current_mode in ["menu", "tidal", "qobuz", "spotify", "library", "radiomanager", "playlists", "configmenu", "displaymenu", "clockmenu", "screensavermenu", "systeminfo", "systemupdate"]:
+        if current_mode in ["menu", "tidal", "qobuz", "spotify", "library", "radiomanager", "playlists", "screensaver", "configmenu", "displaymenu", "clockmenu", "screensavermenu", "systeminfo", "systemupdate"]:
             send_command("select")
-        elif current_mode == "clock":
+        elif current_mode in ["clock", "screensaver"]:
             send_command("toggle")
         else:
             send_command("toggle")
