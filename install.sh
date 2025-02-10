@@ -482,7 +482,7 @@ setup_run_update_wrapper() {
         run_command "chmod 4755 /home/volumio/Quadify/scripts/run_update"
         log_message "success" "run_update setuid wrapper compiled and installed."
     else
-        log_message "warning" "run_update.c not found in /home/volumio/Quadify. Skipping setuid wrapper installation."
+        log_message "warning" "run_update.c not found in /home/volumio/Quadify/scripts. Skipping setuid wrapper installation."
     fi
     show_random_tip
 }
