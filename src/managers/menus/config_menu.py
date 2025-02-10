@@ -31,7 +31,6 @@ class ConfigMenu(BaseManager):
             "Screen+",
             "System",
             "Update",
-            "IRremote",
             "Back"
         ]
 
@@ -43,7 +42,6 @@ class ConfigMenu(BaseManager):
             "Screen+": self.display_manager.icons.get("screensaversettings"),
             "System": self.display_manager.icons.get("systeminfo"),
             "Update": self.display_manager.icons.get("systemupdate"),
-            "IRremote": self.display_manager.icons.get("irremote"),
             "Back": self.display_manager.icons.get("back")  # Use an appropriate icon
         }
 

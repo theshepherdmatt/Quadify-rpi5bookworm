@@ -15,7 +15,7 @@ NC='\033[0m' # No Color
 # ============================
 #   Variables for Progress Tracking
 # ============================
-TOTAL_STEPS=17
+TOTAL_STEPS=20
 CURRENT_STEP=0
 LOG_FILE="install.log"
 
@@ -99,9 +99,130 @@ run_command() {
 }
 
 # ============================
-#   Start Script with Banner
+#   New: Gather All User Preferences Up-Front
 # ============================
-banner
+get_user_preferences() {
+    # 1) Ask about Buttons & LEDs
+    BUTTONSLEDS_ENABLED=false
+    while true; do
+        read -rp "Enable Buttons & LEDs with MCP23017? (y/n): " answer
+        case $answer in
+            [Yy]* ) BUTTONSLEDS_ENABLED=true; break ;;
+            [Nn]* ) BUTTONSLEDS_ENABLED=false; break ;;
+            * ) log_message "warning" "Please answer y or n." ;;
+        esac
+    done
+
+    # 2) Ask about IR remote support
+    echo -e "\nWill you be using an IR remote? (y/n)"
+    read -rp "Your choice: " ir_choice
+    if [[ "$ir_choice" =~ ^[Yy] ]]; then
+        IR_REMOTE_SUPPORT=true
+        # Ask for GPIO selection immediately (this calls the existing function)
+        enable_gpio_ir
+        # Then gather the IR remote configuration selection
+        gather_ir_remote_configuration
+    else
+        IR_REMOTE_SUPPORT=false
+        log_message "info" "IR remote support skipped."
+    fi
+}
+
+# ============================
+#   New: Gather IR Remote Configuration Selection (Interactive)
+# ============================
+gather_ir_remote_configuration() {
+    echo -e "\n${MAGENTA}Select your IR remote configuration:${NC}"
+    echo "1) Default Quadify Remote"
+    echo "2) Apple Remote A1156"
+    echo "3) Apple Remote A1156 Alternative"
+    echo "4) Apple Remote A1294"
+    echo "5) Apple Remote A1294 Alternative"
+    echo "6) Arcam ir-DAC-II Remote"
+    echo "7) Atrix Remote"
+    echo "8) Bluesound RC1"
+    echo "9) Denon Remote RC-1204"
+    echo "10) JustBoom IR Remote"
+    echo "11) Marantz RC003PMCD"
+    echo "12) Odroid Remote"
+    echo "13) Philips CD723"
+    echo "14) PDP Gaming Remote Control"
+    echo "15) Samsung AA59-00431A"
+    echo "16) Samsung_BN59-006XXA"
+    echo "17) XBox 360 Remote"
+    echo "18) XBox One Remote"
+    echo "19) Xiaomi IR for TV box"
+    echo "20) Yamaha RAV363"
+    
+    read -p "Enter your choice (1-20): " choice
+    case "$choice" in
+        1) remote_folder="Default Quadify Remote" ;;
+        2) remote_folder="Apple Remote A1156" ;;
+        3) remote_folder="Apple Remote A1156 Alternative" ;;
+        4) remote_folder="Apple Remote A1294" ;;
+        5) remote_folder="Apple Remote A1294 Alternative" ;;
+        6) remote_folder="Arcam ir-DAC-II Remote" ;;
+        7) remote_folder="Atrix Remote" ;;
+        8) remote_folder="Bluesound RC1" ;;
+        9) remote_folder="Denon Remote RC-1204" ;;
+        10) remote_folder="JustBoom IR Remote" ;;
+        11) remote_folder="Marantz RC003PMCD" ;;
+        12) remote_folder="Odroid Remote" ;;
+        13) remote_folder="Philips CD723" ;;
+        14) remote_folder="PDP Gaming Remote Control" ;;
+        15) remote_folder="Samsung AA59-00431A" ;;
+        16) remote_folder="Samsung_BN59-006XXA" ;;
+        17) remote_folder="XBox 360 Remote" ;;
+        18) remote_folder="XBox One Remote" ;;
+        19) remote_folder="Xiaomi IR for TV box" ;;
+        20) remote_folder="Yamaha RAV363" ;;
+        *) echo "Invalid selection. Exiting."; exit 1 ;;
+    esac
+    REMOTE_CONFIG_CHOICE=true
+    log_message "info" "IR remote selected: $remote_folder"
+}
+
+# ============================
+#   IR Remote Configuration Application (Later in the script)
+# ============================
+apply_ir_remote_configuration() {
+    log_progress "Applying IR remote configuration for: $remote_folder"
+    # If the default is selected, use the files directly from the lirc folder.
+    if [ "$remote_folder" = "Default Quadify Remote" ]; then
+        SOURCE_DIR="/home/volumio/Quadify/lirc/"
+    else
+        SOURCE_DIR="/home/volumio/Quadify/lirc/configurations/${remote_folder}/"
+        if [ ! -d "$SOURCE_DIR" ]; then
+            log_message "error" "Directory '$SOURCE_DIR' does not exist."
+            exit 1
+        fi
+    fi
+    DEST_DIR="/etc/lirc/"
+
+    # Copy lircd.conf
+    if [ -f "${SOURCE_DIR}lircd.conf" ]; then
+        run_command "cp \"${SOURCE_DIR}lircd.conf\" \"${DEST_DIR}lircd.conf\""
+        log_message "success" "Copied lircd.conf from $remote_folder."
+    else
+        log_message "error" "File '${SOURCE_DIR}lircd.conf' not found."
+        exit 1
+    fi
+
+    # Copy lircrc
+    if [ -f "${SOURCE_DIR}lircrc" ]; then
+        run_command "cp \"${SOURCE_DIR}lircrc\" \"${DEST_DIR}lircrc\""
+        log_message "success" "Copied lircrc from $remote_folder."
+    else
+        log_message "error" "File '${SOURCE_DIR}lircrc' not found."
+        exit 1
+    fi
+
+    # Restart LIRC and IR listener services
+    run_command "systemctl restart lircd"
+    run_command "systemctl restart ir_listener.service"
+    log_message "success" "IR services restarted."
+    echo -e "\nIR remote configuration applied. Please reboot later for changes to take effect."
+}
 
 # ============================
 #   System Dependencies
@@ -188,17 +309,44 @@ enable_i2c_spi() {
     show_random_tip
 }
 
+# ============================
+#   GPIO IR Overlay with User Selection
+# ============================
 enable_gpio_ir() {
     log_progress "Configuring GPIO IR overlay in userconfig.txt..."
     CONFIG_FILE="/boot/userconfig.txt"
     if [ ! -f "$CONFIG_FILE" ]; then
         run_command "touch \"$CONFIG_FILE\""
     fi
-    if ! grep -q "^dtoverlay=gpio-ir" "$CONFIG_FILE"; then
-        echo "dtoverlay=gpio-ir,gpio_pin=26" >> "$CONFIG_FILE"
-        log_message "success" "GPIO IR overlay added to $CONFIG_FILE."
+
+    # Prompt the user for the GPIO pin selection
+    echo -e "\nSelect the GPIO pin for the IR receiver:"
+    echo "1) GPIO 19"
+    echo "2) GPIO 20"
+    echo "3) GPIO 21"
+    echo "4) GPIO 23"
+    echo "5) GPIO 26 (Default)"
+    echo "6) GPIO 27"
+    read -p "Enter your choice (1-6) [Default 5]: " gpio_choice
+
+    case "$gpio_choice" in
+        1) selected_gpio=19 ;;
+        2) selected_gpio=20 ;;
+        3) selected_gpio=21 ;;
+        4) selected_gpio=23 ;;
+        5|"") selected_gpio=26 ;;  # default if 5 is chosen or nothing entered
+        6) selected_gpio=27 ;;
+        *) echo "Invalid selection. Using default GPIO 26." 
+           selected_gpio=26 ;;
+    esac
+
+    if grep -q "^dtoverlay=gpio-ir" "$CONFIG_FILE"; then
+        log_message "info" "GPIO IR overlay already present in $CONFIG_FILE. Updating to use GPIO $selected_gpio."
+        run_command "sed -i 's/^dtoverlay=gpio-ir.*$/dtoverlay=gpio-ir,gpio_pin=${selected_gpio}/' \"$CONFIG_FILE\""
+        log_message "success" "GPIO IR overlay updated to use GPIO $selected_gpio in $CONFIG_FILE."
     else
-        log_message "info" "GPIO IR overlay already present in $CONFIG_FILE."
+        echo "dtoverlay=gpio-ir,gpio_pin=${selected_gpio}" >> "$CONFIG_FILE"
+        log_message "success" "GPIO IR overlay added to $CONFIG_FILE with GPIO $selected_gpio."
     fi
 }
 
@@ -299,6 +447,7 @@ configure_mpd() {
     log_progress "Configuring MPD for FIFO..."
     MPD_CONF_FILE="/volumio/app/plugins/music_service/mpd/mpd.conf.tmpl"
     FIFO_OUTPUT="
+
 audio_output {
     type            \"fifo\"
     name            \"my_fifo\"
@@ -472,6 +621,16 @@ update_lirc_options() {
 }
 
 # ============================
+#   Permissions
+# ============================
+set_permissions() {
+    log_progress "Setting ownership & permissions for /home/volumio/Quadify..."
+    run_command "chown -R volumio:volumio /home/volumio/Quadify"
+    run_command "chmod -R 755 /home/volumio/Quadify"
+    log_message "success" "Ownership/permissions set."
+}
+
+# ============================
 #   Set Up run_update Wrapper
 # ============================
 setup_run_update_wrapper() {
@@ -488,94 +647,79 @@ setup_run_update_wrapper() {
 }
 
 # ============================
-#   Permissions
-# ============================
-set_permissions() {
-    log_progress "Setting ownership & permissions for /home/volumio/Quadify..."
-    run_command "chown -R volumio:volumio /home/volumio/Quadify"
-    run_command "chmod -R 755 /home/volumio/Quadify"
-    log_message "success" "Ownership/permissions set."
-}
-
-# ============================
 #   Main Quadify Installation
 # ============================
 main() {
     check_root
+    banner
     log_message "info" "Starting Quadify Installer..."
     
-    # 1) Ask user about Buttons & LEDs with MCP23017
-    BUTTONSLEDS_ENABLED=false
-    while true; do
-        read -rp "Enable Buttons & LEDs with MCP23017? (y/n): " answer
-        case $answer in
-            [Yy]* ) BUTTONSLEDS_ENABLED=true; break ;;
-            [Nn]* ) BUTTONSLEDS_ENABLED=false; break ;;
-            * ) log_message "warning" "Please answer y or n." ;;
-        esac
-    done
+    # NEW: Gather all interactive answers at the very top
+    get_user_preferences
 
-    # 2) Install system dependencies
+    # 3) Install system dependencies
     install_system_dependencies
 
-    # 3) Enable I2C/SPI
+    # 4) Enable I2C/SPI
     enable_i2c_spi
 
-    # 3.5) Enable GPIO IR overlay
-    enable_gpio_ir
-
-    # 4) Upgrade pip
+    # 5) Upgrade pip
     upgrade_pip
 
-    # 5) Install Python dependencies
+    # 6) Install Python dependencies
     install_python_dependencies
 
-    # 6) Detect I2C address if Buttons/LEDs enabled
+    # 7) Detect I2C address if Buttons/LEDs enabled
     if [ "$BUTTONSLEDS_ENABLED" = true ]; then
         detect_i2c_address
     else
         log_message "info" "Skipping I2C detect, as user chose not to enable Buttons/LEDs."
     fi
 
-    # 7) Setup main Quadify service
+    # 8) Setup main Quadify service
     setup_main_service
 
-    # 8) Configure MPD
+    # 9) Configure MPD
     configure_mpd
 
-    # 9) Install CAVA from fork
+    # 10) Install CAVA from fork
     install_cava_from_fork
 
-    # 10) Setup CAVA service
+    # 11) Setup CAVA service
     setup_cava_service
 
-    # 11) Configure Buttons & LEDs (modify main.py)
+    # 12) Configure Buttons & LEDs (modify main.py)
     configure_buttons_leds
 
-    # 12) Setup Samba
+    # 13) Setup Samba
     setup_samba
 
-    # 12.5) Install LIRC configuration (lircrc) from repository folder
+    # 14) Install LIRC configuration (lircrc) from repository folder
     install_lircrc
 
-    # 12.6) Install LIRC configuration files (lircrc and lircd.conf)
+    # 15) Install LIRC configuration files (lircrc and lircd.conf)
     install_lirc_configs
 
-    # 12.7) Install LIRC configuration files (lircrc and lircd.conf)
+    # 16) Setup IR Listener service
     setup_ir_listener_service
 
-    # 12.8) Update LIRC options to set driver to default
+    # 17) Update LIRC options to set driver to default
     update_lirc_options
 
-    # 13) Set Permissions
+    # NEW: If IR remote support was chosen, apply the configuration now.
+    if [ "$IR_REMOTE_SUPPORT" = true ] && [ "$REMOTE_CONFIG_CHOICE" = true ]; then
+        apply_ir_remote_configuration
+    fi
+
+    # 18) Set Permissions
     set_permissions
 
-    # 14) Set up run_update setuid wrapper for automated updates
+    # 19) Set up run_update setuid wrapper for automated updates
     setup_run_update_wrapper
 
     log_message "success" "Quadify installation complete! A reboot is required."
 
-    # 14) Ask user if they'd like to reboot now
+    # 20) Ask user if they'd like to reboot now
     while true; do
         read -rp "Reboot now? (y/n) " answer
         case $answer in
@@ -594,3 +738,4 @@ main() {
 }
 
 main
+
