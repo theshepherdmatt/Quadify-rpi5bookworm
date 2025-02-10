@@ -54,7 +54,7 @@ log_progress() {
 }
 
 # ============================
-#   Check Root BEFORE We Call It
+#  Check Root BEFORE We Call It
 # ============================
 check_root() {
     if [ "$(id -u)" -ne 0 ]; then
@@ -80,30 +80,6 @@ TIPS=(
 show_random_tip() {
     local index=$((RANDOM % ${#TIPS[@]}))
     log_message "info" "Tip: ${TIPS[$index]}"
-}
-
-# ============================
-#   Function to Configure Sudoers
-# ============================
-configure_sudoers() {
-    SUDOERS_FILE="/etc/sudoers.d/quadify_nopasswd"
-    # The desired content
-    DESIRED_ENTRY="volumio ALL=(ALL) NOPASSWD: /bin/cp, /usr/bin/systemctl, /sbin/reboot, /home/volumio/Quadify/scripts/install_remote_config.sh"
-    
-    if [ ! -f "$SUDOERS_FILE" ]; then
-        echo "$DESIRED_ENTRY" > "$SUDOERS_FILE"
-        chmod 0440 "$SUDOERS_FILE"
-        log_message "success" "Sudoers configuration added to $SUDOERS_FILE"
-    else
-        # Check if the file already contains the desired remote config script entry.
-        if ! grep -q "/home/volumio/Quadify/scripts/install_remote_config.sh" "$SUDOERS_FILE"; then
-            echo "$DESIRED_ENTRY" > "$SUDOERS_FILE"
-            chmod 0440 "$SUDOERS_FILE"
-            log_message "success" "Sudoers configuration updated in $SUDOERS_FILE"
-        else
-            log_message "info" "Sudoers configuration already contains the remote config script entry."
-        fi
-    fi
 }
 
 # ============================
@@ -435,6 +411,42 @@ configure_buttons_leds() {
 # ============================
 #   IR Controller
 # ============================
+install_lircrc() {
+    log_progress "Installing LIRC configuration (lircrc) from repository..."
+    LOCAL_LIRCRC="/home/volumio/Quadify/lirc/lircrc"
+    DESTINATION="/etc/lirc/lircrc"
+    if [ -f "$LOCAL_LIRCRC" ]; then
+        run_command "cp \"$LOCAL_LIRCRC\" \"$DESTINATION\""
+        log_message "success" "LIRC configuration (lircrc) copied to $DESTINATION."
+    else
+        log_message "error" "Local lircrc not found at $LOCAL_LIRCRC. Please ensure it is present."
+        exit 1
+    fi
+}
+
+install_lirc_configs() {
+    log_progress "Installing LIRC configuration files..."
+    LOCAL_LIRCRC="/home/volumio/Quadify/lirc/lircrc"
+    LOCAL_LIRCD_CONF="/home/volumio/Quadify/lirc/lircd.conf"
+    DEST_LIRCRC="/etc/lirc/lircrc"
+    DEST_LIRCD_CONF="/etc/lirc/lircd.conf"
+    if [ -f "$LOCAL_LIRCRC" ]; then
+        run_command "cp \"$LOCAL_LIRCRC\" \"$DEST_LIRCRC\""
+        log_message "success" "Copied lircrc to $DEST_LIRCRC."
+    else
+        log_message "error" "lircrc file not found at $LOCAL_LIRCRC."
+        exit 1
+    fi
+    if [ -f "$LOCAL_LIRCD_CONF" ]; then
+        run_command "cp \"$LOCAL_LIRCD_CONF\" \"$DEST_LIRCD_CONF\""
+        log_message "success" "Copied lircd.conf to $DEST_LIRCD_CONF."
+    else
+        log_message "error" "lircd.conf file not found at $LOCAL_LIRCD_CONF."
+        exit 1
+    fi
+    show_random_tip
+}
+
 setup_ir_listener_service() {
     log_progress "Setting up IR Listener service..."
     IR_SERVICE_FILE="/etc/systemd/system/ir_listener.service"
@@ -476,22 +488,6 @@ setup_run_update_wrapper() {
 }
 
 # ============================
-#   Set Up run_remote Wrapper
-# ============================
-setup_run_remote_config_wrapper() {
-    log_progress "Compiling and installing run_remote_config setuid wrapper..."
-    if [ -f "/home/volumio/Quadify/scripts/run_remote_config.c" ]; then
-        run_command "gcc -o /home/volumio/Quadify/scripts/run_remote_config /home/volumio/Quadify/scripts/run_remote_config.c"
-        run_command "chown root:root /home/volumio/Quadify/scripts/run_remote_config"
-        run_command "chmod 4755 /home/volumio/Quadify/scripts/run_remote_config"
-        log_message "success" "run_remote_config setuid wrapper compiled and installed."
-    else
-        log_message "warning" "run_remote_config.c not found in /home/volumio/Quadify. Skipping setuid wrapper installation."
-    fi
-    show_random_tip
-}
-
-# ============================
 #   Permissions
 # ============================
 set_permissions() {
@@ -506,9 +502,6 @@ set_permissions() {
 # ============================
 main() {
     check_root
-    # Configure sudoers for passwordless commands (if not already set)
-    configure_sudoers
-
     log_message "info" "Starting Quadify Installer..."
     
     # 1) Ask user about Buttons & LEDs with MCP23017
@@ -562,10 +555,16 @@ main() {
     # 12) Setup Samba
     setup_samba
 
-    # 12.1) Install LIRC configuration files (lircrc and lircd.conf)
+    # 12.5) Install LIRC configuration (lircrc) from repository folder
+    install_lircrc
+
+    # 12.6) Install LIRC configuration files (lircrc and lircd.conf)
+    install_lirc_configs
+
+    # 12.7) Install LIRC configuration files (lircrc and lircd.conf)
     setup_ir_listener_service
 
-    # 12.2) Update LIRC options to set driver to default
+    # 12.8) Update LIRC options to set driver to default
     update_lirc_options
 
     # 13) Set Permissions
@@ -574,12 +573,9 @@ main() {
     # 14) Set up run_update setuid wrapper for automated updates
     setup_run_update_wrapper
 
-    # 14.1) Set up run_remote_config setuid wrapper for automated updates
-    setup_run_remote_config_wrapper
-
     log_message "success" "Quadify installation complete! A reboot is required."
 
-    # 14.2) Ask user if they'd like to reboot now
+    # 14) Ask user if they'd like to reboot now
     while true; do
         read -rp "Reboot now? (y/n) " answer
         case $answer in
