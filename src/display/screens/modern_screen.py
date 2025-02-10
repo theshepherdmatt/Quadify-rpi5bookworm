@@ -281,7 +281,7 @@ class ModernScreen(BaseManager):
         track_type = data.get("trackType", "").lower()
         status   = data.get("status", "").lower()
 
-        if service == "mpd" and track_type in ["tidal", "qobuz", "spotify"]:
+        if service == "mpd" and track_type in ["tidal", "qobuz", "spotify", "radio_paradise"]:
             service = track_type
 
         if status in ["pause", "stop"] and not service:

@@ -21,13 +21,15 @@ class MenuManager:
         # Menu initialization
         self.menu_stack = []
         self.current_menu_items = ["Stream", "Library", "Playlists", "Radio", "Config"]
-        self.stream_menu_items = ["Tidal", "Qobuz", "Spotify"]
+        self.stream_menu_items = ["Tidal", "Qobuz", "Spotify", "MotherE", "RadioP"]
         self.library_menu_items = ["NAS", "USB"]
         self.display_menu_items = ["Display", "Screensavers", "Clock", "Contrast"]
         self.icons = {
             "Stream": self.display_manager.icons.get("stream"),
             "Library": self.display_manager.icons.get("library"),
             "Radio": self.display_manager.icons.get("webradio"),
+            "RadioP": self.display_manager.icons.get("radio_paradise"),
+            "MotherE": self.display_manager.icons.get("motherearthradio"),
             "Playlists": self.display_manager.icons.get("playlists"),
             "Tidal": self.display_manager.icons.get("tidal"),
             "Qobuz": self.display_manager.icons.get("qobuz"),
@@ -242,11 +244,6 @@ class MenuManager:
             self.logger.info("MenuManager: Switching to Modern screen.")
             self.mode_manager.to_menu()  # Return to menu after selection
 
-        elif selected_item == "VUScreen":
-            self.mode_manager.to_vuscreen()
-            self.logger.info("MenuManager: Switching to Modern screen.")
-            self.mode_manager.to_menu()  # Return to menu after selection
-
         elif selected_item == "NAS":
             self.mode_manager.to_library(start_uri="music-library/NAS")
             self.logger.info("Library Manager for NAS activated.")
@@ -260,6 +257,14 @@ class MenuManager:
 
         elif selected_item == "Qobuz":
             self.mode_manager.to_qobuz()
+
+
+        elif selected_item == "RadioP":
+            self.mode_manager.to_radioparadise()
+
+
+        elif selected_item == "MotherE":
+            self.mode_manager.to_motherearthradio()
 
         elif selected_item == "Spotify":
             self.mode_manager.to_spotify()

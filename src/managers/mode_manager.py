@@ -37,6 +37,9 @@ class ModeManager:
         {'name': 'usblibrary',      'on_enter': 'enter_usb_library'},
         {'name': 'spotify',         'on_enter': 'enter_spotify'},
         {'name': 'webradio',        'on_enter': 'enter_webradio'},
+        {'name': 'motherearthradio', 'on_enter': 'enter_motherearthradio'},
+        {'name': 'radioparadise',   'on_enter': 'enter_radioparadise'},
+        {'name': 'remotemenu',      'on_enter': 'enter_remotemenu'},
     ]
 
     def __init__(self, display_manager, clock, volumio_listener,
@@ -81,6 +84,8 @@ class ModeManager:
         self.radio_manager = None
         self.tidal_manager = None
         self.qobuz_manager = None
+        self.motherearth_manager = None
+        self.radioparadise_manager = None
         self.spotify_manager = None
         self.library_manager = None
         self.usb_library_manager = None
@@ -92,6 +97,7 @@ class ModeManager:
         self.screensaver_menu = None
         self.display_menu = None
         self.clock_menu = None
+        self.remote_menu = None
         self.system_info_screen = None
         self.system_update_menu = None
 
@@ -217,6 +223,12 @@ class ModeManager:
     def set_radio_manager(self, radio_manager):
         self.radio_manager = radio_manager
 
+    def set_motherearth_manager(self, motherearth_manager):
+        self.motherearth_manager = motherearth_manager
+
+    def set_radioparadise_manager(self, radioparadise_manager):
+        self.radioparadise_manager = radioparadise_manager
+
     def set_tidal_manager(self, tidal_manager):
         self.tidal_manager = tidal_manager
 
@@ -246,6 +258,9 @@ class ModeManager:
 
     def set_clock_menu(self, clock_menu):
         self.clock_menu = clock_menu
+
+    def set_remote_menu(self, remote_menu):
+        self.remote_menu = remote_menu
 
     def set_display_menu(self, display_menu):
         self.display_menu = display_menu
@@ -316,6 +331,7 @@ class ModeManager:
         self.machine.add_transition('to_screensavermenu', source='*', dest='screensavermenu', before='push_current_state')
         self.machine.add_transition('to_displaymenu',  source='*', dest='displaymenu', before='push_current_state')
         self.machine.add_transition('to_clockmenu',    source='*', dest='clockmenu', before='push_current_state')
+        self.machine.add_transition('to_remotemenu',    source='*', dest='remotemenu', before='push_current_state')
         self.machine.add_transition('to_configmenu',   source='*', dest='configmenu', before='push_current_state')
         self.machine.add_transition('to_original',     source='*', dest='original', before='push_current_state')
         self.machine.add_transition('to_modern',       source='*', dest='modern', before='push_current_state')
@@ -331,6 +347,8 @@ class ModeManager:
         self.machine.add_transition('to_usb_library',  source='*', dest='usblibrary', before='push_current_state')
         self.machine.add_transition('to_spotify',      source='*', dest='spotify', before='push_current_state')
         self.machine.add_transition('to_webradio',     source='*', dest='webradio', before='push_current_state')
+        self.machine.add_transition('to_motherearthradio',  source='*', dest='motherearthradio', before='push_current_state')
+        self.machine.add_transition('to_radioparadise', source='*', dest='radioparadise', before='push_current_state')
 
     # --- Custom trigger() Method ---
     def trigger(self, event_name, **kwargs):
@@ -363,10 +381,16 @@ class ModeManager:
             self.config_menu.stop_mode()
         if self.clock_menu and self.clock_menu.is_active:
             self.clock_menu.stop_mode()
+        if self.remote_menu and self.remote_menu.is_active:
+            self.remote_menu.stop_mode()
         if self.display_menu and self.display_menu.is_active:
             self.display_menu.stop_mode()
         if self.radio_manager and self.radio_manager.is_active:
             self.radio_manager.stop_mode()
+        if self.motherearth_manager and self.motherearth_manager.is_active:
+            self.motherearth_manager.stop_mode()
+        if self.radioparadise_manager and self.radioparadise_manager.is_active:
+            self.radioparadise_manager.stop_mode()
         if self.playlist_manager and self.playlist_manager.is_active:
             self.playlist_manager.stop_mode()
         if self.tidal_manager and self.tidal_manager.is_active:
@@ -385,6 +409,8 @@ class ModeManager:
             self.modern_screen.stop_mode()
         if self.minimal_screen and self.minimal_screen.is_active:
             self.minimal_screen.stop_mode()
+        if self.webradio_screen and self.webradio_screen.is_active:
+            self.webradio_screen.stop_mode()
         if self.webradio_screen and self.webradio_screen.is_active:
             self.webradio_screen.stop_mode()
         if self.system_info_screen and self.system_info_screen.is_active:
@@ -440,6 +466,28 @@ class ModeManager:
         self.reset_idle_timer()
         self.update_current_mode()
 
+    def enter_motherearthradio(self, event):
+        self.logger.info("Motherearth: Entering 'motherearthradio' state.")
+        self.stop_all_screens()
+        if self.motherearth_manager:
+            self.motherearth_manager.start_mode()
+            self.logger.info("Motherearth: Motherearth started.")
+        else:
+            self.logger.warning("Motherearth: No motherearth_manager set.")
+        self.reset_idle_timer()
+        self.update_current_mode()
+
+    def enter_radioparadise(self, event):
+        self.logger.info("RadioParadise: Entering 'radioparadise' state.")
+        self.stop_all_screens()
+        if self.radioparadise_manager:
+            self.radioparadise_manager.start_mode()
+            self.logger.info("RadioParadise: RadioParadise started.")
+        else:
+            self.logger.warning("RadioParadise: No radioparadise_manager set.")
+        self.reset_idle_timer()
+        self.update_current_mode()
+
     def enter_screensaver(self, event):
         self.logger.info("ModeManager: Entering 'screensaver' state.")
         self.stop_all_screens()
@@ -479,6 +527,17 @@ class ModeManager:
             self.logger.info("ModeManager: Clock menu started.")
         else:
             self.logger.warning("ModeManager: No clock_menu set.")
+        self.reset_idle_timer()
+        self.update_current_mode()
+
+    def enter_remotemenu(self, event):
+        self.logger.info("ModeManager: Entering 'remotemenu' state.")
+        self.stop_all_screens()
+        if self.remote_menu:
+            self.remote_menu.start_mode()
+            self.logger.info("ModeManager: Remote menu started.")
+        else:
+            self.logger.warning("ModeManager: No remote_menu set.")
         self.reset_idle_timer()
         self.update_current_mode()
 
@@ -653,7 +712,7 @@ class ModeManager:
             return
         if status == "play":
             current_mode = self.get_mode()
-            if service in ["webradio", "motherearthradio", "radio_paradise"]:
+            if service in ["webradio"]:
                 if current_mode != "webradio":
                     self.to_webradio()
                     self.last_mode_change_time = now
@@ -748,6 +807,7 @@ class ModeManager:
                 "screensavermenu": self.to_screensavermenu,
                 "displaymenu": self.to_displaymenu,
                 "clockmenu": self.to_clockmenu,
+                "remotemenu": self.to_remotemenu,
                 "configmenu": self.to_configmenu,
                 "original": self.to_original,
                 "modern": self.to_modern,
@@ -761,6 +821,8 @@ class ModeManager:
                 "usblibrary": self.to_usb_library,
                 "spotify": self.to_spotify,
                 "webradio": self.to_webradio,
+                "motherearth": self.to_motherearth,
+                "radioparadise": self.radioparadise,
                 "systeminfo": self.to_systeminfo,
                 "systemupdate": self.to_systemupdate,
                 "boot": self.to_boot

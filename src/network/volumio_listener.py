@@ -31,6 +31,8 @@ class VolumioListener:
         # Navigation signals for managers
         self.playlists_navigation_received = Signal('playlists_navigation_received')
         self.webradio_navigation_received = Signal('webradio_navigation_received')
+        self.motherearth_navigation_received = Signal('motherearth_navigation_received')
+        self.radioparadise_navigation_received = Signal('radioparadise_navigation_received')
         self.qobuz_navigation_received = Signal('qobuz_navigation_received')
         self.tidal_navigation_received = Signal('tidal_navigation_received')
         self.spotify_navigation_received = Signal('spotify_navigation_received')
@@ -257,6 +259,10 @@ class VolumioListener:
         elif uri.startswith("radio/"):
             self.logger.debug("Identified service: webradio")
             return 'webradio'
+        elif uri == "mer":
+            return 'motherearthradio'
+        elif uri == "rparadise":
+            return 'radioparadise'
         elif uri.startswith("playlists") or uri.startswith("playlist://"):
             self.logger.debug("Identified service: playlists")
             return 'playlists'

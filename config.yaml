@@ -119,6 +119,8 @@ display:
   cache_images: true  # Cache frequently used images for faster access
   preload_images:
     - "/home/volumio/Quadify/src/assets/images/webradio.png"
+    - "/home/volumio/Quadify/src/assets/images/radioparadise.png"
+    - "/home/volumio/Quadify/src/assets/images/motherearth.png"
     - "/home/volumio/Quadify/src/assets/images/mpd.png"
     - "/home/volumio/Quadify/src/assets/images/library.png"
     - "/home/volumio/Quadify/src/assets/images/stream.png"

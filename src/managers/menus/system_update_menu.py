@@ -170,7 +170,7 @@ class SystemUpdateMenu(BaseManager):
 
                 # Run the update script and allow reboot
                 self.logger.info("SystemUpdateMenu: Running update script and rebooting.")
-                subprocess.Popen(["bash", "/home/volumio/Quadify/quadify_autoupdate.sh"])
+                subprocess.Popen(["bash", "/home/volumio/Quadify/scripts/quadify_autoupdate.sh"])
 
             else:
                 # "No" => go back to the main menu

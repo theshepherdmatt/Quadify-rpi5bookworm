@@ -201,6 +201,8 @@ def main():
             mode_manager.exit_screensaver()
         elif current_mode == 'clockmenu':
             mode_manager.clock_menu.scroll_selection(direction)
+        elif current_mode == 'remotemenu':
+            mode_manager.remote_menu.scroll_selection(direction)
         elif current_mode == 'screensavermenu':
             mode_manager.screensaver_menu.scroll_selection(direction)
         elif current_mode == 'displaymenu':
@@ -215,6 +217,10 @@ def main():
             mode_manager.playlist_manager.scroll_selection(direction)
         elif current_mode == 'radiomanager':
             mode_manager.radio_manager.scroll_selection(direction)
+        elif current_mode == 'motherearthradio':
+            mode_manager.motherearth_manager.scroll_selection(direction)
+        elif current_mode == 'radioparadise':
+            mode_manager.radioparadise_manager.scroll_selection(direction)
         elif current_mode == 'library':
             mode_manager.library_manager.scroll_selection(direction)
         elif current_mode == 'usblibrary':
@@ -231,6 +237,8 @@ def main():
             mode_manager.menu_manager.select_item()
         elif current_mode == 'configmenu':
             mode_manager.config_menu.select_item()
+        elif current_mode == 'remotemenu':
+            mode_manager.remote_menu.select_item()
         elif current_mode == 'systemupdate':
             mode_manager.system_update_menu.select_item()
         elif current_mode == 'screensavermenu':
@@ -265,6 +273,10 @@ def main():
             mode_manager.library_manager.select_item()
         elif current_mode == 'radiomanager':
             mode_manager.radio_manager.select_item()
+        elif current_mode == 'motherearthradio':
+            mode_manager.motherearth_manager.select_item()
+        elif current_mode == 'radioparadise':
+            mode_manager.radioparadise_manager.select_item()
         elif current_mode == 'usblibrary':
             mode_manager.usb_library_manager.select_item()
         elif current_mode == 'screensaver':
@@ -318,8 +330,11 @@ def main():
             "spotify": lambda: mode_manager.spotify_manager.select_item(),
             "library": lambda: mode_manager.library_manager.select_item(),
             "radiomanager": lambda: mode_manager.radio_manager.select_item(),
+            "motherearthradio": lambda: mode_manager.motherearth_manager.select_item(),
+            "radioparadise": lambda: mode_manager.radioparadise_manager.select_item(),
             "playlists": lambda: mode_manager.playlist_manager.select_item(),
             "configmenu": lambda: mode_manager.config_menu.select_item(),
+            "remotemenu": lambda: mode_manager.remote_menu.select_item(),
             "displaymenu": lambda: mode_manager.display_menu.select_item(),
             "clockmenu": lambda: mode_manager.clock_menu.select_item(),
             "systemupdate": lambda: mode_manager.system_update_menu.select_item(),
@@ -334,8 +349,11 @@ def main():
                 "spotify": lambda: mode_manager.spotify_manager.scroll_selection(-1),
                 "library": lambda: mode_manager.library_manager.scroll_selection(-1),
                 "radiomanager": lambda: mode_manager.radio_manager.scroll_selection(-1),
+                "motherearthradio": lambda: mode_manager.motherearth_manager.scroll_selection(-1),
+                "radioparadise": lambda: mode_manager.radioparadise_manager.scroll_selection(-1),
                 "playlists": lambda: mode_manager.playlist_manager.scroll_selection(-1),
                 "configmenu": lambda: mode_manager.config_menu.scroll_selection(-1),
+                "remotemenu": lambda: mode_manager.remote_menu.scroll_selection(-1),
                 "displaymenu": lambda: mode_manager.display_menu.scroll_selection(-1),
                 "clockmenu": lambda: mode_manager.clock_menu.scroll_selection(-1),
                 "systemupdate": lambda: mode_manager.system_update_menu.scroll_selection(-1),
@@ -348,8 +366,11 @@ def main():
                 "spotify": lambda: mode_manager.spotify_manager.scroll_selection(1),
                 "library": lambda: mode_manager.library_manager.scroll_selection(1),
                 "radiomanager": lambda: mode_manager.radio_manager.scroll_selection(1),
+                "motherearthradio": lambda: mode_manager.motherearth_manager.scroll_selection(1),
+                "radioparadise": lambda: mode_manager.radioparadise_manager.scroll_selection(1),
                 "playlists": lambda: mode_manager.playlist_manager.scroll_selection(1),
                 "configmenu": lambda: mode_manager.config_menu.scroll_selection(1),
+                "remotemenu": lambda: mode_manager.remote_menu.scroll_selection(1),
                 "displaymenu": lambda: mode_manager.display_menu.scroll_selection(1),
                 "clockmenu": lambda: mode_manager.clock_menu.scroll_selection(1),
                 "systemupdate": lambda: mode_manager.system_update_menu.scroll_selection(1),

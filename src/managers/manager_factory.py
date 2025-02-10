@@ -35,6 +35,8 @@ class ManagerFactory:
         tidal_manager        = self.create_tidal_manager()
         qobuz_manager        = self.create_qobuz_manager()
         playlist_manager     = self.create_playlist_manager()
+        motherearth_manager  = self.create_motherearth_manager()
+        radioparadise_manager = self.create_radioparadise_manager()
         radio_manager        = self.create_radio_manager()
         spotify_manager      = self.create_spotify_manager()
         library_manager      = self.create_library_manager()
@@ -49,6 +51,7 @@ class ManagerFactory:
         # Additional items referenced by new ModeManager states
         config_menu          = self.create_config_menu()
         clock_menu           = self.create_clock_menu()
+        remote_menu           = self.create_remote_menu()
         display_menu         = self.create_display_menu()
         screensaver_menu     = self.create_screensaver_menu()
         screensaver          = self.create_screensaver()
@@ -62,6 +65,8 @@ class ManagerFactory:
         self.mode_manager.set_qobuz_manager(qobuz_manager)
         self.mode_manager.set_playlist_manager(playlist_manager)
         self.mode_manager.set_radio_manager(radio_manager)
+        self.mode_manager.set_motherearth_manager(motherearth_manager)
+        self.mode_manager.set_radioparadise_manager(radioparadise_manager)
         self.mode_manager.set_spotify_manager(spotify_manager)
         self.mode_manager.set_library_manager(library_manager)
         self.mode_manager.set_usb_library_manager(usb_library_manager)
@@ -72,6 +77,7 @@ class ManagerFactory:
         self.mode_manager.set_original_screen(original_screen)
 
         self.mode_manager.set_clock_menu(clock_menu)
+        self.mode_manager.set_remote_menu(remote_menu)
         self.mode_manager.set_display_menu(display_menu)
         self.mode_manager.set_screensaver_menu(screensaver_menu)
         self.mode_manager.set_screensaver(screensaver)
@@ -95,6 +101,13 @@ class ManagerFactory:
     def create_config_menu(self):
         from .menus.config_menu import ConfigMenu
         return ConfigMenu(
+            display_manager   = self.display_manager,
+            mode_manager      = self.mode_manager
+        )
+
+    def create_remote_menu(self):
+        from .menus.remote_menu import RemoteMenu
+        return RemoteMenu(
             display_manager   = self.display_manager,
             mode_manager      = self.mode_manager
         )
@@ -130,6 +143,23 @@ class ManagerFactory:
             volumio_listener  = self.volumio_listener,
             mode_manager      = self.mode_manager
         )
+    
+    def create_motherearth_manager(self):
+        from .menus.motherearth_manager import MotherEarthManager
+        return MotherEarthManager(
+            display_manager   = self.display_manager,
+            volumio_listener  = self.volumio_listener,
+            mode_manager      = self.mode_manager
+        )
+
+    def create_radioparadise_manager(self):
+        from .menus.radioparadise_manager import RadioParadiseManager
+        return RadioParadiseManager(
+            display_manager   = self.display_manager,
+            volumio_listener  = self.volumio_listener,
+            mode_manager      = self.mode_manager
+        )
+
 
     def create_spotify_manager(self):
         from .menus.spotify_manager import SpotifyManager

@@ -64,7 +64,7 @@ class WebRadioScreen:
             self.logger.debug("WebRadioScreen: ignoring state change; not in webradio mode.")
             return
 
-        if state.get("service") not in ["webradio", "motherearthradio", "radio_paradise"]:
+        if state.get("service") not in ["webradio"]:
             self.logger.debug("WebRadioScreen: ignoring state change; service not allowed.")
             return
 
@@ -285,19 +285,11 @@ class WebRadioScreen:
 
         # Prepare the Volume and Quality info.
         volume = str(data.get("volume") or "0")
-        quality = ""
-        if service.lower() in ["motherearthradio", "radio_paradise"]:
-            samplerate = data.get("samplerate")
-            bitdepth = data.get("bitdepth")
-            if samplerate and bitdepth:
-                quality = f"{samplerate} / {bitdepth}"
-            else:
-                quality = "High Quality"
-        else:
-            bitrate = data.get("bitrate")
-            quality = bitrate if bitrate else "Live"
+        bitrate = data.get("bitrate")
+        quality = bitrate if bitrate else "Live"
         info_line = f"Vol: {volume} | {quality}"
         draw.text((margin, info_y), info_line, font=self.font_label, fill="white")
+
 
         # Display album art on the upper-right if available.
         albumart_url = data.get("albumart")

@@ -179,9 +179,15 @@ class MinimalScreen(BaseManager):
         # ------------------------------------------------------------------
         raw_service = state.get("service", "Network").lower()
         track_type  = state.get("trackType", "").lower()
-        if raw_service == "mpd" and track_type in ["tidal", "qobuz", "spotify"]:
+        if raw_service == "mpd" and track_type in ["tidal", "qobuz", "spotify", "rparadise"]:
             raw_service = track_type
-        service_display = raw_service.title()
+
+        # Shorten the display name for Radio Paradise
+        if raw_service in ["radioparadise", "radio_paradise"]:
+            service_display = "RadioP"
+        else:
+            service_display = raw_service.title()
+
         samplerate = state.get("samplerate", "44.1")
         bitdepth   = state.get("bitdepth", "16bit")
         volume     = state.get("volume", 0)
