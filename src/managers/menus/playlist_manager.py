@@ -177,6 +177,8 @@ class PlaylistManager(BaseManager):
                     fill="white"
                 )
             self.display_manager.draw_custom(draw)
+            # Automatically navigate back to the menu after 5 seconds.
+            threading.Timer(3.0, self.mode_manager.to_menu).start()
 
     def display_loading_screen(self):
         """Show a loading screen."""

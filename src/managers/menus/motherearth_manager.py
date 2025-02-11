@@ -111,7 +111,7 @@ class MotherEarthManager(BaseManager):
             self.display_manager.draw_custom(draw_callback)
 
             # Automatically navigate back to the menu after 5 seconds.
-            threading.Timer(5.0, self.mode_manager.to_menu).start()
+            threading.Timer(3.0, self.mode_manager.to_menu).start()
 
     def periodic_refresh(self):
         """
