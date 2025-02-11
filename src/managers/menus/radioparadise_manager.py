@@ -8,7 +8,7 @@ class RadioParadiseManager(BaseManager):
     def __init__(self, display_manager, volumio_listener, mode_manager,
                  window_size=4, y_offset=2, line_spacing=15):
         super().__init__(display_manager, volumio_listener, mode_manager)
-        self.mode_name = "radioparadise"
+        self.mode_name = "radio_paradise"
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(logging.DEBUG)
         self.logger.info("RadioParadiseManager initialized.")
@@ -18,7 +18,6 @@ class RadioParadiseManager(BaseManager):
         self.stations = []
         self.current_menu_items = []  # This will hold the station items for the menu
         self.current_selection_index = 0
-        # In this manager we only have one menu (stations)
         self.current_menu = "stations"
         self.window_start_index = 0
 
@@ -42,6 +41,18 @@ class RadioParadiseManager(BaseManager):
 
         self.is_active = False
 
+    def display_loading_screen(self):
+        """Display a loading message for Mother Earth."""
+        self.logger.info("RadioParadiseManager: Displaying loading screen.")
+        def draw_callback(draw_obj):
+            draw_obj.text(
+                (10, self.y_offset),
+                "Loading Radio Paradise...",
+                font=self.font,
+                fill="white"
+            )
+        self.display_manager.draw_custom(draw_callback)
+
     def start_mode(self):
         """Activate Radio Paradise mode and fetch the station list."""
         if self.is_active:
@@ -56,10 +67,38 @@ class RadioParadiseManager(BaseManager):
         self.current_menu_items = []  # Ensure this list is empty before fetching
 
         self.logger.debug("RadioParadiseManager: Connecting navigation_received signal.")
-        # Connect the navigation signal so that handle_navigation() is called
         self.volumio_listener.navigation_received.connect(self.handle_navigation)
         self.logger.info("RadioParadiseManager: Connected to navigation_received signal.")
+
+        # Display a loading screen before fetching stations
+        self.display_loading_screen()
         self.fetch_stations()
+
+        # Start timeout timer (e.g. 5 seconds) to check if station data has been received
+        self.timeout_timer = threading.Timer(3.0, self.radio_paradise_timeout)
+        self.timeout_timer.start()
+
+    def radio_paradise_timeout(self):
+        """Called when station data hasn't loaded within the timeout period."""
+        if not self.current_menu_items:
+            self.logger.warning("RadioParadiseManager: Timeout reached, no station data received.")
+            def draw_callback(draw_obj):
+                draw_obj.text(
+                    (10, self.y_offset),
+                    "Radio Paradise is not loading...",
+                    font=self.font,
+                    fill="white"
+                )
+                draw_obj.text(
+                    (10, self.y_offset + self.line_spacing),
+                    "Have you logged in via Volumio?",
+                    font=self.font,
+                    fill="white"
+                )
+            self.display_manager.draw_custom(draw_callback)
+
+            # Automatically navigate back to the menu after 5 seconds.
+            threading.Timer(5.0, self.mode_manager.to_menu).start()
 
     def stop_mode(self):
         """Deactivate Radio Paradise mode and clear the display."""
@@ -142,7 +181,6 @@ class RadioParadiseManager(BaseManager):
             self.logger.info(f"RadioParadiseManager: Updated stations with {len(self.stations)} items.")
             self.current_selection_index = 0
             self.window_start_index = 0
-            # Set current_menu_items to the list of stations
             self.current_menu_items = self.stations.copy()
             self.logger.debug("RadioParadiseManager: Displaying menu with updated stations.")
             self.display_menu()
@@ -175,7 +213,6 @@ class RadioParadiseManager(BaseManager):
                 actual_index = self.window_start_index + i
                 arrow = "-> " if actual_index == self.current_selection_index else "   "
                 title = item.get("title", "Untitled")
-                # Use bold font for the selected item
                 font = self.font_bold if actual_index == self.current_selection_index else self.font
                 fill = "white" if actual_index == self.current_selection_index else "gray"
                 y = self.y_offset + i * self.line_spacing
@@ -221,7 +258,7 @@ class RadioParadiseManager(BaseManager):
     def select_item(self):
         """
         Handle the selection of the highlighted station.
-        When a station is selected, send a playback command.
+        When a station is selected, send a playback command and display a toast.
         """
         if not self.is_active:
             self.logger.debug("RadioParadiseManager: select_item called but mode is not active.")
@@ -235,26 +272,70 @@ class RadioParadiseManager(BaseManager):
         albumart_url = selected_item.get("albumart", "")
         self.logger.info(f"RadioParadiseManager: Playing station: {station_title} with URI: {uri}")
         self.logger.debug(f"RadioParadiseManager: Selected item details: {selected_item}")
+        
+        # Send the playback command
         self.play_station(station_title, uri, albumart_url=albumart_url)
+        
+        # Display the toast overlay using our custom method.
+        self.show_station_selected_toast()
+
+    def show_station_selected_toast(self):
+        """
+        Display a two-line toast overlay with the message:
+        "Station selected:
+         Display will update after the next song"
+        The text is centered horizontally and shifted downward.
+        After 5 seconds, the station menu is refreshed.
+        """
+        self.logger.info("RadioParadiseManager: Displaying toast overlay.")
+        toast_message = "Station selected:\nDisplay will update after the next song"
+        lines = toast_message.split('\n')
+        # Calculate total height for the text block
+        line_heights = [self.font.getsize(line)[1] for line in lines]
+        total_height = sum(line_heights) + (len(lines) - 1) * 2  # 2 pixels spacing between lines
+        # Center vertically then shift down by 20 pixels
+        y_start = (self.display_manager.oled.height - total_height) // 2
+
+        def draw_callback(draw_obj):
+            current_y = y_start
+            for line in lines:
+                text_width, text_height = draw_obj.textsize(line, font=self.font)
+                x = (self.display_manager.oled.width - text_width) // 2
+                draw_obj.text((x, current_y), line, font=self.font, fill="white")
+                current_y += text_height + 2
+        self.display_manager.draw_custom(draw_callback)
+        # After 5 seconds, refresh the station menu to remove the toast overlay.
+        import threading
+        threading.Timer(5.0, self.display_menu).start()
 
     def play_station(self, title, uri, albumart_url=None):
-        """Send a command to play the selected Radio Paradise station."""
+        """Send a command to play the selected Radio Paradise station and force an immediate state update."""
         try:
             self.logger.info(f"RadioParadiseManager: Attempting to play station: {title}")
-            payload = {
-                'title': title,
-                'service': 'radio_paradise',
-                'uri': uri,
-                'type': 'mywebradio',
-                'albumart': albumart_url or '',
-                'icon': 'fa fa-music'
-            }
-            self.logger.debug(f"RadioParadiseManager: Payload prepared: {payload}")
-            self.volumio_listener.socketIO.emit('replaceAndPlay', payload)
-            self.logger.info("RadioParadiseManager: Sent replaceAndPlay command.")
-            # If a screen transition is desired, you might add:
-            # self.mode_manager.to_webradio()
-            self.logger.debug("RadioParadiseManager: Playback command emitted successfully.")
+            if self.volumio_listener.is_connected():
+                # Suppress state changes to prevent transitional 'stop' events from interfering
+                self.mode_manager.suppress_state_change()
+                self.logger.debug("RadioParadiseManager: Suppressed state changes.")
+                
+                payload = {
+                    'title': title,
+                    'service': 'radio_paradise',
+                    'uri': uri,
+                    'type': 'mywebradio',
+                    'albumart': albumart_url or '',
+                    'icon': 'fa fa-music'
+                }
+                self.logger.debug(f"RadioParadiseManager: Payload prepared: {payload}")
+                self.volumio_listener.socketIO.emit('replaceAndPlay', payload)
+                self.logger.info("RadioParadiseManager: Sent replaceAndPlay command.")
+                
+                # Allow state changes after 1 second to let Volumio update properly
+                import threading
+                threading.Timer(1.0, self.mode_manager.allow_state_change).start()
+                self.logger.debug("RadioParadiseManager: Scheduled allow_state_change after delay.")
+            else:
+                self.logger.error("RadioParadiseManager: Not connected to Volumio.")
+                self.display_error_message("Connection Error", "Not connected to Volumio.")
         except Exception as e:
             self.logger.exception(f"RadioParadiseManager: Failed to play station - {e}")
             self.display_error_message("Playback Error", f"Could not play station: {e}")

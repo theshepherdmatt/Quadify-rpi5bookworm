@@ -14,7 +14,7 @@ class MotherEarthManager(BaseManager):
         self.logger.info("MotherEarthManager initialized (stations-only mode).")
         self.logger.debug(f"Configuration: window_size={window_size}, y_offset={y_offset}, line_spacing={line_spacing}")
 
-        # List of stations (Radio Paradise returns a single list)
+        # List of stations (Mother Earth returns a single list)
         self.stations = []
         self.current_menu_items = []  # This will hold the station items for the menu
         self.current_selection_index = 0
@@ -42,6 +42,24 @@ class MotherEarthManager(BaseManager):
 
         self.is_active = False
 
+        # Timeout timer attribute for station loading
+        self.timeout_timer = None
+
+        # New: Refresh timer to periodically try to update the display/connection
+        self.refresh_timer = None
+
+    def display_loading_screen(self):
+        """Display a loading message for Mother Earth."""
+        self.logger.info("MotherEarthManager: Displaying loading screen.")
+        def draw_callback(draw_obj):
+            draw_obj.text(
+                (10, self.y_offset),
+                "Loading Mother Earth...",
+                font=self.font,
+                fill="white"
+            )
+        self.display_manager.draw_custom(draw_callback)
+
     def start_mode(self):
         """Activate Mother Earth mode and fetch the station list."""
         if self.is_active:
@@ -59,11 +77,63 @@ class MotherEarthManager(BaseManager):
         # Connect the navigation signal so that handle_navigation() is called
         self.volumio_listener.navigation_received.connect(self.handle_navigation)
         self.logger.info("MotherEarthManager: Connected to navigation_received signal.")
+
+        # Display a loading screen before fetching stations
+        self.display_loading_screen()
+
         self.fetch_stations()
+
+        # Start a periodic refresh timer (e.g. every 30 seconds)
+        self.refresh_timer = threading.Timer(30.0, self.periodic_refresh)
+        self.refresh_timer.start()
+
+        # Start timeout timer (e.g. 5 seconds) to check if station data has been received
+        self.timeout_timer = threading.Timer(5.0, self.mother_earth_timeout)
+        self.timeout_timer.start()
+
+    def mother_earth_timeout(self):
+        """Called when station data hasn't loaded within the timeout period."""
+        if not self.current_menu_items:
+            self.logger.warning("MotherEarthManager: Timeout reached, no station data received.")
+            def draw_callback(draw_obj):
+                draw_obj.text(
+                    (10, self.y_offset),
+                    "Mother Earth is not loading...",
+                    font=self.font,
+                    fill="white"
+                )
+                draw_obj.text(
+                    (10, self.y_offset + self.line_spacing),
+                    "Have you logged in via Volumio?",
+                    font=self.font,
+                    fill="white"
+                )
+            self.display_manager.draw_custom(draw_callback)
+
+            # Automatically navigate back to the menu after 5 seconds.
+            threading.Timer(5.0, self.mode_manager.to_menu).start()
+
+    def periodic_refresh(self):
+        """
+        Periodically try to refresh the connection or update the display.
+        This method re-fetches station data or re-displays the current menu.
+        """
+        self.logger.info("MotherEarthManager: Performing periodic refresh.")
+        if self.volumio_listener.is_connected():
+            # Option 1: Re-fetch station data.
+            self.logger.info("MotherEarthManager: Re-fetching stations as part of refresh.")
+            self.fetch_stations()
+            # Option 2: Alternatively, if you only need to re-display the menu, you could call:
+            # self.display_menu()
+        else:
+            self.logger.warning("MotherEarthManager: Volumio is not connected during refresh attempt.")
+        # Restart the timer for the next refresh
+        self.refresh_timer = threading.Timer(30.0, self.periodic_refresh)
+        self.refresh_timer.start()
 
     def stop_mode(self):
         """Deactivate Mother Earth mode and clear the display."""
-        self.logger.info("MotherEarthManager: Stopping Radio Paradise mode.")
+        self.logger.info("MotherEarthManager: Stopping Mother Earth mode.")
         self.is_active = False
         self.display_manager.clear_screen()
         try:
@@ -71,6 +141,12 @@ class MotherEarthManager(BaseManager):
             self.logger.debug("MotherEarthManager: Disconnected navigation_received signal.")
         except Exception as e:
             self.logger.debug(f"MotherEarthManager: Exception while disconnecting navigation signal: {e}")
+        # Cancel the timeout timer if it's still running
+        if self.timeout_timer:
+            self.timeout_timer.cancel()
+        # Cancel the refresh timer if it's still running
+        if self.refresh_timer:
+            self.refresh_timer.cancel()
 
     def fetch_stations(self):
         """
@@ -142,10 +218,11 @@ class MotherEarthManager(BaseManager):
             self.logger.info(f"MotherEarthManager: Updated stations with {len(self.stations)} items.")
             self.current_selection_index = 0
             self.window_start_index = 0
-            # Set current_menu_items to the list of stations
             self.current_menu_items = self.stations.copy()
             self.logger.debug("MotherEarthManager: Displaying menu with updated stations.")
             self.display_menu()
+            if self.timeout_timer:
+                self.timeout_timer.cancel()
         except Exception as e:
             self.logger.exception(f"MotherEarthManager: Exception in update_stations - {e}")
             self.display_error_message("Error", "Failed to update stations.")
@@ -175,7 +252,6 @@ class MotherEarthManager(BaseManager):
                 actual_index = self.window_start_index + i
                 arrow = "-> " if actual_index == self.current_selection_index else "   "
                 title = item.get("title", "Untitled")
-                # Use bold font for the selected item
                 font = self.font_bold if actual_index == self.current_selection_index else self.font
                 fill = "white" if actual_index == self.current_selection_index else "gray"
                 y = self.y_offset + i * self.line_spacing
@@ -221,7 +297,7 @@ class MotherEarthManager(BaseManager):
     def select_item(self):
         """
         Handle the selection of the highlighted station.
-        When a station is selected, send a playback command.
+        When a station is selected, send a playback command and display a toast.
         """
         if not self.is_active:
             self.logger.debug("MotherEarthManager: select_item called but mode is not active.")
@@ -236,7 +312,31 @@ class MotherEarthManager(BaseManager):
         self.logger.info(f"MotherEarthManager: Playing station: {station_title} with URI: {uri}")
         self.logger.debug(f"MotherEarthManager: Selected item details: {selected_item}")
         self.play_station(station_title, uri, albumart_url=albumart_url)
+        # Display the toast overlay after station selection.
+        self.show_station_selected_toast()
 
+    def show_station_selected_toast(self):
+        """Display a two-line toast overlay, centered horizontally and shifted downward."""
+        self.logger.info("MotherEarthManager: Displaying toast overlay.")
+        toast_message = "Station selected:\nDisplay will update after the next song"
+        lines = toast_message.split('\n')
+        # Calculate total height of the text block
+        line_heights = [self.font.getsize(line)[1] for line in lines]
+        total_height = sum(line_heights) + (len(lines) - 1) * 2  # 2 pixels spacing between lines
+        # Center vertically then shift down by 20 pixels
+        y_start = (self.display_manager.oled.height - total_height) // 2
+
+        def draw_callback(draw_obj):
+            current_y = y_start
+            for line in lines:
+                text_width, text_height = draw_obj.textsize(line, font=self.font)
+                x = (self.display_manager.oled.width - text_width) // 2
+                draw_obj.text((x, current_y), line, font=self.font, fill="white")
+                current_y += text_height + 2
+        self.display_manager.draw_custom(draw_callback)
+        # After 3 seconds, refresh the station menu (thus clearing the toast overlay).
+        import threading
+        threading.Timer(3.0, self.display_menu).start()
 
     def play_station(self, title, uri, albumart_url=None):
         """Send a command to play the selected Mother Earth station."""
@@ -253,8 +353,6 @@ class MotherEarthManager(BaseManager):
             self.logger.debug(f"MotherEarthManager: Payload prepared: {payload}")
             self.volumio_listener.socketIO.emit('replaceAndPlay', payload)
             self.logger.info("MotherEarthManager: Sent replaceAndPlay command.")
-            # If a screen transition is desired, you might add:
-            # self.mode_manager.to_webradio()
             self.logger.debug("MotherEarthManager: Playback command emitted successfully.")
         except Exception as e:
             self.logger.exception(f"MotherEarthManager: Failed to play station - {e}")

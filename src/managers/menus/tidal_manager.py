@@ -86,6 +86,9 @@ class TidalManager(BaseManager):
                 )
 
             self.display_manager.draw_custom(draw)
+            
+            # Automatically navigate back to the menu after 5 seconds.
+            threading.Timer(5.0, self.mode_manager.to_menu).start()
 
 
     def stop_mode(self):
@@ -116,8 +119,8 @@ class TidalManager(BaseManager):
     
     def handle_track_change(self, sender, track, **kwargs):
         """Handle track changes from Volumio."""
-        if track.get('service') == 'qobuz':
-            self.logger.info("QobuzManager: Track changed, updating display.")
+        if track.get('service') == 'tidal':
+            self.logger.info("TidalManager: Track changed, updating display.")
             self.update_song_info(track)
 
     def handle_navigation(self, sender, navigation, service, uri, **kwargs):

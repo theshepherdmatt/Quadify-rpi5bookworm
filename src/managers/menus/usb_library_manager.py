@@ -53,6 +53,34 @@ class USBLibraryManager(BaseManager):
         self.display_loading_screen()
         self.fetch_navigation("music-library/USB")
 
+        # Start timeout timer (e.g. 5 seconds)
+        self.timeout_timer = threading.Timer(3.0, self.library_timeout)
+        self.timeout_timer.start()
+
+    def library_timeout(self):
+        """Called when library navigation has not loaded within the timeout period."""
+        if not self.current_menu_items:
+            self.logger.warning("LibraryManager: Timeout reached, no navigation data received.")
+
+            def draw(draw_obj):
+                draw_obj.text(
+                    (10, self.y_offset),
+                    "Your library is not loading...",
+                    font=self.display_manager.fonts.get(self.font_key, ImageFont.load_default()),
+                    fill="white"
+                )
+                draw_obj.text(
+                    (10, self.y_offset + self.line_spacing),
+                    "Have you enabled it via Volumio?",
+                    font=self.display_manager.fonts.get(self.font_key, ImageFont.load_default()),
+                    fill="white"
+                )
+
+            self.display_manager.draw_custom(draw)
+            
+            # Automatically navigate back to the menu after 5 seconds.
+            threading.Timer(5.0, self.mode_manager.to_menu).start()
+
     def stop_mode(self):
         if not self.is_active:
             self.logger.debug("USBLibraryManager: USB Library mode already inactive.")

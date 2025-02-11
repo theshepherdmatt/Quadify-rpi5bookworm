@@ -70,11 +70,13 @@ class SpotifyManager(BaseManager):
                 )
                 draw_obj.text(
                     (10, self.y_offset + self.line_spacing),
-                    "Check your connection to Volumio.",
+                    "Have you logged in via Volumio?",
                     font=self.display_manager.fonts.get(self.font_key, ImageFont.load_default()),
                     fill="white"
                 )
             self.display_manager.draw_custom(draw)
+            # Automatically navigate back to the menu after 5 seconds.
+            threading.Timer(5.0, self.mode_manager.to_menu).start()
 
     def stop_mode(self):
         if not self.is_active:

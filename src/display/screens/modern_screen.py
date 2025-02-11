@@ -23,7 +23,7 @@ class ModernScreen(BaseManager):
     def __init__(self, display_manager, volumio_listener, mode_manager):
         super().__init__(display_manager, volumio_listener, mode_manager)
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.logger.setLevel(logging.DEBUG)
+        self.logger.setLevel(logging.INFO)
 
         self.mode_manager     = mode_manager
         self.volumio_listener = volumio_listener

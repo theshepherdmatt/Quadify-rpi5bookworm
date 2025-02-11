@@ -107,6 +107,36 @@ class LibraryManager(BaseManager):
         # Log the reset state
         self.logger.debug(f"LibraryManager: Mode active: {self.is_active}, Selection Index: {self.current_selection_index}, Window Start Index: {self.window_start_index}")
 
+        # Start timeout timer (e.g. 5 seconds)
+        self.timeout_timer = threading.Timer(3.0, self.library_timeout)
+        self.timeout_timer.start()
+
+    def library_timeout(self):
+        """Called when library navigation has not loaded within the timeout period."""
+        if not self.current_menu_items:
+            self.logger.warning("LibraryManager: Timeout reached, no navigation data received.")
+
+            def draw(draw_obj):
+                draw_obj.text(
+                    (10, self.y_offset),
+                    "Your library is not loading...",
+                    font=self.display_manager.fonts.get(self.font_key, ImageFont.load_default()),
+                    fill="white"
+                )
+                draw_obj.text(
+                    (10, self.y_offset + self.line_spacing),
+                    "Have you enabled it via Volumio?",
+                    font=self.display_manager.fonts.get(self.font_key, ImageFont.load_default()),
+                    fill="white"
+                )
+
+            self.display_manager.draw_custom(draw)
+            
+            # Automatically navigate back to the menu after 5 seconds.
+            import threading
+            threading.Timer(5.0, self.mode_manager.to_menu).start()
+
+
     def stop_mode(self):
         if not self.is_active:
             self.logger.debug("LibraryManager: Library mode already inactive.")
