@@ -139,6 +139,7 @@ display:
     - "/home/volumio/Quadify/src/assets/images/systeminfo.png"
     - "/home/volumio/Quadify/src/assets/images/systemupdate.png"
     - "/home/volumio/Quadify/src/assets/images/screensaversettings.png"
+    - "/home/volumio/Quadify/src/assets/images/airplay.png"
 
 mcp23017_address: 0x20
 

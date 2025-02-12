@@ -40,6 +40,7 @@ class ModeManager:
         {'name': 'motherearthradio', 'on_enter': 'enter_motherearthradio'},
         {'name': 'radioparadise',   'on_enter': 'enter_radioparadise'},
         {'name': 'remotemenu',      'on_enter': 'enter_remotemenu'},
+        {'name': 'airplay',          'on_enter': 'enter_airplay'},
     ]
 
     def __init__(self, display_manager, clock, volumio_listener,
@@ -93,6 +94,7 @@ class ModeManager:
         self.modern_screen = None
         self.minimal_screen = None
         self.webradio_screen = None
+        self.airplay_screen = None
         self.screensaver = None
         self.screensaver_menu = None
         self.display_menu = None
@@ -256,6 +258,9 @@ class ModeManager:
     def set_webradio_screen(self, webradio_screen):
         self.webradio_screen = webradio_screen
 
+    def set_airplay_screen(self, airplay_screen):
+        self.airplay_screen = airplay_screen
+
     def set_clock_menu(self, clock_menu):
         self.clock_menu = clock_menu
 
@@ -347,6 +352,7 @@ class ModeManager:
         self.machine.add_transition('to_usb_library',  source='*', dest='usblibrary', before='push_current_state')
         self.machine.add_transition('to_spotify',      source='*', dest='spotify', before='push_current_state')
         self.machine.add_transition('to_webradio',     source='*', dest='webradio', before='push_current_state')
+        self.machine.add_transition('to_airplay',     source='*', dest='airplay', before='push_current_state')
         self.machine.add_transition('to_motherearthradio',  source='*', dest='motherearthradio', before='push_current_state')
         self.machine.add_transition('to_radioparadise', source='*', dest='radioparadise', before='push_current_state')
 
@@ -411,6 +417,8 @@ class ModeManager:
             self.minimal_screen.stop_mode()
         if self.webradio_screen and self.webradio_screen.is_active:
             self.webradio_screen.stop_mode()
+        if self.airplay_screen and self.airplay_screen.is_active:
+            self.airplay_screen.stop_mode()
         if self.webradio_screen and self.webradio_screen.is_active:
             self.webradio_screen.stop_mode()
         if self.system_info_screen and self.system_info_screen.is_active:
@@ -419,6 +427,14 @@ class ModeManager:
             self.system_update_menu.stop_mode()
 
     # --- State Entry Methods ---
+    def to_airplay(self):
+        self.logger.info("ModeManager: Switching to AirPlay mode.")
+        # Set the mode to 'airplay' before starting the AirPlay screen.
+        self.machine.set_state("airplay")
+        self.current_screen = self.airplay_screen
+        self.airplay_screen.start_mode()
+
+
     def enter_boot(self, event):
         self.logger.info("ModeManager: Entering 'boot' state.")
         self.stop_all_screens()
@@ -661,6 +677,16 @@ class ModeManager:
             self.logger.warning("ModeManager: No webradio_screen set.")
         self.update_current_mode()
 
+    def enter_airplay(self, event):
+        self.logger.info("ModeManager: Entering 'airplay' state.")
+        self.stop_all_screens()
+        if self.airplay_screen:
+            self.airplay_screen.start_mode()
+            self.logger.info("ModeManager: AirPlayScreen started.")
+        else:
+            self.logger.warning("ModeManager: No airplay_screen set.")
+        self.update_current_mode()
+
     def enter_configmenu(self, event):
         self.logger.info("ModeManager: Entering 'configmenu'.")
         self.stop_all_screens()
@@ -690,8 +716,10 @@ class ModeManager:
             self.current_status = status
             if self.previous_status == "play" and self.current_status == "stop":
                 self._handle_track_change()
-            self._handle_playback_states(status, service)
+            # Pass the full state as the third parameter
+            self._handle_playback_states(status, service, state)
             self.logger.debug("ModeManager: Completed process_state_change.")
+
 
     def _handle_track_change(self):
         self.is_track_changing = True
@@ -704,18 +732,29 @@ class ModeManager:
             self.pause_stop_timer.start()
             self.logger.debug("ModeManager: Started stop verification timer.")
 
-    def _handle_playback_states(self, status, service):
+    def _handle_playback_states(self, status, service, state_data):
         now = time.time()
         desired_mode = self.config.get("display_mode", "original")
+            
+        # Skip rapid mode switches
         if (now - self.last_mode_change_time) < self.min_mode_switch_interval:
             self.logger.debug("ModeManager: Skipping a rapid mode switch due to cooldown.")
             return
+
+        # For AirPlay, simply ignore state changes so we remain in clock mode.
+        if service in ["airplay", "airplay_emulation"]:
+            self.logger.debug("AirPlay service detected; ignoring state update and remaining in clock mode.")
+            return
+
+        # Normal handling for non-AirPlay services:
         if status == "play":
             current_mode = self.get_mode()
             if service in ["webradio"]:
                 if current_mode != "webradio":
                     self.to_webradio()
                     self.last_mode_change_time = now
+                else:
+                    self.logger.debug("Already in 'webradio' mode; no transition needed.")
             else:
                 if desired_mode == "modern":
                     if current_mode != "modern":
@@ -738,6 +777,7 @@ class ModeManager:
             self.reset_idle_timer()
         elif status == "pause":
             self._start_pause_timer()
+
 
     def _start_pause_timer(self):
         if not self.pause_stop_timer:
@@ -775,7 +815,7 @@ class ModeManager:
     def toggle_play_pause(self):
         current_mode = self.get_mode()
         self.logger.debug("toggle_play_pause: Current mode before toggling: %s", current_mode)
-        if current_mode in ['clock', 'original', 'modern', 'minimal', 'webradio']:
+        if current_mode in ['clock', 'original', 'modern', 'minimal', 'webradio', 'airplay']:
             if current_mode == 'clock':
                 # Now that Clock implements toggle_play_pause, use it directly.
                 if hasattr(self.clock, "toggle_play_pause"):
@@ -790,6 +830,8 @@ class ModeManager:
                 self.minimal_screen.toggle_play_pause()
             elif current_mode == 'webradio' and self.webradio_screen:
                 self.webradio_screen.toggle_play_pause()
+            elif current_mode == 'airplay' and self.webradio_screen:
+                self.airplay_screen.toggle_play_pause()
             else:
                 self.logger.warning(f"No screen available to toggle play/pause in mode: {current_mode}")
         else:
@@ -821,6 +863,7 @@ class ModeManager:
                 "usblibrary": self.to_usb_library,
                 "spotify": self.to_spotify,
                 "webradio": self.to_webradio,
+                "airplay": self.to_airplay,
                 "motherearth": self.to_motherearth,
                 "radioparadise": self.radioparadise,
                 "systeminfo": self.to_systeminfo,
