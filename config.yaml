@@ -141,7 +141,7 @@ display:
     - "/home/volumio/Quadify/src/assets/images/screensaversettings.png"
     - "/home/volumio/Quadify/src/assets/images/airplay.png"
 
-mcp23017_address: 0x27
+mcp23017_address: 0x20
 
 logging:
   level: "DEBUG"  # Options: DEBUG, INFO, WARNING, ERROR
