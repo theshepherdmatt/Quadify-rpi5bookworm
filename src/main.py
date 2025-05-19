@@ -287,9 +287,13 @@ def main():
     def on_long_press():
         logger.info("Long button press detected.")
         current_mode = mode_manager.get_mode()
-        # For a long press, we can choose to go back if the navigation stack is not empty.
-        # Here we use our back() method:
-        mode_manager.trigger("back")
+
+        # if we’re in the main menu, always go home
+        if current_mode == "menu":
+            mode_manager.trigger("to_clock")
+        else:
+            # otherwise use the normal back behaviour
+            mode_manager.trigger("back")
 
     # 14) Initialize RotaryControl
     rotary_control = RotaryControl(
