@@ -46,7 +46,7 @@ git clone git@github.com:theshepherdmatt/Quadify-Beta.git
 ```
 mv Quadify-Beta Quadify 
 ```
-(this changes the folder/paths to original Quadify inst of Quadify-Beta)
+(this changes the folder/paths to the original Quadify)
 
 * and
 ```
