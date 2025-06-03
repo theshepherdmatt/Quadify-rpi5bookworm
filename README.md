@@ -1,32 +1,64 @@
-# Quadify Repository Overview
-This repository is a comprehensive guide and toolkit for integrating Quadify audio hardware enhancements into Raspberry Pi audio systems, initially developed by Audiophonics and subsequently enhanced by the Quadify team.
+# Quadify-Beta Repository Overview
+This is the BETA branch of Quadify
+This repository contains the latest features, fixes, and experimental changes before they are merged into the stable Quadify release.
+Use this version if you want early access to new features, but understand it may be less stable than the mainline Quadify repository.
 
-Contained within are all necessary files and instructions to equip your Raspberry Pi audio setup with Quadify’s specialised hardware, alongside a suite of tools for optimising your device for high-quality audio playback.
+Overview
+Quadify-Beta is a comprehensive guide and toolkit for integrating Quadify audio hardware enhancements into Raspberry Pi audio systems. Initially developed by Audiophonics, this project has been extensively enhanced by the Quadify team, with all new updates debuting here before stable release.
 
-## Supported Systems: 
-  
-### For Volumio Users:
-* Installation of OLED Display
-* Installation of Buttons and Leds
-* Installation of rotary encoder
+This repository contains:
 
-## Key Considerations:
-* This toolkit is mostly intended for new setups but it’s crafted to be forgiving enough for use on existing Volumio installations that might need repairs or adjustments post-update. While designed with our proprietary configurations in mind, it’s not exhaustively tested in every conceivable environment. Proceed with caution, understanding the risk of needing a complete system reset in extreme situations. Always ensure your data is backed up.
+All necessary files for hardware integration (OLED, buttons, rotary encoder, LEDs)
 
-* This installation process preserves most standard distribution settings. Initial configurations, especially those related to system sound and volume control via Volumio's WebUi, remain necessary. 
+Updated install scripts and documentation
 
-* An active internet connection is crucial.** for the download of necessary components, as the installation cannot proceed offline.
+Experimental and in-progress features
 
-* Download source files (this repository).
+Supported Systems
+For Volumio Users:
+
+OLED display installation
+
+Button and LED integration
+
+Rotary encoder installation
+
+Important Notes (Beta-Specific):
+Bleeding Edge:
+This version may include features, fixes, or improvements not yet fully tested.
+If you need maximum reliability, use the stable Quadify repository.
+
+Intended for new setups but should work for most existing Volumio installs. In rare cases, you might need a system reset.
+
+Back up your data first!
+
+Active internet required for all dependencies.
+
+Standard Volumio settings are preserved (you may still need to use the Volumio WebUI for some sound/volume adjustments).
+
+Quick Start
+Clone the Beta repo:
+
 ```bash
-git clone https://github.com/theshepherdmatt/Quadify.git
+git clone git@github.com:theshepherdmatt/Quadify-Beta.git
 ```
-
 * then
 ```
 cd Quadify
 sudo bash install.sh
 ```
+(If you prefer HTTPS, use https://github.com/theshepherdmatt/Quadify-Beta.git)
+
+A reboot may be required after install; you’ll be prompted if so.
+
+Installation Timeframe
+Installation time varies (OLED: ~5 min on Volumio, longer if compiling from source)
+
+Beta updates may occasionally change this process—watch the repo for new commit notes
+
+Stable Version
+For the latest stable and recommended Quadify release, please use:
+https://github.com/theshepherdmatt/Quadify
 
 * Post-installation, a system reboot might be necessary to apply the changes effectively. You’ll be informed via command line if such an action is required.
 
