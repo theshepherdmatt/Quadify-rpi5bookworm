@@ -331,9 +331,13 @@ def main():
     )
     manager_factory.setup_mode_manager()
     volumio_listener.mode_manager = mode_manager
-    
-    mode_manager.trigger("to_menu")
-    logger.info("Forced system into 'menu' mode after ready GIF.")
+
+    current_state = volumio_listener.get_current_state()
+    if current_state and current_state.get("status") == "play":
+        mode_manager.process_state_change(volumio_listener, current_state)
+    else:
+        mode_manager.trigger("to_menu")
+    logger.info("Startup mode determined from current Volumio state.")
 
     buttons_leds = ButtonsLEDController(config_path=config_path)
     buttons_leds.start()
