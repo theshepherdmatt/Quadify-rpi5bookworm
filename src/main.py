@@ -327,7 +327,6 @@ def main():
     # --- UI input handlers ---
     def on_rotate_ui(direction):
         current_mode = mode_manager.get_mode()
-        # (Expand this logic as needed for your project!)
         if current_mode == 'original':
             volume_change = 40 if direction == 1 else -40
             mode_manager.original_screen.adjust_volume(volume_change)
@@ -339,25 +338,67 @@ def main():
             volume_change = 10 if direction == 1 else -20
             mode_manager.minimal_screen.adjust_volume(volume_change)
             logger.debug(f"MinimalScreen: Adjusted volume by {volume_change}")
+        elif current_mode == 'webradio':
+            volume_change = 10 if direction == 1 else -20
+            mode_manager.webradio_screen.adjust_volume(volume_change)
+            logger.debug(f"WebRadioScreen: Adjusted volume by {volume_change}")
         elif current_mode == 'menu':
             mode_manager.menu_manager.scroll_selection(direction)
             logger.debug(f"Scrolled menu with direction: {direction}")
-        # Add the rest of your custom logic/modes here...
+        elif current_mode == 'configmenu':
+            mode_manager.config_menu.scroll_selection(direction)
+        elif current_mode == 'systemupdate':
+            mode_manager.system_update_menu.scroll_selection(direction)
+        elif current_mode == 'screensaver':
+            mode_manager.exit_screensaver()
+        elif current_mode == 'clockmenu':
+            mode_manager.clock_menu.scroll_selection(direction)
+        elif current_mode == 'remotemenu':
+            mode_manager.remote_menu.scroll_selection(direction)
+        elif current_mode == 'screensavermenu':
+            mode_manager.screensaver_menu.scroll_selection(direction)
+        elif current_mode == 'displaymenu':
+            mode_manager.display_menu.scroll_selection(direction)
+        elif current_mode == 'tidal':
+            mode_manager.tidal_manager.scroll_selection(direction)
+        elif current_mode == 'qobuz':
+            mode_manager.qobuz_manager.scroll_selection(direction)
+        elif current_mode == 'spotify':
+            mode_manager.spotify_manager.scroll_selection(direction)
+        elif current_mode == 'playlists':
+            mode_manager.playlist_manager.scroll_selection(direction)
+        elif current_mode == 'radiomanager':
+            mode_manager.radio_manager.scroll_selection(direction)
+        elif current_mode == 'motherearthradio':
+            mode_manager.motherearth_manager.scroll_selection(direction)
+        elif current_mode == 'radioparadise':
+            mode_manager.radioparadise_manager.scroll_selection(direction)
+        elif current_mode == 'library':
+            mode_manager.library_manager.scroll_selection(direction)
+        elif current_mode == 'usblibrary':
+            mode_manager.usb_library_manager.scroll_selection(direction)
         else:
             logger.warning(f"Unhandled mode: {current_mode}; no rotary action performed.")
 
     def on_button_press_ui():
-        if not ready_stop_event.is_set():
-            ready_stop_event.set()
-
         current_mode = mode_manager.get_mode()
         if current_mode == 'clock':
-            mode_manager.clock.stop()
-            display_manager.slide_clock_to_menu(mode_manager.clock, mode_manager.menu_manager)
+            # Use trigger to go to menu
             mode_manager.trigger("to_menu")
         elif current_mode == 'menu':
             mode_manager.menu_manager.select_item()
-        # Add the rest of your custom logic/modes here...
+        elif current_mode == 'configmenu':
+            mode_manager.config_menu.select_item()
+        elif current_mode == 'remotemenu':
+            mode_manager.remote_menu.select_item()
+        elif current_mode == 'systemupdate':
+            mode_manager.system_update_menu.select_item()
+        elif current_mode == 'screensavermenu':
+            mode_manager.screensaver_menu.select_item()
+        elif current_mode == 'displaymenu':
+            mode_manager.display_menu.select_item()
+        elif current_mode == 'clockmenu':
+            mode_manager.clock_menu.select_item()
         elif current_mode in ['original', 'modern', 'minimal']:
             logger.info(f"Button pressed in {current_mode} mode; toggling playback.")
             if current_mode == 'original':
@@ -372,10 +413,29 @@ def main():
                 screen.toggle_play_pause()
             else:
                 logger.warning(f"No screen instance found for mode: {current_mode}")
+        elif current_mode == 'playlists':
+            mode_manager.playlist_manager.select_item()
+        elif current_mode == 'tidal':
+            mode_manager.tidal_manager.select_item()
+        elif current_mode == 'qobuz':
+            mode_manager.qobuz_manager.select_item()
+        elif current_mode == 'spotify':
+            mode_manager.spotify_manager.select_item()
+        elif current_mode == 'library':
+            mode_manager.library_manager.select_item()
+        elif current_mode == 'radiomanager':
+            mode_manager.radio_manager.select_item()
+        elif current_mode == 'motherearthradio':
+            mode_manager.motherearth_manager.select_item()
+        elif current_mode == 'radioparadise':
+            mode_manager.radioparadise_manager.select_item()
+        elif current_mode == 'usblibrary':
+            mode_manager.usb_library_manager.select_item()
         elif current_mode == 'screensaver':
             mode_manager.exit_screensaver()
         else:
             logger.warning(f"Unhandled mode: {current_mode}; no button action performed.")
+
 
     def on_long_press_ui():
         current_mode = mode_manager.get_mode()
