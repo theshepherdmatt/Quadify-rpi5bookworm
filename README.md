@@ -71,3 +71,15 @@ https://github.com/theshepherdmatt/Quadify
 
 ## Installation Timeframe :
 Given the diverse landscape of Linux distributions tailored for Raspberry Pi audio setups and their varying update cycles, the installation duration can significantly fluctuate. Direct compilation of certain components from their source is a necessity, affecting overall setup time. For instance, setting up OLED may take approximately 5 minutes on Volumio audio systems.
+
+## Compiling run_update Helper
+The install script builds a small setuid wrapper used for automated updates. If you run `install.sh` as root, it will compile `scripts/run_update.c` automatically:
+
+```bash
+gcc -o scripts/run_update scripts/run_update.c
+chown root:root scripts/run_update
+chmod 4755 scripts/run_update
+```
+
+This step gives the Volumio user permission to perform updates.
+
