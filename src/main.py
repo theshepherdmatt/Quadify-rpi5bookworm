@@ -153,13 +153,13 @@ def main():
         )
         time.sleep(2)
         
-    # --- Choose which ready GIF to show (based on our own flag, not Wi-Fi config) ---
+    # --- Determine which ready GIF to show first ---
     if not has_seen_ready():
-        ready_gif_path = display_config.get('ready_new_path', 'ready_new.gif')
+        first_ready_path = display_config.get('ready_new_path', 'ready_new.gif')
         logger.info("Showing 'ready_new.gif' for new user.")
         is_first_time_user = True
     else:
-        ready_gif_path = display_config.get('ready_gif_path', 'ready.gif')
+        first_ready_path = display_config.get('ready_gif_path', 'ready.gif')
         logger.info("Showing 'ready.gif' for returning user.")
         is_first_time_user = False
 
@@ -247,24 +247,6 @@ def main():
 
     volumio_listener.state_changed.connect(on_state_changed)
 
-    # Ready GIF thread (uses chosen GIF path!)
-    def show_ready_gif_until_event(stop_event, gif_path):
-        try:
-            image = Image.open(gif_path)
-            if not getattr(image, "is_animated", False):
-                logger.warning("Ready GIF is not animated.")
-                return
-        except Exception as e:
-            logger.error(f"Failed to load ready GIF: {e}")
-            return
-        logger.info(f"Displaying ready GIF ({gif_path}) until event.")
-        while not stop_event.is_set():
-            for frame in ImageSequence.Iterator(image):
-                if stop_event.is_set():
-                    return
-                display_manager.oled.display(frame.convert(display_manager.oled.mode))
-                frame_duration = frame.info.get('duration', 100) / 1000.0
-                time.sleep(frame_duration)
 
     # DummyModeManager and initial rotary input handler, for before full UI setup
     class DummyModeManager:
@@ -297,9 +279,11 @@ def main():
     min_loading_event.wait()
     logger.info("Volumio is ready & min loading time passed, proceeding to ready GIF.")
 
+    show_gif_loop(first_ready_path, lambda: True, display_manager, logger)
+
     threading.Thread(
-        target=show_ready_gif_until_event,
-        args=(ready_stop_event, ready_gif_path),
+        target=display_manager.show_ready_gif_until_event,
+        args=(ready_stop_event,),
         daemon=True
     ).start()
     ready_stop_event.wait()
