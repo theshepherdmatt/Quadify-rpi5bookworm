@@ -697,7 +697,7 @@ main() {
     # 7) Detect I2C address if Buttons/LEDs enabled
     if [ "$BUTTONSLEDS_ENABLED" = true ]; then
         detect_i2c_address
-        set_early_led8_service
+        setup_early_led8_service
     else
         log_message "info" "Skipping I2C detect, as user chose not to enable Buttons/LEDs."
     fi
