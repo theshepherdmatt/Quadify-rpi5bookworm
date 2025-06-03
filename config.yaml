@@ -10,11 +10,15 @@ volumio:
   connection_timeout: 5  # Timeout in seconds for Volumio API connection
 
 display:
-  icon_dir: "/home/volumio/Quadify/src/assets/images"
-  default_album_art: "/home/volumio/Quadify/src/assets/images/albumart.jpg"
-  loading_gif_path: "/home/volumio/Quadify/src/assets/images/Loading.gif"
-  screensaver_gif_path: "/home/volumio/Quadify/src/assets/images/geo.gif"  
-  logo_path: "/home/volumio/Quadify/src/assets/images/logo.png"
+  icon_dir: "/home/volumio/Quadify/src/assets/images/menus"
+  default_album_art: "/home/volumio/Quadify/src/assets/images/menus/albumart.jpg"
+  loading_gif_path: "/home/volumio/Quadify/src/assets/images/gif/Loading.gif"
+  ready_gif_path: "/home/volumio/Quadify/src/assets/images/gif/ready.gif"
+  ready_new_path: "/home/volumio/Quadify/src/assets/images/gif/ready_new.gif"
+  connecting_path: "/home/volumio/Quadify/src/assets/images/gif/connecting.gif"
+  connected_path: "/home/volumio/Quadify/src/assets/images/gif/connected.gif"
+  screensaver_gif_path: "/home/volumio/Quadify/src/assets/images/screensaver/geo.gif"  
+  logo_path: "/home/volumio/Quadify/src/assets/images/gif/logo.gif"
   shutdown_path: "/home/volumio/Quadify/src/assets/images/shuttingdown.png"
 
   rotation: 2  # Set rotation if needed (0, 90, 180, 270)
@@ -118,30 +122,30 @@ display:
 
   cache_images: true  # Cache frequently used images for faster access
   preload_images:
-    - "/home/volumio/Quadify/src/assets/images/webradio.png"
-    - "/home/volumio/Quadify/src/assets/images/radioparadise.png"
-    - "/home/volumio/Quadify/src/assets/images/motherearth.png"
-    - "/home/volumio/Quadify/src/assets/images/mpd.png"
-    - "/home/volumio/Quadify/src/assets/images/library.png"
-    - "/home/volumio/Quadify/src/assets/images/stream.png"
-    - "/home/volumio/Quadify/src/assets/images/tidal.png"
-    - "/home/volumio/Quadify/src/assets/images/qobuz.png"
-    - "/home/volumio/Quadify/src/assets/images/spop.png"      
-    - "/home/volumio/Quadify/src/assets/images/playlists.png"
-    - "/home/volumio/Quadify/src/assets/images/default.png"
-    - "/home/volumio/Quadify/src/assets/images/nas.png"
-    - "/home/volumio/Quadify/src/assets/images/usb.png"
-    - "/home/volumio/Quadify/src/assets/images/volume.png"
-    - "/home/volumio/Quadify/src/assets/images/config.png"
-    - "/home/volumio/Quadify/src/assets/images/back.png"
-    - "/home/volumio/Quadify/src/assets/images/clocksettings.png"
-    - "/home/volumio/Quadify/src/assets/images/displaysettings.png"
-    - "/home/volumio/Quadify/src/assets/images/systeminfo.png"
-    - "/home/volumio/Quadify/src/assets/images/systemupdate.png"
-    - "/home/volumio/Quadify/src/assets/images/screensaversettings.png"
-    - "/home/volumio/Quadify/src/assets/images/airplay.png"
+    - "/home/volumio/Quadify/src/assets/images/menus/webradio.png"
+    - "/home/volumio/Quadify/src/assets/images/menus/radioparadise.png"
+    - "/home/volumio/Quadify/src/assets/images/menus/motherearth.png"
+    - "/home/volumio/Quadify/src/assets/images/menus/mpd.png"
+    - "/home/volumio/Quadify/src/assets/images/menus/library.png"
+    - "/home/volumio/Quadify/src/assets/images/menus/stream.png"
+    - "/home/volumio/Quadify/src/assets/images/menus/tidal.png"
+    - "/home/volumio/Quadify/src/assets/images/menus/qobuz.png"
+    - "/home/volumio/Quadify/src/assets/images/menus/spop.png"      
+    - "/home/volumio/Quadify/src/assets/images/menus/playlists.png"
+    - "/home/volumio/Quadify/src/assets/images/menus/default.png"
+    - "/home/volumio/Quadify/src/assets/images/menus/nas.png"
+    - "/home/volumio/Quadify/src/assets/images/menus/usb.png"
+    - "/home/volumio/Quadify/src/assets/images/menus/volume.png"
+    - "/home/volumio/Quadify/src/assets/images/menus/config.png"
+    - "/home/volumio/Quadify/src/assets/images/menus/back.png"
+    - "/home/volumio/Quadify/src/assets/images/menus/clocksettings.png"
+    - "/home/volumio/Quadify/src/assets/images/menus/displaysettings.png"
+    - "/home/volumio/Quadify/src/assets/images/menus/systeminfo.png"
+    - "/home/volumio/Quadify/src/assets/images/menus/systemupdate.png"
+    - "/home/volumio/Quadify/src/assets/images/menus/screensaversettings.png"
+    - "/home/volumio/Quadify/src/assets/images/menus/airplay.png"
 
-mcp23017_address: 0x27
+mcp23017_address: 0x20
 
 logging:
   level: "DEBUG"  # Options: DEBUG, INFO, WARNING, ERROR

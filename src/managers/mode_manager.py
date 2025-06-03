@@ -133,6 +133,16 @@ class ModeManager:
             self.logger.warning("ModeManager: volumio_listener is None, no state_changed signal linked.")
 
         self.lock = threading.Lock()
+        
+        self.menu_inactivity_timer = None
+        self.menu_inactivity_timeout = 15  # seconds; change as needed
+        self.menu_modes = {
+            "menu", "playlists", "tidal", "qobuz", "library", "usblibrary",
+            "configmenu", "displaymenu", "clockmenu", "remotemenu",
+            "radiomanager", "motherearthradio", "radioparadise",
+            "systeminfo", "systemupdate", "spotify", "webradio", "airplay"
+        }
+
 
     # --- Callback to push the current state before a transition ---
     def push_current_state(self, event):
@@ -425,6 +435,27 @@ class ModeManager:
             self.system_info_screen.stop_mode()
         if self.system_update_menu and self.system_update_menu.is_active:
             self.system_update_menu.stop_mode()
+            
+    def start_menu_inactivity_timer(self):
+        self.cancel_menu_inactivity_timer()
+        self.menu_inactivity_timer = threading.Timer(
+            self.menu_inactivity_timeout, self.exit_menu_to_clock)
+        self.menu_inactivity_timer.start()
+        self.logger.debug(
+            f"ModeManager: Started menu inactivity timer for {self.menu_inactivity_timeout} seconds.")
+
+    def reset_menu_inactivity_timer(self):
+        if self.get_mode() in self.menu_modes:
+            self.start_menu_inactivity_timer()
+
+    def cancel_menu_inactivity_timer(self):
+        if self.menu_inactivity_timer:
+            self.menu_inactivity_timer.cancel()
+            self.menu_inactivity_timer = None
+
+    def exit_menu_to_clock(self):
+        self.logger.info("ModeManager: Menu inactivity timeout reached. Returning to clock.")
+        self.to_clock()
 
     # --- State Entry Methods ---
     def to_airplay(self):
@@ -450,6 +481,9 @@ class ModeManager:
             self.logger.warning("ModeManager: No Clock instance.")
         self.reset_idle_timer()
         self.update_current_mode()
+        self.cancel_menu_inactivity_timer()  # No timeout on clock
+        
+    # --- Screens ---
 
     def enter_modern(self, event):
         self.logger.info("ModeManager: Entering 'modern' playback mode.")
@@ -460,6 +494,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No modern_screen set.")
         self.update_current_mode()
+        self.cancel_menu_inactivity_timer()  # No timeout on clock
 
     def enter_minimal(self, event):
         self.logger.info("ModeManager: Entering 'minimal' playback mode.")
@@ -470,6 +505,32 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No minimal_screen set.")
         self.update_current_mode()
+        self.cancel_menu_inactivity_timer()  # No timeout on clock
+        
+    def enter_original(self, event):
+        self.logger.info("ModeManager: Entering 'original' playback mode.")
+        self.stop_all_screens()
+        if self.original_screen:
+            self.original_screen.start_mode()
+            self.logger.info("ModeManager: Original screen started.")
+        else:
+            self.logger.warning("ModeManager: No original_screen set.")
+        self.update_current_mode()
+        self.cancel_menu_inactivity_timer()  # No timeout on clock
+
+    def enter_systeminfo(self, event):
+        self.logger.info("ModeManager: Entering 'systeminfo' mode.")
+        self.stop_all_screens()
+        if self.system_info_screen:
+            self.system_info_screen.start_mode()
+            self.logger.info("ModeManager: SystemInfoScreen started.")
+        else:
+            self.logger.warning("ModeManager: No system_info_screen set.")
+        self.reset_idle_timer()
+        self.start_menu_inactivity_timer()
+        self.update_current_mode()
+        
+    # --- Menu Managers ---
 
     def enter_radiomanager(self, event):
         self.logger.info("ModeManager: Entering 'radiomanager' state.")
@@ -480,6 +541,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No radio_manager set.")
         self.reset_idle_timer()
+        self.start_menu_inactivity_timer()
         self.update_current_mode()
 
     def enter_motherearthradio(self, event):
@@ -490,7 +552,6 @@ class ModeManager:
             self.logger.info("Motherearth: Motherearth started.")
         else:
             self.logger.warning("Motherearth: No motherearth_manager set.")
-        self.reset_idle_timer()
         self.update_current_mode()
 
     def enter_radioparadise(self, event):
@@ -501,7 +562,6 @@ class ModeManager:
             self.logger.info("RadioParadise: RadioParadise started.")
         else:
             self.logger.warning("RadioParadise: No radioparadise_manager set.")
-        self.reset_idle_timer()
         self.update_current_mode()
 
     def enter_screensaver(self, event):
@@ -513,6 +573,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: screensaver is None.")
         self.update_current_mode()
+        self.cancel_menu_inactivity_timer()  # No timeout on clock
 
     def enter_screensavermenu(self, event):
         self.logger.info("ModeManager: Entering 'screensavermenu' state.")
@@ -522,6 +583,8 @@ class ModeManager:
             self.logger.info("ModeManager: Screensaver menu started.")
         else:
             self.logger.warning("ModeManager: No screensaver_menu set.")
+        self.reset_idle_timer()
+        self.start_menu_inactivity_timer()
         self.update_current_mode()
 
     def enter_displaymenu(self, event):
@@ -533,6 +596,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No display_menu set.")
         self.reset_idle_timer()
+        self.start_menu_inactivity_timer()
         self.update_current_mode()
 
     def enter_clockmenu(self, event):
@@ -544,6 +608,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No clock_menu set.")
         self.reset_idle_timer()
+        self.start_menu_inactivity_timer()
         self.update_current_mode()
 
     def enter_remotemenu(self, event):
@@ -555,27 +620,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No remote_menu set.")
         self.reset_idle_timer()
-        self.update_current_mode()
-
-    def enter_original(self, event):
-        self.logger.info("ModeManager: Entering 'original' playback mode.")
-        self.stop_all_screens()
-        if self.original_screen:
-            self.original_screen.start_mode()
-            self.logger.info("ModeManager: Original screen started.")
-        else:
-            self.logger.warning("ModeManager: No original_screen set.")
-        self.update_current_mode()
-
-    def enter_systeminfo(self, event):
-        self.logger.info("ModeManager: Entering 'systeminfo' mode.")
-        self.stop_all_screens()
-        if self.system_info_screen:
-            self.system_info_screen.start_mode()
-            self.logger.info("ModeManager: SystemInfoScreen started.")
-        else:
-            self.logger.warning("ModeManager: No system_info_screen set.")
-        self.reset_idle_timer()
+        self.start_menu_inactivity_timer()
         self.update_current_mode()
 
     def enter_systemupdate(self, event):
@@ -587,6 +632,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No system_update_menu set.")
         self.reset_idle_timer()
+        self.start_menu_inactivity_timer()
         self.update_current_mode()
 
     def enter_menu(self, event):
@@ -598,6 +644,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No menu_manager set.")
         self.reset_idle_timer()
+        self.start_menu_inactivity_timer()
         self.update_current_mode()
 
     def enter_playlists(self, event):
@@ -609,6 +656,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No playlist_manager set.")
         self.reset_idle_timer()
+        self.start_menu_inactivity_timer()
         self.update_current_mode()
 
     def enter_tidal(self, event):
@@ -620,6 +668,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No tidal_manager set.")
         self.reset_idle_timer()
+        self.start_menu_inactivity_timer()
         self.update_current_mode()
 
     def enter_qobuz(self, event):
@@ -631,6 +680,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No qobuz_manager set.")
         self.reset_idle_timer()
+        self.start_menu_inactivity_timer()
         self.update_current_mode()
 
     def enter_library(self, event):
@@ -643,6 +693,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No library_manager set.")
         self.reset_idle_timer()
+        self.start_menu_inactivity_timer()
         self.update_current_mode()
 
     def enter_usb_library(self, event):
@@ -655,6 +706,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No usb_library_manager set.")
         self.reset_idle_timer()
+        self.start_menu_inactivity_timer()
         self.update_current_mode()
 
     def enter_spotify(self, event):
@@ -665,6 +717,8 @@ class ModeManager:
             self.logger.info("ModeManager: SpotifyManager started.")
         else:
             self.logger.warning("ModeManager: No spotify_manager set.")
+        self.reset_idle_timer()
+        self.start_menu_inactivity_timer()
         self.update_current_mode()
 
     def enter_webradio(self, event):
@@ -675,6 +729,8 @@ class ModeManager:
             self.logger.info("ModeManager: WebRadioScreen started.")
         else:
             self.logger.warning("ModeManager: No webradio_screen set.")
+        self.reset_idle_timer()
+        self.start_menu_inactivity_timer()
         self.update_current_mode()
 
     def enter_airplay(self, event):
@@ -686,6 +742,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No airplay_screen set.")
         self.update_current_mode()
+        self.cancel_menu_inactivity_timer()  # No timeout on clock
 
     def enter_configmenu(self, event):
         self.logger.info("ModeManager: Entering 'configmenu'.")
@@ -695,6 +752,8 @@ class ModeManager:
             self.logger.info("ModeManager: Config menu started.")
         else:
             self.logger.warning("ModeManager: No config_menu set.")
+        self.reset_idle_timer()
+        self.start_menu_inactivity_timer()
         self.update_current_mode()
 
     def exit_screensaver(self):
@@ -880,3 +939,5 @@ class ModeManager:
 
     def get_mode(self):
         return self.state
+        
+        

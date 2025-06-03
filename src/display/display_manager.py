@@ -39,8 +39,11 @@ class DisplayManager:
         self.icons = {}
 
         # Define the services and load their corresponding icons
-        services = ["stream", "library", "playlists", "qobuz", "tidal", "airplay", "spop", "spotify", "webradio", "motherearthradio", "radio_paradise", "mpd", "default", "nas", "usb", "back", "config", "irremote", "volume", "displaysettings", "clocksettings", "screensaversettings", "systeminfo", "systemupdate"]
-        icon_dir = self.config.get('icon_dir', "/home/volumio/Quadify/src/assets/images")
+        services = ["stream", "library", "playlists", "qobuz", "tidal", "airplay", "spop", "spotify", 
+        "webradio", "motherearthradio", "radio_paradise", "mpd", "default", "nas", "usb", "back", 
+        "config", "irremote", "volume", "displaysettings", "clocksettings", "screensaversettings", 
+        "systeminfo", "systemupdate"]
+        icon_dir = self.config.get('icon_dir', "/home/volumio/Quadify/src/assets/images/menus")
 
         for service in services:
             icon_path = os.path.join(icon_dir, f"{service}.png")
@@ -180,17 +183,81 @@ class DisplayManager:
             self.oled.display(image)
             self.logger.info("Executed custom draw function.")
 
-    def show_logo(self):
-        """Displays the startup logo on the OLED screen for a set duration."""
+    def show_logo(self, duration=5):
         logo_path = self.config.get('logo_path')
-        if logo_path:
-            self.display_image(logo_path, timeout=5)
-            self.logger.info("Displaying startup logo for 5 seconds.")
-        else:
+        if not logo_path:
             self.logger.warning("No logo path configured.")
+            return
+
+        try:
+            image = Image.open(logo_path)
+        except IOError:
+            self.logger.error(f"Could not load logo from '{logo_path}'.")
+            return
+
+        start_time = time.time()
+        if getattr(image, "is_animated", False):
+            while time.time() - start_time < duration:
+                for frame in ImageSequence.Iterator(image):
+                    if time.time() - start_time >= duration:
+                        break
+                    # --- Resize frame if needed ---
+                    resized_frame = frame.convert("RGB").resize(self.oled.size, Image.LANCZOS).convert(self.oled.mode)
+                    self.oled.display(resized_frame)
+                    frame_duration = frame.info.get('duration', 100) / 1000.0
+                    time.sleep(frame_duration)
+        else:
+            img = image.convert(self.oled.mode).resize(self.oled.size, Image.LANCZOS)
+            self.oled.display(img)
+            time.sleep(duration)
+
+
 
     def stop_mode(self):
         """Stops any active mode and clears the display."""
         self.is_active = False
         self.clear_screen()
         self.logger.info("MenuManager: Stopped menu mode and cleared display.")
+
+    def slide_clock_to_menu(display_manager, clock, menu, duration=0.4, fps=60):
+        width = display_manager.oled.width
+        frames = int(duration * fps)
+        for step in range(frames + 1):
+            progress = int((width * step) / frames)
+            base_image = Image.new("RGB", display_manager.oled.size, "black")
+            # Draw clock sliding out left
+            clock_img = clock.render_to_image(offset_x=-progress)
+            base_image.paste(clock_img, (0, 0), clock_img if clock_img.mode == "RGBA" else None)
+            # Draw menu sliding in right
+            menu_img = menu.render_to_image(offset_x=width - progress)
+            base_image.paste(menu_img, (0, 0), menu_img if menu_img.mode == "RGBA" else None)
+            frame_start = time.time()
+            display_manager.oled.display(base_image)
+            frame_drawn = time.time()
+            elapsed = frame_drawn - frame_start
+            remaining = (duration / frames) - elapsed
+            if remaining > 0:
+                time.sleep(remaining)
+            print(f"Frame {step}: drew in {elapsed:.3f} sec, slept for {max(remaining,0):.3f} sec")
+        menu.display_menu()
+
+
+    def show_ready_gif_until_event(self, stop_event):
+        ready_gif_path = self.config.get('ready_gif_path')
+        try:
+            image = Image.open(ready_gif_path)
+        except Exception as e:
+            self.logger.error(f"Could not load ready.gif: {e}")
+            return
+
+        self.logger.info("Displaying ready.gif in a loop until event set.")
+
+        while not stop_event.is_set():
+            for frame in ImageSequence.Iterator(image):
+                if stop_event.is_set():
+                    self.logger.info("Ready GIF display stopped by event.")
+                    return
+                frame_resized = frame.convert("RGB").resize(self.oled.size, Image.LANCZOS).convert(self.oled.mode)
+                self.oled.display(frame_resized)
+                frame_duration = frame.info.get('duration', 100) / 1000.0
+                time.sleep(frame_duration)
