@@ -40,7 +40,7 @@ Quick Start
 Clone the Beta repo:
 
 ```bash
-git clone git@github.com:theshepherdmatt/Quadify-Beta.git
+git clone https://github.com/theshepherdmatt/Quadify-Beta.git
 ```
 * then
 ```
