@@ -441,6 +441,31 @@ setup_main_service() {
 }
 
 # ============================
+#   LED On Early Service
+# ============================
+
+setup_early_led8_service() {
+    log_progress "Setting up early LED 8 indicator service..."
+    SERVICE_SRC="/home/volumio/Quadify/service/early_led8.service"
+    SERVICE_DST="/etc/systemd/system/early_led8.service"
+    SCRIPT_SRC="/home/volumio/Quadify/scripts/early_led8.py"
+    SCRIPT_DST="/home/volumio/Quadify/scripts/early_led8.py"
+
+    if [[ -f "$SERVICE_SRC" && -f "$SCRIPT_SRC" ]]; then
+        run_command "cp \"$SERVICE_SRC\" \"$SERVICE_DST\""
+        run_command "chmod +x \"$SCRIPT_DST\""
+        run_command "systemctl daemon-reload"
+        run_command "systemctl enable early_led8.service"
+        run_command "systemctl start early_led8.service"
+        log_message "success" "early_led8.service installed and started."
+    else
+        log_message "error" "Missing $SERVICE_SRC or $SCRIPT_SRC."
+        exit 1
+    fi
+}
+
+
+# ============================
 #   MPD Configuration
 # ============================
 configure_mpd() {
