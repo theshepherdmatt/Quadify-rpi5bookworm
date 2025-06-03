@@ -47,10 +47,11 @@ git clone git@github.com:theshepherdmatt/Quadify-Beta.git
 mv Quadify-Beta Quadify (this changes the folder/paths to original Quadify inst of Qaudify-Beta)
 ```
 * and
----bash
+```
 cd Quadify
 sudo bash install.sh
 ```
+
 (If you prefer HTTPS, use https://github.com/theshepherdmatt/Quadify-Beta.git)
 
 A reboot may be required after install; you’ll be prompted if so.
