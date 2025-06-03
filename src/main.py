@@ -163,6 +163,20 @@ def main():
         logger.info("Showing 'ready.gif' for returning user.")
         is_first_time_user = False
 
+    import smbus2
+
+    MCP23017_ADDRESS = 0x20   # Adjust to your address if needed
+    MCP23017_GPIOA   = 0x12
+    
+    try:
+        bus = smbus2.SMBus(1)
+        # Turn LED8 off (clear bit 0)
+        current = bus.read_byte_data(MCP23017_ADDRESS, MCP23017_GPIOA)
+        bus.write_byte_data(MCP23017_ADDRESS, MCP23017_GPIOA, current & 0b11111110)
+        bus.close()
+    except Exception as e:
+        print(f"Error turning off LED8: {e}")
+
 
     # --- Startup Logo ---
     logger.info("Displaying startup logo...")
