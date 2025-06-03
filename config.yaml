@@ -58,12 +58,6 @@ display:
     sample_rate_khz:
       path: "/home/volumio/Quadify/src/assets/fonts/OpenSans-Regular.ttf"
       size: 12
-    radio_title:
-      path: "/home/volumio/Quadify/src/assets/fonts/OpenSans-Regular.ttf"
-      size: 15
-    radio_bitrate:
-      path: "/home/volumio/Quadify/src/assets/fonts/OpenSans-Regular.ttf"
-      size: 12
     volume_small:
       path: "/home/volumio/Quadify/src/assets/fonts/OpenSans-Regular.ttf"
       size: 8
