@@ -452,7 +452,7 @@ def main():
     rotary_control.long_press_callback = on_long_press_ui
 
     # --- Command socket server for remote control ---
-    def quadify_command_server(mode_manager, volumio_listener):
+    def quadify_command_server(mode_manager, volumio_listener, display_manager, buttons_leds):
         sock_path = "/tmp/quadify.sock"
         try:
             os.remove(sock_path)
@@ -463,6 +463,63 @@ def main():
         server_socket.bind(sock_path)
         server_socket.listen(1)
         print(f"Quadify command server listening on {sock_path}")
+
+        select_mapping = {
+            "menu": lambda: mode_manager.menu_manager.select_item(),
+            "tidal": lambda: mode_manager.tidal_manager.select_item(),
+            "qobuz": lambda: mode_manager.qobuz_manager.select_item(),
+            "spotify": lambda: mode_manager.spotify_manager.select_item(),
+            "library": lambda: mode_manager.library_manager.select_item(),
+            "radiomanager": lambda: mode_manager.radio_manager.select_item(),
+            "motherearthradio": lambda: mode_manager.motherearth_manager.select_item(),
+            "radioparadise": lambda: mode_manager.radioparadise_manager.select_item(),
+            "playlists": lambda: mode_manager.playlist_manager.select_item(),
+            "configmenu": lambda: mode_manager.config_menu.select_item(),
+            "remotemenu": lambda: mode_manager.remote_menu.select_item(),
+            "displaymenu": lambda: mode_manager.display_menu.select_item(),
+            "clockmenu": lambda: mode_manager.clock_menu.select_item(),
+            "systemupdate": lambda: mode_manager.system_update_menu.select_item(),
+            "screensavermenu": lambda: mode_manager.screensaver_menu.select_item(),
+            "systeminfo": lambda: mode_manager.system_info_screen.select_item(),
+        }
+
+        scroll_mapping = {
+            "scroll_up": {
+                "tidal": lambda: mode_manager.tidal_manager.scroll_selection(-1),
+                "qobuz": lambda: mode_manager.qobuz_manager.scroll_selection(-1),
+                "spotify": lambda: mode_manager.spotify_manager.scroll_selection(-1),
+                "library": lambda: mode_manager.library_manager.scroll_selection(-1),
+                "radiomanager": lambda: mode_manager.radio_manager.scroll_selection(-1),
+                "motherearthradio": lambda: mode_manager.motherearth_manager.scroll_selection(-1),
+                "radioparadise": lambda: mode_manager.radioparadise_manager.scroll_selection(-1),
+                "playlists": lambda: mode_manager.playlist_manager.scroll_selection(-1),
+                "configmenu": lambda: mode_manager.config_menu.scroll_selection(-1),
+                "remotemenu": lambda: mode_manager.remote_menu.scroll_selection(-1),
+                "displaymenu": lambda: mode_manager.display_menu.scroll_selection(-1),
+                "clockmenu": lambda: mode_manager.clock_menu.scroll_selection(-1),
+                "systemupdate": lambda: mode_manager.system_update_menu.scroll_selection(-1),
+                "screensavermenu": lambda: mode_manager.screensaver_menu.scroll_selection(-1),
+                "systeminfo": lambda: mode_manager.system_info_screen.scroll_selection(-1),
+            },
+            "scroll_down": {
+                "tidal": lambda: mode_manager.tidal_manager.scroll_selection(1),
+                "qobuz": lambda: mode_manager.qobuz_manager.scroll_selection(1),
+                "spotify": lambda: mode_manager.spotify_manager.scroll_selection(1),
+                "library": lambda: mode_manager.library_manager.scroll_selection(1),
+                "radiomanager": lambda: mode_manager.radio_manager.scroll_selection(1),
+                "motherearthradio": lambda: mode_manager.motherearth_manager.scroll_selection(1),
+                "radioparadise": lambda: mode_manager.radioparadise_manager.scroll_selection(1),
+                "playlists": lambda: mode_manager.playlist_manager.scroll_selection(1),
+                "configmenu": lambda: mode_manager.config_menu.scroll_selection(1),
+                "remotemenu": lambda: mode_manager.remote_menu.scroll_selection(1),
+                "displaymenu": lambda: mode_manager.display_menu.scroll_selection(1),
+                "clockmenu": lambda: mode_manager.clock_menu.scroll_selection(1),
+                "systemupdate": lambda: mode_manager.system_update_menu.scroll_selection(1),
+                "screensavermenu": lambda: mode_manager.screensaver_menu.scroll_selection(1),
+                "systeminfo": lambda: mode_manager.system_info_screen.scroll_selection(1),
+            }
+        }
+
         while True:
             try:
                 conn, _ = server_socket.accept()
@@ -472,11 +529,69 @@ def main():
                         continue
                     command = data.decode("utf-8").strip()
                     print(f"Command received: {command}")
-                    # Implement your command handling here!
+                    current_mode = mode_manager.get_mode()
+
+                    if command == "home":
+                        mode_manager.trigger("to_clock")
+                    elif command == "shutdown":
+                        shutdown_system(display_manager, buttons_leds, mode_manager)
+                    elif command == "menu":
+                        if current_mode == "clock":
+                            mode_manager.trigger("to_menu")
+                    elif command == "toggle":
+                        mode_manager.toggle_play_pause()
+                    elif command == "repeat":
+                        print("Repeat command received. (Implement as needed)")
+                    elif command == "select":
+                        if current_mode in select_mapping:
+                            select_mapping[current_mode]()
+                        else:
+                            print(f"No select mapping for mode: {current_mode}")
+                    elif command in ["scroll_up", "scroll_down"]:
+                        if current_mode in scroll_mapping[command]:
+                            scroll_mapping[command][current_mode]()
+                        else:
+                            print(f"No scroll mapping for command: {command} in mode: {current_mode}")
+                    elif command == "scroll_left":
+                        if current_mode in ["menu", "configmenu"]:
+                            active_menu = mode_manager.menu_manager if current_mode == "menu" else mode_manager.config_menu
+                            active_menu.scroll_selection(-1)
+                        else:
+                            print(f"No mapping for scroll_left in mode: {current_mode}")
+                    elif command == "scroll_right":
+                        if current_mode in ["menu", "configmenu"]:
+                            active_menu = mode_manager.menu_manager if current_mode == "menu" else mode_manager.config_menu
+                            active_menu.scroll_selection(1)
+                        else:
+                            print(f"No mapping for scroll_right in mode: {current_mode}")
+                    elif command == "seek_plus":
+                        print("Seeking forward 10 seconds.")
+                        subprocess.run(["volumio", "seek", "plus"], check=False)
+                    elif command == "seek_minus":
+                        print("Seeking backward 10 seconds.")
+                        subprocess.run(["volumio", "seek", "minus"], check=False)
+                    elif command == "skip_next":
+                        print("Skipping to next track.")
+                        subprocess.run(["volumio", "next"], check=False)
+                    elif command == "skip_previous":
+                        print("Skipping to previous track.")
+                        subprocess.run(["volumio", "previous"], check=False)
+                    elif command == "volume_plus":
+                        volumio_listener.increase_volume()
+                    elif command == "volume_minus":
+                        volumio_listener.decrease_volume()
+                    elif command == "back":
+                        mode_manager.trigger("back")
+                    else:
+                        print(f"No mapping for command: {command}")
             except Exception as e:
                 print(f"Error in command server: {e}")
 
-    threading.Thread(target=quadify_command_server, args=(mode_manager, volumio_listener), daemon=True).start()
+    threading.Thread(
+        target=quadify_command_server,
+        args=(mode_manager, volumio_listener, display_manager, buttons_leds),
+        daemon=True
+    ).start()
     print("Quadify command server thread started.")
 
     # --- Main loop ---
