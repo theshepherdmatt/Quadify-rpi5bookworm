@@ -897,7 +897,6 @@ class ModeManager:
             self.logger.info("Toggle play/pause is not applicable in the current mode.")
         self.logger.debug("toggle_play_pause: Current mode after toggling: %s", self.get_mode())
 
-
     def back(self):
         if self.mode_stack:
             previous_mode = self.mode_stack.pop()
@@ -923,8 +922,8 @@ class ModeManager:
                 "spotify": self.to_spotify,
                 "webradio": self.to_webradio,
                 "airplay": self.to_airplay,
-                "motherearth": self.to_motherearth,
-                "radioparadise": self.radioparadise,
+                "motherearthradio": self.to_motherearthradio,
+                "radioparadise": self.to_radioparadise,
                 "systeminfo": self.to_systeminfo,
                 "systemupdate": self.to_systemupdate,
                 "boot": self.to_boot
@@ -932,10 +931,12 @@ class ModeManager:
             if previous_mode in mapping:
                 mapping[previous_mode]()
             else:
-                self.logger.warning("No back mapping for '%s'. Defaulting to clock.", previous_mode)
-                self.to_clock()
+                self.logger.warning("No back mapping for '%s'. Defaulting to main menu.", previous_mode)
+                self.to_menu()
         else:
-            self.logger.info("Navigation stack empty, cannot go back.")
+            # Instead of doing nothing, always go to the main menu!
+            self.logger.info("Navigation stack empty, returning to main menu.")
+            self.to_menu()
 
     def get_mode(self):
         return self.state
