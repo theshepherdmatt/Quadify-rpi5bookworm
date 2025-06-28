@@ -221,6 +221,7 @@ class TidalManager(BaseManager):
             }
             for item in combined_items
         ]
+        self.current_menu_items.append({"title": "Back", "uri": None, "type": "back"})
 
         self.logger.info(f"TidalManager: Updated menu with {len(self.current_menu_items)} items.")
 
@@ -281,6 +282,9 @@ class TidalManager(BaseManager):
 
         selected_item = self.current_menu_items[self.current_selection_index]
         self.logger.info(f"TidalManager: Selected item: {selected_item}")
+        if selected_item.get("title") == "Back":
+            self.back()
+            return
         uri = selected_item.get("uri")
 
         if not uri:
@@ -355,6 +359,14 @@ class TidalManager(BaseManager):
         self.window_start_index = previous_context["window_start_index"]
         self.logger.debug("TidalManager: Restored previous menu context from stack.")
         self.display_menu()
+
+    def back(self):
+        if self.menu_stack:
+            self.go_back()
+        else:
+            if self.is_active:
+                self.stop_mode()
+            self.mode_manager.back()
 
     def handle_toast_message(self, sender, message, **kwargs):
         """Handle toast messages from Volumio, especially errors."""

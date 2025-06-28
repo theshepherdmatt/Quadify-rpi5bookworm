@@ -144,6 +144,7 @@ class USBLibraryManager(BaseManager):
             }
             for item in combined_items
         ]
+        self.current_menu_items.append({"title": "Back", "uri": None, "type": "back"})
 
         self.logger.info(f"USBLibraryManager: Updated menu with {len(self.current_menu_items)} items.")
         if self.is_active:
@@ -203,6 +204,9 @@ class USBLibraryManager(BaseManager):
         self.logger.info(f"USBLibraryManager: Selected menu item: {selected_item}")
 
         name = selected_item.get("title")
+        if name == "Back":
+            self.back()
+            return
         uri = selected_item.get("uri")
         if not uri:
             self.logger.warning("USBLibraryManager: Selected item has no URI.")
@@ -266,3 +270,8 @@ class USBLibraryManager(BaseManager):
             )
 
         self.display_manager.draw_custom(draw)
+
+    def back(self):
+        if self.is_active:
+            self.stop_mode()
+        self.mode_manager.back()

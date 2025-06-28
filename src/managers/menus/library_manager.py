@@ -188,6 +188,7 @@ class LibraryManager(BaseManager):
                 }
                 for item in items
             ]
+            self.current_menu_items.append({"title": "Back", "uri": None, "type": "back"})
 
             self.logger.info(f"LibraryManager: Fetched {len(self.current_menu_items)} items for URI: {uri}")
             if self.is_active:
@@ -208,6 +209,10 @@ class LibraryManager(BaseManager):
 
         selected_item = self.current_menu_items[self.current_selection_index]
         self.logger.info(f"LibraryManager: Selected item: {selected_item}")
+
+        if selected_item.get("title") == "Back":
+            self.back()
+            return
 
         if 'action' in selected_item:
             # Handle submenu actions
@@ -578,6 +583,14 @@ class LibraryManager(BaseManager):
 
         # Log or display the extracted information
         self.logger.info(f"Sample Rate: {sample_rate}, Bit Depth: {bitdepth}, Volume: {volume}")
+
+    def back(self):
+        if self.menu_stack:
+            self.pop_menu()
+        else:
+            if self.is_active:
+                self.stop_mode()
+            self.mode_manager.back()
 
         # Optional: Update the screen with this information if needed
         # You can call methods on `self.display_manager` or another appropriate object

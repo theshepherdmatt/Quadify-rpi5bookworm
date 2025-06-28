@@ -205,6 +205,7 @@ class RadioManager(BaseManager):
                 item.get("title", item.get("name", "Untitled"))
                 for item in items
             ]
+            self.categories.append("Back")
             self.logger.info(f"RadioManager: Updated categories list with {len(self.categories)} items.")
             self.current_selection_index = 0
             self.window_start_index = 0
@@ -242,6 +243,7 @@ class RadioManager(BaseManager):
                 }
                 for item in items
             ]
+            self.stations.append({"title": "Back", "uri": None})
             self.logger.info(f"RadioManager: Updated stations list with {len(self.stations)} items.")
             self.current_selection_index = 0
             self.window_start_index = 0
@@ -351,6 +353,10 @@ class RadioManager(BaseManager):
             selected_category = self.categories[self.current_selection_index]
             self.logger.info(f"RadioManager: Selected radio category: {selected_category}")
 
+            if selected_category == "Back":
+                self.navigate_back()
+                return
+
             # Fetch the URI for the selected category
             selected_item = self.get_category_item_by_title(selected_category)
             uri = selected_item.get("uri") if selected_item else None
@@ -373,6 +379,10 @@ class RadioManager(BaseManager):
 
             selected_station = self.stations[self.current_selection_index]
             station_title = selected_station['title'].strip()
+
+            if station_title == "Back":
+                self.navigate_back()
+                return
             uri = selected_station['uri']
             albumart_url = selected_station.get('albumart', '')
 
@@ -407,6 +417,14 @@ class RadioManager(BaseManager):
             self.display_categories()
         elif self.current_menu == "stations":
             self.display_radio_stations()
+
+    def back(self):
+        if self.menu_stack:
+            self.navigate_back()
+        else:
+            if self.is_active:
+                self.stop_mode()
+            self.mode_manager.back()
 
     def get_visible_window(self, items):
         """Returns a subset of items to display based on the current selection, keeping it centered."""
