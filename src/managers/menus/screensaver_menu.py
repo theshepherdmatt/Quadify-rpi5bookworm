@@ -156,9 +156,9 @@ class ScreensaverMenu(BaseManager):
         self.logger.info(f"ScreensaverMenu: Selected => {selected_name} (main menu)")
 
         if selected_name == "Back":
-            # Return to config
+            # Go back to the previous menu
             self.stop_mode()
-            self.mode_manager.to_configmenu()
+            self.mode_manager.back()
             return
 
         elif selected_name == "Timer":
@@ -261,3 +261,8 @@ class ScreensaverMenu(BaseManager):
 
         end_index = self.window_start_index + self.window_size
         return items[self.window_start_index:end_index]
+
+    def back(self):
+        if self.is_active:
+            self.stop_mode()
+        self.mode_manager.back()

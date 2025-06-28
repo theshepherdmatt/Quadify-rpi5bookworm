@@ -202,3 +202,8 @@ class SystemInfoScreen(BaseManager):
         except Exception:
             pass
         return []
+
+    def back(self):
+        if self.is_active:
+            self.stop_mode()
+        self.mode_manager.back()

@@ -154,6 +154,7 @@ class PlaylistManager(BaseManager):
             }
             for item in combined_items
         ]
+        self.current_menu_items.append({"title": "Back", "uri": None, "type": "back"})
 
         self.logger.info(f"PlaylistManager: Updated menu with {len(self.current_menu_items)} items.")
         if self.is_active:
@@ -237,6 +238,9 @@ class PlaylistManager(BaseManager):
         selected_item = self.current_menu_items[self.current_selection_index]
         self.logger.info(f"PlaylistManager: Selected item: {selected_item}")
         name = selected_item.get("title")
+        if name == "Back":
+            self.back()
+            return
         if not name:
             self.logger.warning("PlaylistManager: Selected item has no name.")
             self.display_error_message("Invalid Selection", "Selected item has no name.")
@@ -313,3 +317,8 @@ class PlaylistManager(BaseManager):
         bitdepth = state.get("bitdepth", "Unknown Bit Depth")
         volume = state.get("volume", "Unknown Volume")
         self.logger.info(f"Sample Rate: {sample_rate}, Bit Depth: {bitdepth}, Volume: {volume}")
+
+    def back(self):
+        if self.is_active:
+            self.stop_mode()
+        self.mode_manager.back()

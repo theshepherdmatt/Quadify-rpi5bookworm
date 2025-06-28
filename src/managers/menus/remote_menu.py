@@ -138,9 +138,9 @@ class RemoteMenu(BaseManager):
         self.logger.info(f"RemoteMenu: Selected => {selected_item}")
 
         if selected_item == "Back":
-            # Return to the previous (config) menu.
+            # Go back to the previous menu
             self.stop_mode()
-            self.mode_manager.to_configmenu()
+            self.mode_manager.back()
         else:
             # Define the source directory.
             source_dir = f"/home/volumio/Quadify/lirc/configurations/{selected_item}"
@@ -225,4 +225,9 @@ class RemoteMenu(BaseManager):
 
         end_index = self.window_start_index + self.window_size
         return items[self.window_start_index:end_index]
+
+    def back(self):
+        if self.is_active:
+            self.stop_mode()
+        self.mode_manager.back()
 

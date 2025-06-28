@@ -540,22 +540,10 @@ def main():
 
     def on_button_press_ui():
         current_mode = mode_manager.get_mode()
-        if current_mode == 'clock':
+        if current_mode in mode_manager.menu_modes:
+            mode_manager.back()
+        elif current_mode == 'clock':
             mode_manager.trigger("to_menu")
-        elif current_mode == 'menu':
-            mode_manager.menu_manager.select_item()
-        elif current_mode == 'configmenu':
-            mode_manager.config_menu.select_item()
-        elif current_mode == 'remotemenu':
-            mode_manager.remote_menu.select_item()
-        elif current_mode == 'systemupdate':
-            mode_manager.system_update_menu.select_item()
-        elif current_mode == 'screensavermenu':
-            mode_manager.screensaver_menu.select_item()
-        elif current_mode == 'displaymenu':
-            mode_manager.display_menu.select_item()
-        elif current_mode == 'clockmenu':
-            mode_manager.clock_menu.select_item()
         elif current_mode in ['original', 'modern', 'minimal']:
             logger.info(f"Button pressed in {current_mode} mode; toggling playback.")
             if current_mode == 'original':
@@ -570,24 +558,6 @@ def main():
                 screen.toggle_play_pause()
             else:
                 logger.warning(f"No screen instance found for mode: {current_mode}")
-        elif current_mode == 'playlists':
-            mode_manager.playlist_manager.select_item()
-        elif current_mode == 'tidal':
-            mode_manager.tidal_manager.select_item()
-        elif current_mode == 'qobuz':
-            mode_manager.qobuz_manager.select_item()
-        elif current_mode == 'spotify':
-            mode_manager.spotify_manager.select_item()
-        elif current_mode == 'library':
-            mode_manager.library_manager.select_item()
-        elif current_mode == 'radiomanager':
-            mode_manager.radio_manager.select_item()
-        elif current_mode == 'motherearthradio':
-            mode_manager.motherearth_manager.select_item()
-        elif current_mode == 'radioparadise':
-            mode_manager.radioparadise_manager.select_item()
-        elif current_mode == 'usblibrary':
-            mode_manager.usb_library_manager.select_item()
         elif current_mode == 'screensaver':
             mode_manager.exit_screensaver()
         else:

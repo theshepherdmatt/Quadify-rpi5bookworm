@@ -57,3 +57,7 @@ class BaseManager(ABC):
     def clear_display(self):
         self.display_manager.clear_screen()
         self.logger.info("Cleared the display screen.")
+
+    def back(self):
+        """Default back action delegates to ModeManager."""
+        self.mode_manager.back()

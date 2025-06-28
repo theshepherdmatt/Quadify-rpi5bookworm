@@ -168,9 +168,9 @@ class DisplayMenu(BaseManager):
                 self._display_current_menu()
 
             elif selected_item == "Back":
-                # Return to config menu
+                # Go back to the previous menu/screen
                 self.stop_mode()
-                self.mode_manager.to_configmenu()
+                self.mode_manager.back()
             else:
                 self.logger.warning(f"DisplayMenu: Unknown main item => {selected_item}")
 
@@ -343,3 +343,8 @@ class DisplayMenu(BaseManager):
             self.mode_manager.save_preferences()
         else:
             self.logger.warning(f"DisplayMenu: Unknown brightness => {level}")
+
+    def back(self):
+        if self.is_active:
+            self.stop_mode()
+        self.mode_manager.back()

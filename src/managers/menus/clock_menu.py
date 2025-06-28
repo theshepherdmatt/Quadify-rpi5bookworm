@@ -169,10 +169,10 @@ class ClockMenu(BaseManager):
                 self._draw_current_menu()
 
             elif selected == "Back":
-                # Return to Display Menu
-                self.logger.info("ClockMenu: 'Back' => to Display Menu")
+                # Go back to the previous menu
+                self.logger.info("ClockMenu: 'Back' => back action")
                 self.stop_mode()
-                self.mode_manager.to_displaymenu()
+                self.mode_manager.back()
 
             else:
                 self.logger.warning(f"ClockMenu: Unknown main item => {selected}")
@@ -303,3 +303,8 @@ class ClockMenu(BaseManager):
             self.mode_manager.save_preferences()
         else:
             self.logger.warning(f"ClockMenu: Unknown font => {selected}")
+
+    def back(self):
+        if self.is_active:
+            self.stop_mode()
+        self.mode_manager.back()

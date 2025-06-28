@@ -141,9 +141,9 @@ class SystemUpdateMenu(BaseManager):
                 self._display_current_menu()
 
             elif selected_item == "Back":
-                # Return to whichever menu invoked us (maybe config menu)
+                # Go back to the previous menu
                 self.stop_mode()
-                self.mode_manager.to_configmenu()
+                self.mode_manager.back()
 
             else:
                 self.logger.warning(f"SystemUpdateMenu: Unknown main item => {selected_item}")
@@ -229,3 +229,8 @@ class SystemUpdateMenu(BaseManager):
         end_index = self.window_start_index + self.window_size
         visible_slice = items[self.window_start_index:end_index]
         return visible_slice
+
+    def back(self):
+        if self.is_active:
+            self.stop_mode()
+        self.mode_manager.back()
