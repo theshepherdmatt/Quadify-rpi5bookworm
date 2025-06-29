@@ -4,9 +4,9 @@ IFS=$'\n\t'
 
 echo "🔄 Starting Quadify update..."
 
-# 1) Stop Quadify service (user-level)
+# 1) Stop playback and related services
 echo "Stopping Quadify service..."
-systemctl --user stop quadify
+sudo systemctl stop quadify
 sleep 2
 
 # 2) Backup preferences
@@ -31,14 +31,15 @@ mv /home/volumio/Quadify_new /home/volumio/Quadify
 if [ -f "$PREF_BAK" ]; then
     echo "Restoring preference.json..."
     mv "$PREF_BAK" "$PREF_SRC"
+    chown volumio:volumio "$PREF_SRC"
     chmod 664 "$PREF_SRC"
 fi
 
-# 6) Cleanup
+# 6) Optional cleanup
 echo "Cleaning up backup directory..."
 rm -rf /home/volumio/Quadify_old
 
-# 7) Wait for Volumio API
+# 7) Wait for Volumio API to become responsive
 echo "Waiting for Volumio API to become responsive..."
 for i in {1..15}; do
     if curl -s http://localhost:3000/api/v1/getstate | grep -q \"status\"; then
@@ -48,8 +49,8 @@ for i in {1..15}; do
     sleep 1
 done
 
-# 8) Restart Quadify (user-level)
+# 8) Restart Quadify
 echo "Restarting Quadify..."
-systemctl --user start quadify
+sudo systemctl start quadify
 
 echo "✅ Quadify has been updated and restarted successfully."
