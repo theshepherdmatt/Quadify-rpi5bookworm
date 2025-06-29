@@ -19,7 +19,7 @@ class SystemUpdateMenu(BaseManager):
         self,
         display_manager,
         mode_manager,
-        window_size=4,     # Number of lines visible at once
+        window_size=4,
         y_offset=2,
         line_spacing=15
     ):
@@ -27,42 +27,26 @@ class SystemUpdateMenu(BaseManager):
         self.logger = logging.getLogger(self.__class__.__name__)
 
         self.is_active = False
-        self.current_menu = "main"  # could be "main" or "confirm"
+        self.current_menu = "main"
 
-        # Debounce
         self.last_action_time = 0
         self.debounce_interval = 0.3
 
-        # Layout / scrolling
         self.window_size = window_size
         self.window_start_index = 0
         self.y_offset = y_offset
         self.line_spacing = line_spacing
 
-        # Font
         self.font_key = "menu_font"
         self.font = display_manager.fonts.get(self.font_key, ImageFont.load_default())
 
-        # MAIN menu items
-        self.main_items = [
-            "Update from GitHub",
-            "Back"
-        ]
-
-        # CONFIRM sub-menu
+        self.main_items = ["Update from GitHub", "Back"]
         self.confirm_items = ["Yes", "No"]
 
-        # We'll store whichever list is active in `self.current_list`
         self.current_list = self.main_items
-
-        # Current selection index
         self.current_selection_index = 0
 
-    # ----------------------------------------------------------------
-    # Start / Stop
-    # ----------------------------------------------------------------
     def start_mode(self):
-        """Activate and display the main menu."""
         if self.is_active:
             self.logger.debug("SystemUpdateMenu: Already active.")
             return
@@ -77,19 +61,12 @@ class SystemUpdateMenu(BaseManager):
         self._display_current_menu()
 
     def stop_mode(self):
-        """Stop the menu and clear the display."""
         if self.is_active:
             self.is_active = False
             self.display_manager.clear_screen()
             self.logger.info("SystemUpdateMenu: Stopped and cleared display.")
 
-    # ----------------------------------------------------------------
-    # Scroll & Select
-    # ----------------------------------------------------------------
     def scroll_selection(self, direction):
-        """
-        Move the highlighted index up or down.
-        """
         if not self.is_active:
             self.logger.warning("SystemUpdateMenu: Scroll attempted while inactive.")
             return
@@ -109,13 +86,10 @@ class SystemUpdateMenu(BaseManager):
             self.current_selection_index -= 1
 
         if self.current_selection_index != old_index:
-            self.logger.debug(
-                f"SystemUpdateMenu: Scrolled from {old_index} to {self.current_selection_index}"
-            )
+            self.logger.debug(f"SystemUpdateMenu: Scrolled from {old_index} to {self.current_selection_index}")
             self._display_current_menu()
 
     def select_item(self):
-        """Handle selection in the current menu."""
         if not self.is_active:
             self.logger.warning("SystemUpdateMenu: Select attempted while inactive.")
             return
@@ -127,13 +101,10 @@ class SystemUpdateMenu(BaseManager):
         self.last_action_time = now
 
         selected_item = self.current_list[self.current_selection_index]
-        self.logger.info(
-            f"SystemUpdateMenu: Selected => {selected_item} in menu '{self.current_menu}'"
-        )
+        self.logger.info(f"SystemUpdateMenu: Selected => {selected_item} in menu '{self.current_menu}'")
 
         if self.current_menu == "main":
             if selected_item == "Update from GitHub":
-                # Jump to confirm sub-menu
                 self.current_menu = "confirm"
                 self.current_list = self.confirm_items
                 self.current_selection_index = 0
@@ -141,54 +112,39 @@ class SystemUpdateMenu(BaseManager):
                 self._display_current_menu()
 
             elif selected_item == "Back":
-                # Go back to the previous menu
                 self.stop_mode()
                 self.mode_manager.back()
 
             else:
                 self.logger.warning(f"SystemUpdateMenu: Unknown main item => {selected_item}")
-                
 
         elif self.current_menu == "confirm":
             if selected_item == "Yes":
-                # Display update message before executing the script
                 self.display_manager.clear_screen()
-                
+
                 def draw(draw_obj):
-                    text = "Updating from GitHub\nRebooting in 10 sec..."
+                    text = "Updating from GitHub\nRestarting services..."
                     draw_obj.text((10, 20), text, font=self.font, fill="white")
 
                 self.display_manager.draw_custom(draw)
-
                 self.logger.info("SystemUpdateMenu: Displayed update message.")
-                
-                # Wait for 10 seconds so user can see message
-                time.sleep(10)
-
-                # Stop the menu mode
+                time.sleep(5)
                 self.stop_mode()
 
-                # Run the update script and allow reboot
-                self.logger.info("SystemUpdateMenu: Running update script and rebooting.")
+                self.logger.info("SystemUpdateMenu: Running update script.")
                 subprocess.Popen(["bash", "/home/volumio/Quadify/scripts/quadify_autoupdate.sh"])
 
             else:
-                # "No" => go back to the main menu
                 self.current_menu = "main"
                 self.current_list = self.main_items
                 self.current_selection_index = 0
                 self.window_start_index = 0
                 self._display_current_menu()
 
-
         else:
             self.logger.warning(f"SystemUpdateMenu: Unrecognized menu => {self.current_menu}")
 
-    # ----------------------------------------------------------------
-    # Display the current menu (main or confirm)
-    # ----------------------------------------------------------------
     def _display_current_menu(self):
-        """Draw the current list with anchored scrolling logic."""
         if not self.is_active:
             return
 
@@ -216,7 +172,6 @@ class SystemUpdateMenu(BaseManager):
         total_items = len(items)
         half_window = self.window_size // 2
 
-        # Attempt to center the selection
         tentative_start = selected_index - half_window
 
         if tentative_start < 0:
@@ -227,8 +182,7 @@ class SystemUpdateMenu(BaseManager):
             self.window_start_index = tentative_start
 
         end_index = self.window_start_index + self.window_size
-        visible_slice = items[self.window_start_index:end_index]
-        return visible_slice
+        return items[self.window_start_index:end_index]
 
     def back(self):
         if self.is_active:
