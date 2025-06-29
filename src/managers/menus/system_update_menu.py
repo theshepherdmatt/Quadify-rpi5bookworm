@@ -132,7 +132,7 @@ class SystemUpdateMenu(BaseManager):
                 self.stop_mode()
 
                 self.logger.info("SystemUpdateMenu: Running update script.")
-                subprocess.call(["bash", "/home/volumio/Quadify/scripts/quadify_autoupdate.sh"])
+                subprocess.call(["sudo", "bash", "/home/volumio/Quadify/scripts/quadify_autoupdate.sh"])
 
             else:
                 self.current_menu = "main"
