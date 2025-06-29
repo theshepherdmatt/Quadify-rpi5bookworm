@@ -46,9 +46,6 @@ class SystemUpdateMenu(BaseManager):
         self.current_list = self.main_items
         self.current_selection_index = 0
 
-        self.updating_gif = "/home/volumio/Quadify/src/assets/images/gif/updating.gif"
-        self.updatedmessage_gif = "/home/volumio/Quadify/src/assets/images/gif/updatedmessage.gif"
-
     def start_mode(self):
         if self.is_active:
             self.logger.debug("SystemUpdateMenu: Already active.")
@@ -120,10 +117,25 @@ class SystemUpdateMenu(BaseManager):
 
         elif self.current_menu == "confirm":
             if selected_item == "Yes":
-                self.display_manager.show_gif(self.updating_gif)
-                subprocess.call(["bash", "/home/volumio/Quadify/scripts/quadify_autoupdate.sh"])
-                self.display_manager.show_gif(self.updatedmessage_gif)
+                self.display_manager.clear_screen()
+
+                def draw(draw_obj):
+                    text = "Updating from GitHub\nPlease wait..."
+                    draw_obj.text((10, 20), text, font=self.font, fill="white")
+
+                self.display_manager.draw_custom(draw)
+                self.logger.info("SystemUpdateMenu: Displayed update message.")
+
+                subprocess.Popen(["bash", "/home/volumio/Quadify/scripts/quadify_autoupdate.sh"])
+                time.sleep(2)
+
+                def draw_success(draw_obj):
+                    text = "Update triggered successfully.\nSystem will restart."
+                    draw_obj.text((10, 20), text, font=self.font, fill="white")
+
+                self.display_manager.draw_custom(draw_success)
                 time.sleep(3)
+
                 self.display_manager.show_logo()
                 self.stop_mode()
             else:
