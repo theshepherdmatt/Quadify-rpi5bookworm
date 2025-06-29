@@ -518,6 +518,39 @@ class ModeManager:
         self.update_current_mode()
         self.cancel_menu_inactivity_timer()  # No timeout on clock
 
+        def enter_spotify(self, event):
+        self.logger.info("ModeManager: Entering 'spotify' state.")
+        self.stop_all_screens()
+        if self.spotify_manager:
+            self.spotify_manager.start_mode()
+            self.logger.info("ModeManager: SpotifyManager started.")
+        else:
+            self.logger.warning("ModeManager: No spotify_manager set.")
+        self.update_current_mode()
+        self.cancel_menu_inactivity_timer()  # No timeout on clock
+
+    def enter_webradio(self, event):
+        self.logger.info("ModeManager: Entering 'webradio' state.")
+        self.stop_all_screens()
+        if self.webradio_screen:
+            self.webradio_screen.start_mode()
+            self.logger.info("ModeManager: WebRadioScreen started.")
+        else:
+            self.logger.warning("ModeManager: No webradio_screen set.")
+        self.update_current_mode()
+        self.cancel_menu_inactivity_timer()  # No timeout on clock
+
+    def enter_airplay(self, event):
+        self.logger.info("ModeManager: Entering 'airplay' state.")
+        self.stop_all_screens()
+        if self.airplay_screen:
+            self.airplay_screen.start_mode()
+            self.logger.info("ModeManager: AirPlayScreen started.")
+        else:
+            self.logger.warning("ModeManager: No airplay_screen set.")
+        self.update_current_mode()
+        self.cancel_menu_inactivity_timer()  # No timeout on clock
+
     def enter_systeminfo(self, event):
         self.logger.info("ModeManager: Entering 'systeminfo' mode.")
         self.stop_all_screens()
@@ -708,41 +741,6 @@ class ModeManager:
         self.reset_idle_timer()
         self.start_menu_inactivity_timer()
         self.update_current_mode()
-
-    def enter_spotify(self, event):
-        self.logger.info("ModeManager: Entering 'spotify' state.")
-        self.stop_all_screens()
-        if self.spotify_manager:
-            self.spotify_manager.start_mode()
-            self.logger.info("ModeManager: SpotifyManager started.")
-        else:
-            self.logger.warning("ModeManager: No spotify_manager set.")
-        self.reset_idle_timer()
-        self.start_menu_inactivity_timer()
-        self.update_current_mode()
-
-    def enter_webradio(self, event):
-        self.logger.info("ModeManager: Entering 'webradio' state.")
-        self.stop_all_screens()
-        if self.webradio_screen:
-            self.webradio_screen.start_mode()
-            self.logger.info("ModeManager: WebRadioScreen started.")
-        else:
-            self.logger.warning("ModeManager: No webradio_screen set.")
-        self.reset_idle_timer()
-        self.start_menu_inactivity_timer()
-        self.update_current_mode()
-
-    def enter_airplay(self, event):
-        self.logger.info("ModeManager: Entering 'airplay' state.")
-        self.stop_all_screens()
-        if self.airplay_screen:
-            self.airplay_screen.start_mode()
-            self.logger.info("ModeManager: AirPlayScreen started.")
-        else:
-            self.logger.warning("ModeManager: No airplay_screen set.")
-        self.update_current_mode()
-        self.cancel_menu_inactivity_timer()  # No timeout on clock
 
     def enter_configmenu(self, event):
         self.logger.info("ModeManager: Entering 'configmenu'.")
