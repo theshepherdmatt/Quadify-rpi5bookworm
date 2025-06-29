@@ -518,7 +518,7 @@ class ModeManager:
         self.update_current_mode()
         self.cancel_menu_inactivity_timer()  # No timeout on clock
 
-        def enter_spotify(self, event):
+    def enter_spotify(self, event):
         self.logger.info("ModeManager: Entering 'spotify' state.")
         self.stop_all_screens()
         if self.spotify_manager:
