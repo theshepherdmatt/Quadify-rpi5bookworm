@@ -18,6 +18,8 @@ display:
   ready_loop_path: "/home/volumio/Quadify/src/assets/images/gif/ready_loop.gif"
   connecting_path: "/home/volumio/Quadify/src/assets/images/gif/connecting.gif"
   connected_path: "/home/volumio/Quadify/src/assets/images/gif/connected.gif"
+  updating_path: "/home/volumio/Quadify/src/assets/images/gif/updating.gif"
+  updatedmessage_path: "/home/volumio/Quadify/src/assets/images/gif/updatedmessage.gif"
   screensaver_gif_path: "/home/volumio/Quadify/src/assets/images/screensaver/geo.gif"  
   logo_path: "/home/volumio/Quadify/src/assets/images/gif/logo.gif"
   shutdown_path: "/home/volumio/Quadify/src/assets/images/shuttingdown.png"
