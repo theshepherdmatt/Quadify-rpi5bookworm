@@ -46,6 +46,9 @@ class SystemUpdateMenu(BaseManager):
         self.current_list = self.main_items
         self.current_selection_index = 0
 
+        self.updating_gif = "/home/volumio/Quadify/src/assets/images/gif/updating.gif"
+        self.updatedmessage_gif = "/home/volumio/Quadify/src/assets/images/gif/updatedmessage.gif"
+
     def start_mode(self):
         if self.is_active:
             self.logger.debug("SystemUpdateMenu: Already active.")
@@ -115,34 +118,20 @@ class SystemUpdateMenu(BaseManager):
                 self.stop_mode()
                 self.mode_manager.back()
 
-            else:
-                self.logger.warning(f"SystemUpdateMenu: Unknown main item => {selected_item}")
-
         elif self.current_menu == "confirm":
             if selected_item == "Yes":
-                self.display_manager.clear_screen()
-
-                def draw(draw_obj):
-                    text = "Updating from GitHub\nRestarting services..."
-                    draw_obj.text((10, 20), text, font=self.font, fill="white")
-
-                self.display_manager.draw_custom(draw)
-                self.logger.info("SystemUpdateMenu: Displayed update message.")
-                time.sleep(5)
+                self.display_manager.show_gif(self.updating_gif)
+                subprocess.call(["bash", "/home/volumio/Quadify/scripts/quadify_autoupdate.sh"])
+                self.display_manager.show_gif(self.updatedmessage_gif)
+                time.sleep(3)
+                self.display_manager.show_logo()
                 self.stop_mode()
-
-                self.logger.info("SystemUpdateMenu: Running update script.")
-                subprocess.call(["sudo", "bash", "/home/volumio/Quadify/scripts/quadify_autoupdate.sh"])
-
             else:
                 self.current_menu = "main"
                 self.current_list = self.main_items
                 self.current_selection_index = 0
                 self.window_start_index = 0
                 self._display_current_menu()
-
-        else:
-            self.logger.warning(f"SystemUpdateMenu: Unrecognized menu => {self.current_menu}")
 
     def _display_current_menu(self):
         if not self.is_active:
