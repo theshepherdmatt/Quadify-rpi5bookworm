@@ -397,13 +397,11 @@ def main():
     # On Volumio state change: set events, also handle ready_stop_event if playing
     def on_state_changed(sender, state):
         logger.info(f"Volumio state changed: {state}")
-        if state.get('status') == 'play' and not ready_stop_event.is_set():
-            logger.info("Detected playback start! Exiting ready screen.")
+        if not ready_stop_event.is_set() and state.get('status') == 'play':
+            logger.info("Detected playback start: stopping ready loop.")
             ready_stop_event.set()
         if state.get('status') in ['play', 'stop', 'pause', 'unknown'] and not volumio_ready_event.is_set():
-            logger.info("Volumio is considered ready now.")
             volumio_ready_event.set()
-        # (No disconnect here! As discussed.)
 
     volumio_listener.state_changed.connect(on_state_changed)
 
