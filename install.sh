@@ -656,6 +656,21 @@ set_permissions() {
 }
 
 # ============================
+#   Allow Volumio to Use systemctl Without Password
+# ============================
+ensure_sudoers_nopasswd() {
+    log_progress "Ensuring sudoers entry for passwordless systemctl..."
+    SUDOERS_LINE="volumio ALL=(ALL) NOPASSWD: /bin/systemctl"
+    if ! grep -qF "$SUDOERS_LINE" /etc/sudoers; then
+        echo "$SUDOERS_LINE" | EDITOR='tee -a' visudo > /dev/null
+        log_message "success" "Added sudoers rule for systemctl without password."
+    else
+        log_message "info" "Sudoers rule for systemctl already present."
+    fi
+}
+
+
+# ============================
 #   Set Up run_update Wrapper
 # ============================
 setup_run_update_wrapper() {
@@ -677,6 +692,7 @@ setup_run_update_wrapper() {
 main() {
     check_root
     banner
+	ensure_sudoers_nopasswd
     log_message "info" "Starting Quadify Installer..."
     
     # NEW: Gather all interactive answers at the very top
@@ -764,4 +780,3 @@ main() {
 }
 
 main
-
