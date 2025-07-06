@@ -40,14 +40,10 @@ Quick Start
 Clone the Beta repo:
 
 ```bash
-git clone https://github.com/theshepherdmatt/Quadify-Beta.git
+git clone https://github.com/theshepherdmatt/Quadify.git
 ```
 * then
 ```
-mv Quadify-Beta Quadify 
-```
-(this changes the folder/paths to the original Quadify)
-
 * and
 ```
 cd Quadify
