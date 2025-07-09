@@ -766,7 +766,7 @@ main() {
         read -rp "Reboot now? (y/n) " answer
         case $answer in
             [Yy]* )
-                log_message "info" "Rebooting system now. See you on the other side!"
+                log_message "info" "Rebooting system now. See you on the other side!.......you might need to turn the pi on and off again to restart"
                 reboot
                 exit 0
                 ;;
