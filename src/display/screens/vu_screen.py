@@ -26,7 +26,7 @@ class VUScreen(BaseManager):
 
         # Font (use display_manager fonts, fallback to default)
         self.font_artist = ImageFont.truetype("/home/volumio/Quadify/src/assets/fonts/OpenSans-Regular.ttf", 10)
-        self.font_title = ImageFont.truetype("/home/volumio/Quadify/src/assets/fonts/OpenSans-Regular.ttf", 14)
+        self.font_title = ImageFont.truetype("/home/volumio/Quadify/src/assets/fonts/OpenSans-Regular.ttf", 12)
         self.font = self.font_title
 
         self.font = self.font_title or ImageFont.load_default()
@@ -254,24 +254,30 @@ class VUScreen(BaseManager):
         except Exception as e:
             self.logger.error(f"draw_display: Error drawing needles: {e}")
 
-        # Draw artist/title at top, centred
+        # Draw artist and title on one line: Artist | Song Title
         title = data.get("title", "Unknown Title")
         artist = data.get("artist", "Unknown Artist")
+        combined = f"{artist} - {title}"
 
         width, height = self.display_manager.oled.size
 
         try:
-            # Use the correct font for each
-            title_w, title_h = draw.textsize(title, font=self.font_title)
-            artist_w, artist_h = draw.textsize(artist, font=self.font_artist)
-            title_y = -1
-            artist_y = title_y + title_h - 1
-            draw.text(((width-title_w)//2, title_y), title, font=self.font_title, fill="white")
-            draw.text(((width-artist_w)//2, artist_y), artist, font=self.font_artist, fill="white")
-            self.logger.debug("draw_display: Title/artist drawn with separate fonts.")
+            # Draw Artist | Title
+            text_w, text_h = draw.textsize(combined, font=self.font)
+            text_y = 0  # or adjust as needed
+            draw.text(((width - text_w) // 2, text_y), combined, font=self.font, fill="white")
+
+            # Draw Samplerate / Bitdepth underneath
+            samplerate = data.get("samplerate", "N/A")
+            bitdepth = data.get("bitdepth", "N/A")
+            info_text = f"{samplerate} / {bitdepth}"
+            info_w, info_h = draw.textsize(info_text, font=self.font_artist)
+            info_y = text_y + text_h + 1  # 1px gap
+            draw.text(((width - info_w) // 2, info_y), info_text, font=self.font_artist, fill="white")
+
+            self.logger.debug("draw_display: Combined artist/title and sample info drawn at top.")
         except Exception as e:
             self.logger.error(f"draw_display: Error drawing text: {e}")
-
 
         try:
             frame = frame.convert(self.display_manager.oled.mode)
@@ -279,6 +285,7 @@ class VUScreen(BaseManager):
             self.logger.info("draw_display: Frame sent to display.")
         except Exception as e:
             self.logger.error(f"draw_display: Error displaying frame: {e}")
+
 
     def display_playback_info(self):
         """
