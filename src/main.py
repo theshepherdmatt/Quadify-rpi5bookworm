@@ -502,23 +502,43 @@ def main():
 
     def on_button_press_ui():
         current_mode = mode_manager.get_mode()
-        if current_mode in mode_manager.menu_modes:
-            mode_manager.back()
+
+        # Map menu modes to their select_item functions
+        menu_select_mapping = {
+            'menu': mode_manager.menu_manager.select_item,
+            'configmenu': mode_manager.config_menu.select_item,
+            'systemupdate': mode_manager.system_update_menu.select_item,
+            'screensavermenu': mode_manager.screensaver_menu.select_item,
+            'clockmenu': mode_manager.clock_menu.select_item,
+            'remotemenu': mode_manager.remote_menu.select_item,
+            'displaymenu': mode_manager.display_menu.select_item,
+            'tidal': mode_manager.tidal_manager.select_item,
+            'qobuz': mode_manager.qobuz_manager.select_item,
+            'spotify': mode_manager.spotify_manager.select_item,
+            'library': mode_manager.library_manager.select_item,
+            'radiomanager': mode_manager.radio_manager.select_item,
+            'motherearthradio': mode_manager.motherearth_manager.select_item,
+            'radioparadise': mode_manager.radioparadise_manager.select_item,
+            'playlists': mode_manager.playlist_manager.select_item,
+            # Add any other menu/submenu modes here as needed
+        }
+
+        # Map playback modes to their corresponding screen attribute names
+        playback_screen_mapping = {
+            'original': 'original_screen',
+            'modern': 'modern_screen',
+            'minimal': 'minimal_screen',
+            'vuscreen': 'vu_screen',
+        }
+
+        if current_mode in menu_select_mapping:
+            menu_select_mapping[current_mode]()
         elif current_mode == 'clock':
             mode_manager.trigger("to_menu")
-        elif current_mode in ['original', 'modern', 'minimal', 'vuscreen']:
-            logger.info(f"Button pressed in {current_mode} mode; toggling playback.")
-            if current_mode == 'original':
-                screen = mode_manager.original_screen
-            elif current_mode == 'modern':
-                screen = mode_manager.modern_screen
-            elif current_mode == 'minimal':
-                screen = mode_manager.minimal_screen
-            elif current_mode == 'vuscreen':
-                screen = mode_manager.vu_screen
-            else:
-                screen = None
+        elif current_mode in playback_screen_mapping:
+            screen = getattr(mode_manager, playback_screen_mapping[current_mode], None)
             if screen:
+                logger.info(f"Button pressed in {current_mode} mode; toggling playback.")
                 screen.toggle_play_pause()
             else:
                 logger.warning(f"No screen instance found for mode: {current_mode}")
@@ -526,6 +546,7 @@ def main():
             mode_manager.exit_screensaver()
         else:
             logger.warning(f"Unhandled mode: {current_mode}; no button action performed.")
+
 
     def on_long_press_ui():
         current_mode = mode_manager.get_mode()
