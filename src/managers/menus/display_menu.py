@@ -14,7 +14,7 @@ class DisplayMenu(BaseManager):
       4) Back  (-> returns to Config Menu)
 
     Sub-menus (no "Back" line):
-      - Display Modes: ["Modern", "Original", "Minimal"]
+      - Display Modes: ["Modern", "VU Meter", "Minimal", "Original"]
       - Spectrum:      ["Off", "On"]
       - Brightness:    ["Low", "Medium", "High"]
 
@@ -60,7 +60,7 @@ class DisplayMenu(BaseManager):
         ]
 
         # SUB-menu items (no 'Back' lines here)
-        self.display_modes_items = ["Modern", "Original", "Minimal"]
+        self.display_modes_items = ["Modern", "VU Meter", "Minimal", "Original"]
         self.spectrum_items      = ["Off", "On"]
         self.brightness_items    = ["Low", "Medium", "High"]
 
@@ -286,11 +286,13 @@ class DisplayMenu(BaseManager):
         "Modern" => set display_mode to "modern"
         "Original" => "original"
         "Minimal" => "minimal"
+        "VU Meter" => "vuscreen"
         """
         display_map = {
             "Modern": "modern",
             "Original": "original",
             "Minimal": "minimal",
+            "VU Meter": "vuscreen",
         }
         mapped = display_map.get(mode_name)
         if mapped:

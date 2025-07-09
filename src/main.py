@@ -22,6 +22,7 @@ from hardware.shutdown_system import shutdown_system
 from display.screens.original_screen import OriginalScreen
 from display.screens.modern_screen import ModernScreen
 from display.screens.minimal_screen import MinimalScreen
+from display.screens.vu_screen import VUScreen
 from display.screens.system_info_screen import SystemInfoScreen
 from display.screensavers.snake_screensaver import SnakeScreensaver
 from display.screensavers.geo_screensaver import GeoScreensaver
@@ -49,38 +50,6 @@ def load_config(config_path='/config.yaml'):
         logging.warning(f"Config file {config_path} not found. Using default configuration.")
     return config
     
-FIRST_RUN_FLAG = '/data/quadify_first_run_done'
-
-def has_seen_ready():
-    """Returns True if user has already seen the ready_new screen."""
-    return os.path.exists(FIRST_RUN_FLAG)
-
-def set_has_seen_ready():
-    """Creates the flag file to record that the ready_new screen was shown."""
-    try:
-        os.makedirs(os.path.dirname(FIRST_RUN_FLAG), exist_ok=True)
-        with open(FIRST_RUN_FLAG, 'w') as f:
-            f.write("shown")
-    except Exception as e:
-        print(f"Could not create first-run flag file: {e}")
-
-def is_first_run():
-    netconfigured = os.path.exists('/data/configuration/netconfigured')
-    network_configs = glob.glob('/data/configuration/system_controller/network/*.json')
-    return not (netconfigured and network_configs)
-
-def is_network_online(host="8.8.8.8", port=53, timeout=3):
-    """
-    Returns True if the device can reach an external server (default: Google's DNS).
-    This is a strong signal that the device is on Wi-Fi with internet access.
-    """
-    try:
-        socket.setdefaulttimeout(timeout)
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.connect((host, port))
-        return True
-    except Exception:
-        return False
 
 def show_gif_loop(gif_path, stop_condition, display_manager, logger):
     """Displays an animated GIF in a loop until stop_condition() returns True."""
@@ -121,40 +90,7 @@ def main():
     display_config = config.get('display', {})
 
     # --- DisplayManager ---
-    display_manager = DisplayManager(display_config)
-
-    # --- First Run: Show Network Setup GIFs ---
-    if is_first_run():
-        connecting_gif = display_config.get('connecting_path', 'connecting.gif')
-        connected_gif = display_config.get('connected_path', 'connected.gif')
-
-        logger.info("First run detected. Showing 'connecting' GIF until network is up.")
-
-        show_gif_loop(
-            connecting_gif,
-            lambda: is_network_online(),
-            display_manager,
-            logger
-        )
-
-        logger.info("Network connected! Showing 'connected' GIF for 2 seconds.")
-        show_gif_loop(
-            connected_gif,
-            lambda: True,
-            display_manager,
-            logger
-        )
-        time.sleep(2)
-        
-    # --- Determine which ready GIF to show first ---
-    if not has_seen_ready():
-        first_ready_path = display_config.get('ready_new_path', 'ready_new.gif')
-        logger.info("Showing 'ready_new.gif' for new user.")
-        is_first_time_user = True
-    else:
-        first_ready_path = display_config.get('ready_gif_path', 'ready.gif')
-        logger.info("Showing 'ready.gif' for returning user.")
-        is_first_time_user = False
+    display_manager = DisplayManager(display_config)    
 
     import smbus2
 
@@ -185,15 +121,22 @@ def main():
     volumio_cfg = config.get('volumio', {})
     volumio_host = volumio_cfg.get('host', 'localhost')
     volumio_port = volumio_cfg.get('port', 3000)
-    volumio_listener = VolumioListener(host=volumio_host, port=volumio_port)
 
-    # --- START COMMAND SERVER EARLY with dummy manager for ready loop exit --- #
+    # --- START VolumioListener EARLY with DummyModeManager for ready loop exit --- #
     class DummyModeManager:
+        def __init__(self):
+            self.last_state = None
         def get_mode(self): return None
         def trigger(self, event): pass
+        def process_state_change(self, sender, state, **kwargs):
+            # Just buffer the last state seen
+            self.last_state = state
 
     dummy_mode_manager = DummyModeManager()
+    volumio_listener = VolumioListener(host=volumio_host, port=volumio_port)
+    volumio_listener.mode_manager = dummy_mode_manager
 
+    # --- Setup RotaryControl for early ready exit --- #
     def on_button_press_inner():
         if not ready_stop_event.is_set():
             ready_stop_event.set()
@@ -394,24 +337,27 @@ def main():
 
     threading.Thread(target=set_min_loading_event, daemon=True).start()
 
-    # On Volumio state change: set events, also handle ready_stop_event if playing
     def on_state_changed(sender, state):
-        logger.info(f"Volumio state changed: {state}")
-        if not ready_stop_event.is_set() and state.get('status') == 'play':
+        logger.info(f"[on_state_changed] State: {state!r}")
+        status = str(state.get('status', '???')).lower()
+        logger.info(f"[on_state_changed] Detected status: {status}")
+        # Buffer state in dummy mode manager for handoff after ready loop
+        if hasattr(volumio_listener.mode_manager, "process_state_change"):
+            volumio_listener.mode_manager.process_state_change(sender, state)
+        if not ready_stop_event.is_set() and status == 'play':
             logger.info("Detected playback start: stopping ready loop.")
             ready_stop_event.set()
-        if state.get('status') in ['play', 'stop', 'pause', 'unknown'] and not volumio_ready_event.is_set():
+        if status in ['play', 'stop', 'pause', 'unknown'] and not volumio_ready_event.is_set():
             volumio_ready_event.set()
 
     volumio_listener.state_changed.connect(on_state_changed)
+    logger.info("Bound on_state_changed to volumio_listener.state_changed")
 
     # --- Wait for both loading events then run Ready GIF ---
     logger.info("Waiting for Volumio readiness & min load time.")
     volumio_ready_event.wait()
     min_loading_event.wait()
     logger.info("Volumio is ready & min loading time passed, proceeding to ready GIF.")
-
-    show_gif_loop(first_ready_path, lambda: True, display_manager, logger)
 
     # --- Ready loop that waits for button/remote/playback to set ready_stop_event ---
     def show_ready_gif_until_event(stop_event, gif_path):
@@ -439,9 +385,6 @@ def main():
     ready_stop_event.wait()
     logger.info("Ready GIF exited, continuing to UI startup.")
 
-    if is_first_time_user:
-        set_has_seen_ready()
-
     # --- Now the main UI, ModeManager, screens, etc ---
     clock_config = config.get('clock', {})
     clock = Clock(display_manager, clock_config, volumio_listener)
@@ -465,12 +408,30 @@ def main():
     manager_factory.setup_mode_manager()
     volumio_listener.mode_manager = mode_manager
 
-    current_state = volumio_listener.get_current_state()
-    if current_state and current_state.get("status") == "play":
-        mode_manager.process_state_change(volumio_listener, current_state)
-    else:
-        mode_manager.trigger("to_menu")
-    logger.info("Startup mode determined from current Volumio state.")
+    # --- Handoff buffered state from DummyModeManager if available ---
+    if hasattr(dummy_mode_manager, 'last_state') and dummy_mode_manager.last_state:
+        logger.info("Handing off last Volumio state from DummyModeManager to real ModeManager")
+        mode_manager.process_state_change(volumio_listener, dummy_mode_manager.last_state)
+        status = dummy_mode_manager.last_state.get("status", "").lower()
+        service = dummy_mode_manager.last_state.get("service", "").lower()
+        display_mode = mode_manager.config.get("display_mode", "original")
+
+        if status == "play":
+            if service == "webradio":
+                mode_manager.trigger("to_webradio")
+            elif display_mode == "vuscreen":
+                mode_manager.trigger("to_vuscreen")
+            elif display_mode == "modern":
+                mode_manager.trigger("to_modern")
+            elif display_mode == "minimal":
+                mode_manager.trigger("to_minimal")
+            else:
+                mode_manager.trigger("to_original")
+        elif status in ["pause", "stop"]:
+            mode_manager.trigger("to_clock")
+        else:
+            mode_manager.trigger("to_menu")
+
 
     # --- Restart command server with full manager for runtime control ---
     threading.Thread(
@@ -493,7 +454,10 @@ def main():
         elif current_mode == 'minimal':
             volume_change = 10 if direction == 1 else -20
             mode_manager.minimal_screen.adjust_volume(volume_change)
-            logger.debug(f"MinimalScreen: Adjusted volume by {volume_change}")
+        elif current_mode == 'vuscreen':
+            volume_change = 10 if direction == 1 else -20
+            mode_manager.vu_screen.adjust_volume(volume_change)
+            logger.debug(f"VUScreen: Adjusted volume by {volume_change}")
         elif current_mode == 'webradio':
             volume_change = 10 if direction == 1 else -20
             mode_manager.webradio_screen.adjust_volume(volume_change)
@@ -542,7 +506,7 @@ def main():
             mode_manager.back()
         elif current_mode == 'clock':
             mode_manager.trigger("to_menu")
-        elif current_mode in ['original', 'modern', 'minimal']:
+        elif current_mode in ['original', 'modern', 'minimal', 'vuscreen']:
             logger.info(f"Button pressed in {current_mode} mode; toggling playback.")
             if current_mode == 'original':
                 screen = mode_manager.original_screen
@@ -550,6 +514,8 @@ def main():
                 screen = mode_manager.modern_screen
             elif current_mode == 'minimal':
                 screen = mode_manager.minimal_screen
+            elif current_mode == 'vuscreen':
+                screen = mode_manager.vu_screen
             else:
                 screen = None
             if screen:
