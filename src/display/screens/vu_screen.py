@@ -182,6 +182,35 @@ class VUScreen(BaseManager):
         self.display_manager.clear_screen()
         self.logger.info("stop_mode: Display cleared.")
 
+    def adjust_volume(self, volume_change):
+        """
+        Adjust volume from an external call (e.g. rotary). This
+        emits a volume +/- to Volumio.
+        """
+        if not self.volumio_listener:
+            self.logger.error("VUScreen: no volumio_listener, cannot adjust volume.")
+            return
+
+        if self.latest_state is None:
+            self.logger.debug("VUScreen: latest_state=None => assume volume=100.")
+            self.latest_state = {"volume": 100}
+
+        with self.state_lock:
+            curr_vol = self.latest_state.get("volume", 100)
+            new_vol  = max(0, min(int(curr_vol) + volume_change, 100))
+
+        self.logger.info(f"VUScreen: Adjusting volume from {curr_vol} to {new_vol}.")
+        try:
+            if volume_change > 0:
+                self.volumio_listener.socketIO.emit("volume", "+")
+            elif volume_change < 0:
+                self.volumio_listener.socketIO.emit("volume", "-")
+            else:
+                self.volumio_listener.socketIO.emit("volume", new_vol)
+        except Exception as e:
+            self.logger.error(f"VUScreen: error adjusting volume => {e}")
+
+
     # -------- VU Needle Drawing & Display --------
     def level_to_angle(self, level):
         angle = self.min_angle + (level / 255) * (self.max_angle - self.min_angle)
@@ -252,10 +281,23 @@ class VUScreen(BaseManager):
             self.logger.error(f"draw_display: Error displaying frame: {e}")
 
     def display_playback_info(self):
+        """
+        If needed, manually refresh the display with the current state.
+        """
         state = self.volumio_listener.get_current_state()
-        self.logger.info(f"display_playback_info: state={state}")
         if state:
             self.draw_display(state)
+        else:
+            self.logger.warning("VUScreen: No current volumio state available to display.")
 
     def toggle_play_pause(self):
-        self.logger.info("VUScreen: toggle_play_pause called (no-op)")
+        """Emit Volumio play/pause toggle if connected."""
+        self.logger.info("VUScreen: Toggling play/pause.")
+        if not self.volumio_listener or not self.volumio_listener.is_connected():
+            self.logger.warning("VUScreen: Not connected to Volumio => cannot toggle.")
+            return
+        try:
+            self.volumio_listener.socketIO.emit("toggle", {})
+            self.logger.debug("VUScreen: Emitted 'toggle' event.")
+        except Exception as e:
+            self.logger.error(f"VUScreen: toggle_play_pause failed => {e}")
