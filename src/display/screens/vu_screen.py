@@ -3,6 +3,7 @@ import threading
 import os
 import math
 import time
+import subprocess
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 from managers.menus.base_manager import BaseManager
 
@@ -75,6 +76,23 @@ class VUScreen(BaseManager):
         self.logger.info("VUScreen initialised.")
 
     # ---------------- CAVA/FIFO Spectrum Thread ---------------------
+
+    def _is_cava_running(self):
+        """Returns True if cava.service is active, False otherwise."""
+        try:
+            out = subprocess.check_output(['systemctl', 'is-active', '--quiet', 'cava'])
+            return True
+        except subprocess.CalledProcessError:
+            return False
+
+    def _start_cava_service(self):
+        """Starts or restarts cava.service."""
+        try:
+            subprocess.run(['systemctl', 'restart', 'cava'], check=True)
+            self.logger.info("VUScreen: CAVA service restarted.")
+        except Exception as e:
+            self.logger.error(f"VUScreen: Failed to start/restart CAVA service: {e}")
+
     def _read_fifo(self):
         if not os.path.exists(FIFO_PATH):
             self.logger.error(f"VUScreen: FIFO {FIFO_PATH} not found.")
@@ -127,6 +145,13 @@ class VUScreen(BaseManager):
             return
         self.is_active = True
         self.logger.info("start_mode: VUScreen is now active.")
+
+        # Ensure CAVA is running for VU
+        if not self._is_cava_running():
+            self.logger.info("VUScreen: CAVA not running, attempting to start.")
+            self._start_cava_service()
+        else:
+            self.logger.info("VUScreen: CAVA already running.")
 
         # Start the CAVA spectrum thread if not already running
         if not self.spectrum_thread or not self.spectrum_thread.is_alive():
