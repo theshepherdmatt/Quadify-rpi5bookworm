@@ -52,18 +52,79 @@ Follow the on-screen prompts. A reboot may be required after installation (you w
   (longer if compiling certain components from source)
 * Installation steps may change as the project evolves—check commit notes and documentation for updates.
 
-## Compiling `run_update` Helper
 
-The install script automatically builds a small setuid wrapper (`scripts/run_update.c`) to allow the Volumio user to perform updates:
+## Debugging and Service Management
+
+If Quadify isn’t working as expected, try the following steps to identify and resolve common issues:
+
+### 1. Restart Quadify Services
+
+Most issues can be fixed by restarting the relevant services. From the terminal:
 
 ```bash
-gcc -o scripts/run_update scripts/run_update.c
-chown root:root scripts/run_update
-chmod 4755 scripts/run_update
+sudo systemctl restart quadify
 ```
 
-This step is handled by the installer if you run `install.sh` as root (recommended).
+Or to stop and start manually:
 
-## Troubleshooting & Feedback
+```bash
+sudo systemctl stop quadify
+sudo systemctl start quadify
+```
 
-If you encounter issues, please check the [Issues](https://github.com/theshepherdmatt/Quadify/issues) tab and join the discussion.
+### 2. Manually Run Quadify
+
+For more detailed error messages or debugging, run Quadify directly and watch the logs:
+
+```bash
+cd Quadify/src
+python3 main.py
+```
+
+Check the output for errors—this can help identify configuration or dependency issues.
+
+### 3. Check Quadify Service Logs
+
+To see the system logs for the Quadify service:
+
+```bash
+journalctl -u quadify -f
+```
+
+This will show live logs. For a broader look, just:
+
+```bash
+journalctl -u quadify
+```
+
+### 4. Check Volumio Logs
+
+Since Quadify integrates tightly with Volumio, check the main Volumio service logs for related errors:
+
+```bash
+journalctl -u volumio -f
+```
+
+### 5. Check CAVA Visualiser Service (if using VU Meter)
+
+Some display modes (e.g., the VU Meter) require the CAVA visualiser to be running. To check CAVA’s status:
+
+```bash
+sudo systemctl status cava
+```
+
+If it’s not active, start it:
+
+```bash
+sudo systemctl start cava
+```
+
+You can also enable it to start at boot:
+
+```bash
+sudo systemctl enable cava
+```
+
+---
+
+**If you encounter persistent issues, please open an [Issue](https://github.com/theshepherdmatt/Quadify/issues) with details of your setup and any error messages.**
