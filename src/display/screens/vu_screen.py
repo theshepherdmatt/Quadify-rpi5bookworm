@@ -283,15 +283,19 @@ class VUScreen(BaseManager):
             self.logger.error(f"draw_display: Error drawing needles: {e}")
 
         try:
-            # Artist - Title line
+            # Artist - Title line with truncation
             title = data.get("title", "Unknown Title")
             artist = data.get("artist", "Unknown Artist")
+            max_length = 45
             combined = f"{artist} - {title}"
+            if len(combined) > max_length:
+                combined = combined[:max_length - 3] + "..."
+
             text_w, text_h = draw.textsize(combined, font=self.font)
             text_y = -4
             draw.text(((width - text_w) // 2, text_y), combined, font=self.font, fill="white")
 
-            # Middle info line: Vol / Samplerate / Bitdepth
+            # Bottom info line: Vol / Samplerate / Bitdepth
             samplerate = data.get("samplerate", "N/A")
             bitdepth = data.get("bitdepth", "N/A")
             volume = data.get("volume", "N/A")
@@ -300,21 +304,19 @@ class VUScreen(BaseManager):
             info_y = text_y + text_h + 1
             draw.text(((width - info_w) // 2, info_y), info_text, font=self.font_artist, fill="white")
 
-            # Bottom line: service icon only, centered
+            # Service icon centered below info
             service = data.get("service", "").lower()
             icon_path = f"/home/volumio/Quadify/src/assets/images/menus/{service}.png"
-            icon = None
             if os.path.exists(icon_path):
                 try:
                     icon = Image.open(icon_path).convert("RGBA").resize((16, 16))
-                    icon_w, icon_h = icon.size
-                    icon_x = (width - icon_w) // 2
-                    icon_y = info_y + info_h + 1
+                    icon_x = (width - icon.width) // 2
+                    icon_y = info_y + info_h + 2
                     frame.paste(icon, (icon_x, icon_y), icon)
                 except Exception as e:
                     self.logger.warning(f"Service icon error for '{service}': {e}")
 
-            self.logger.debug("draw_display: Combined artist/title, info line, and service icon drawn.")
+            self.logger.debug("draw_display: Artist/title, info line, and icon drawn.")
         except Exception as e:
             self.logger.error(f"draw_display: Error rendering text: {e}")
 
@@ -324,6 +326,7 @@ class VUScreen(BaseManager):
             self.logger.info("draw_display: Frame sent to display.")
         except Exception as e:
             self.logger.error(f"draw_display: Error displaying frame: {e}")
+
 
 
     def display_playback_info(self):
