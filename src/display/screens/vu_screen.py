@@ -26,7 +26,7 @@ class VUScreen(BaseManager):
         self.volumio_listener = volumio_listener
 
         # Font (use display_manager fonts, fallback to default)
-        self.font_artist = ImageFont.truetype("/home/volumio/Quadify/src/assets/fonts/OpenSans-Regular.ttf", 10)
+        self.font_artist = ImageFont.truetype("/home/volumio/Quadify/src/assets/fonts/OpenSans-Regular.ttf", 8)
         self.font_title = ImageFont.truetype("/home/volumio/Quadify/src/assets/fonts/OpenSans-Regular.ttf", 12)
         self.font = self.font_title
 
@@ -251,6 +251,7 @@ class VUScreen(BaseManager):
         )
         draw.line([centre, (x_end, y_end)], fill=colour, width=2)
 
+
     def draw_display(self, data):
         self.logger.info(f"draw_display: Called with data: {data}")
 
@@ -269,9 +270,11 @@ class VUScreen(BaseManager):
         except Exception as e:
             self.logger.error(f"draw_display: Failed to copy background: {e}")
             frame = Image.new("RGBA", self.display_manager.oled.size, "black")
-        draw = ImageDraw.Draw(frame)
 
-        # Draw needles
+        draw = ImageDraw.Draw(frame)
+        width, height = self.display_manager.oled.size
+
+        # Draw VU needles
         try:
             self.draw_needle(draw, self.left_centre, self.level_to_angle(left), self.needle_length, "white")
             self.draw_needle(draw, self.right_centre, self.level_to_angle(right), self.needle_length, "white")
@@ -279,30 +282,41 @@ class VUScreen(BaseManager):
         except Exception as e:
             self.logger.error(f"draw_display: Error drawing needles: {e}")
 
-        # Draw artist and title on one line: Artist | Song Title
-        title = data.get("title", "Unknown Title")
-        artist = data.get("artist", "Unknown Artist")
-        combined = f"{artist} - {title}"
-
-        width, height = self.display_manager.oled.size
-
         try:
-            # Draw Artist | Title
+            # Artist - Title line
+            title = data.get("title", "Unknown Title")
+            artist = data.get("artist", "Unknown Artist")
+            combined = f"{artist} - {title}"
             text_w, text_h = draw.textsize(combined, font=self.font)
-            text_y = 0  # or adjust as needed
+            text_y = -4
             draw.text(((width - text_w) // 2, text_y), combined, font=self.font, fill="white")
 
-            # Draw Samplerate / Bitdepth underneath
+            # Middle info line: Vol / Samplerate / Bitdepth
             samplerate = data.get("samplerate", "N/A")
             bitdepth = data.get("bitdepth", "N/A")
-            info_text = f"{samplerate} / {bitdepth}"
+            volume = data.get("volume", "N/A")
+            info_text = f"Vol: {volume} / {samplerate} / {bitdepth}"
             info_w, info_h = draw.textsize(info_text, font=self.font_artist)
-            info_y = text_y + text_h + 1  # 1px gap
+            info_y = text_y + text_h + 1
             draw.text(((width - info_w) // 2, info_y), info_text, font=self.font_artist, fill="white")
 
-            self.logger.debug("draw_display: Combined artist/title and sample info drawn at top.")
+            # Bottom line: service icon only, centered
+            service = data.get("service", "").lower()
+            icon_path = f"/home/volumio/Quadify/src/assets/images/menus/{service}.png"
+            icon = None
+            if os.path.exists(icon_path):
+                try:
+                    icon = Image.open(icon_path).convert("RGBA").resize((16, 16))
+                    icon_w, icon_h = icon.size
+                    icon_x = (width - icon_w) // 2
+                    icon_y = info_y + info_h + 1
+                    frame.paste(icon, (icon_x, icon_y), icon)
+                except Exception as e:
+                    self.logger.warning(f"Service icon error for '{service}': {e}")
+
+            self.logger.debug("draw_display: Combined artist/title, info line, and service icon drawn.")
         except Exception as e:
-            self.logger.error(f"draw_display: Error drawing text: {e}")
+            self.logger.error(f"draw_display: Error rendering text: {e}")
 
         try:
             frame = frame.convert(self.display_manager.oled.mode)
