@@ -90,8 +90,11 @@ def main():
     display_config = config.get('display', {})
 
     # --- DisplayManager ---
-    display_manager = DisplayManager(display_config)    
+    display_manager = DisplayManager(display_config)   
 
+    buttons_leds = ButtonsLEDController()
+    buttons_leds.start()
+ 
     import smbus2
 
     MCP23017_ADDRESS = 0x20
@@ -298,7 +301,7 @@ def main():
     # --- Start early for ready loop UX ---
     threading.Thread(
         target=quadify_command_server,
-        args=(dummy_mode_manager, volumio_listener, display_manager, None),
+        args=(dummy_mode_manager, volumio_listener, display_manager, buttons_leds),
         daemon=True
     ).start()
     print("Quadify command server thread (early) started.")
@@ -436,7 +439,7 @@ def main():
     # --- Restart command server with full manager for runtime control ---
     threading.Thread(
         target=quadify_command_server,
-        args=(mode_manager, volumio_listener, display_manager, None),
+        args=(mode_manager, volumio_listener, display_manager, buttons_leds),
         daemon=True
     ).start()
     print("Quadify command server thread (UI) started.")
@@ -566,6 +569,7 @@ def main():
     except KeyboardInterrupt:
         logger.info("Shutting down Quadify via KeyboardInterrupt.")
     finally:
+        buttons_leds.stop()
         rotary_control.stop()
         try:
             volumio_listener.stop_listener()
