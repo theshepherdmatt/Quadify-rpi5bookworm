@@ -498,6 +498,8 @@ def main():
             mode_manager.radioparadise_manager.scroll_selection(direction)
         elif current_mode == 'library':
             mode_manager.library_manager.scroll_selection(direction)
+        elif current_mode == 'internal':
+            mode_manager.internal_manager.scroll_selection(direction)
         elif current_mode == 'usblibrary':
             mode_manager.usb_library_manager.scroll_selection(direction)
         else:
@@ -519,6 +521,7 @@ def main():
             'qobuz': mode_manager.qobuz_manager.select_item,
             'spotify': mode_manager.spotify_manager.select_item,
             'library': mode_manager.library_manager.select_item,
+            'internal': mode_manager.internal_manager.select_item,
             'radiomanager': mode_manager.radio_manager.select_item,
             'motherearthradio': mode_manager.motherearth_manager.select_item,
             'radioparadise': mode_manager.radioparadise_manager.select_item,

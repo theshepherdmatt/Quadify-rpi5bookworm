@@ -35,6 +35,7 @@ class ModeManager:
         {'name': 'tidal',           'on_enter': 'enter_tidal'},
         {'name': 'qobuz',           'on_enter': 'enter_qobuz'},
         {'name': 'library',         'on_enter': 'enter_library'},
+        {'name': 'internal',         'on_enter': 'enter_internal'},
         {'name': 'usblibrary',      'on_enter': 'enter_usb_library'},
         {'name': 'spotify',         'on_enter': 'enter_spotify'},
         {'name': 'webradio',        'on_enter': 'enter_webradio'},
@@ -90,6 +91,7 @@ class ModeManager:
         self.radioparadise_manager = None
         self.spotify_manager = None
         self.library_manager = None
+        self.internal_manager = None
         self.usb_library_manager = None
         self.original_screen = None
         self.modern_screen = None
@@ -139,7 +141,7 @@ class ModeManager:
         self.menu_inactivity_timer = None
         self.menu_inactivity_timeout = 15  # seconds; change as needed
         self.menu_modes = {
-            "menu", "playlists", "tidal", "qobuz", "library", "usblibrary",
+            "menu", "playlists", "tidal", "qobuz", "library", "internal", "usblibrary",
             "configmenu", "displaymenu", "clockmenu", "remotemenu",
             "radiomanager", "motherearthradio", "radioparadise",
             "systeminfo", "systemupdate", "spotify", "webradio", "airplay"
@@ -255,6 +257,9 @@ class ModeManager:
     def set_library_manager(self, library_manager):
         self.library_manager = library_manager
 
+    def set_internal_manager(self, internal_manager):
+        self.internal_manager = internal_manager
+
     def set_usb_library_manager(self, usb_library_manager):
         self.usb_library_manager = usb_library_manager
 
@@ -365,6 +370,7 @@ class ModeManager:
         self.machine.add_transition('to_tidal',        source='*', dest='tidal', before='push_current_state')
         self.machine.add_transition('to_qobuz',        source='*', dest='qobuz', before='push_current_state')
         self.machine.add_transition('to_library',      source='*', dest='library', before='push_current_state')
+        self.machine.add_transition('to_internal',      source='*', dest='internal', before='push_current_state')
         self.machine.add_transition('to_usb_library',  source='*', dest='usblibrary', before='push_current_state')
         self.machine.add_transition('to_spotify',      source='*', dest='spotify', before='push_current_state')
         self.machine.add_transition('to_webradio',     source='*', dest='webradio', before='push_current_state')
@@ -423,6 +429,8 @@ class ModeManager:
             self.spotify_manager.stop_mode()
         if self.library_manager and self.library_manager.is_active:
             self.library_manager.stop_mode()
+        if self.internal_manager and self.internal_manager.is_active:
+            self.internal_manager.stop_mode()
         if self.usb_library_manager and self.usb_library_manager.is_active:
             self.usb_library_manager.stop_mode()
         if self.original_screen and self.original_screen.is_active:
@@ -747,6 +755,19 @@ class ModeManager:
         self.start_menu_inactivity_timer()
         self.update_current_mode()
 
+    def enter_internal(self, event):
+        self.logger.info("ModeManager: Entering 'internal' state.")
+        self.stop_all_screens()
+        if self.internal_manager:
+            start_uri = event.kwargs.get('start_uri')
+            self.internal_manager.start_mode(start_uri=start_uri)
+            self.logger.info("ModeManager: InternalManager started.")
+        else:
+            self.logger.warning("ModeManager: No internal_manager set.")
+        self.reset_idle_timer()
+        self.start_menu_inactivity_timer()
+        self.update_current_mode()
+
     def enter_usb_library(self, event):
         self.logger.info("ModeManager: Entering 'usblibrary' state.")
         self.stop_all_screens()
@@ -947,6 +968,7 @@ class ModeManager:
                 "tidal": self.to_tidal,
                 "qobuz": self.to_qobuz,
                 "library": self.to_library,
+                "internal": self.to_internal,
                 "usblibrary": self.to_usb_library,
                 "spotify": self.to_spotify,
                 "webradio": self.to_webradio,

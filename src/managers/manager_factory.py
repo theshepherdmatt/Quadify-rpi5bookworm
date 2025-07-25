@@ -40,6 +40,7 @@ class ManagerFactory:
         radio_manager        = self.create_radio_manager()
         spotify_manager      = self.create_spotify_manager()
         library_manager      = self.create_library_manager()
+        internal_manager      = self.create_internal_manager()
         usb_library_manager  = self.create_usb_library_manager()
 
         # Quoode/Quadify common screens
@@ -71,6 +72,7 @@ class ManagerFactory:
         self.mode_manager.set_radioparadise_manager(radioparadise_manager)
         self.mode_manager.set_spotify_manager(spotify_manager)
         self.mode_manager.set_library_manager(library_manager)
+        self.mode_manager.set_internal_manager(internal_manager)
         self.mode_manager.set_usb_library_manager(usb_library_manager)
 
         self.mode_manager.set_webradio_screen(webradio_screen)
@@ -176,6 +178,14 @@ class ManagerFactory:
     def create_library_manager(self):
         from .menus.library_manager import LibraryManager
         return LibraryManager(
+            display_manager   = self.display_manager,
+            volumio_config    = self.config.get('volumio', {}),
+            mode_manager      = self.mode_manager
+        )
+    
+    def create_internal_manager(self):
+        from .menus.internal_manager import InternalManager
+        return InternalManager(
             display_manager   = self.display_manager,
             volumio_config    = self.config.get('volumio', {}),
             mode_manager      = self.mode_manager

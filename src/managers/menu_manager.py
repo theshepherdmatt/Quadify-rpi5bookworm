@@ -18,7 +18,7 @@ class MenuManager:
         self.menu_stack = []
         self.current_menu_items = ["Stream", "Library", "Playlists", "Radio", "Config"]
         self.stream_menu_items = ["Tidal", "Qobuz", "Spotify", "MotherE", "RadioP"]
-        self.library_menu_items = ["NAS", "USB"]
+        self.library_menu_items = ["INTERNAL", "NAS", "USB"]
         self.display_menu_items = ["Display", "Screensavers", "Clock", "Contrast"]
         self.icons = {
             "Stream": self.display_manager.icons.get("stream"),
@@ -30,6 +30,7 @@ class MenuManager:
             "Tidal": self.display_manager.icons.get("tidal"),
             "Qobuz": self.display_manager.icons.get("qobuz"),
             "Spotify": self.display_manager.icons.get("spop"),
+            "INTERNAL": self.display_manager.icons.get("mpd"),
             "NAS": self.display_manager.icons.get("nas"), 
             "USB": self.display_manager.icons.get("usb"),
             "Config": self.display_manager.icons.get("config"),
@@ -197,6 +198,9 @@ class MenuManager:
         elif selected_item == "NAS":
             self.mode_manager.to_library(start_uri="music-library/NAS")
             self.logger.info("Library Manager for NAS activated.")
+        elif selected_item == "INTERNAL":
+            self.mode_manager.to_internal(start_uri="music-library/INTERNAL")
+            self.logger.info("Internal Manager activated.")
         elif selected_item == "USB":
             self.mode_manager.to_library(start_uri="music-library/USB")
             self.logger.info("USB Library Manager activated.")
