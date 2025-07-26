@@ -19,7 +19,7 @@ class WebRadioScreen:
 
     def __init__(self, display_manager, volumio_listener, mode_manager):
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.logger.setLevel(logging.DEBUG)
+        self.logger.setLevel(logging.ERROR)
 
         self.display_manager = display_manager
         self.volumio_listener = volumio_listener

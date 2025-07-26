@@ -453,6 +453,10 @@ class ModeManager:
             self.system_update_menu.stop_mode()
             
     def start_menu_inactivity_timer(self):
+        if self.get_mode() in ["library", "usblibrary", "internal", "tidal", "qobuz", "spotify"]:
+            self.logger.debug("ModeManager: Inactivity timer skipped for '%s' mode.", self.get_mode())
+            return
+
         self.cancel_menu_inactivity_timer()
         self.menu_inactivity_timer = threading.Timer(
             self.menu_inactivity_timeout, self.exit_menu_to_clock)
@@ -758,6 +762,7 @@ class ModeManager:
     def enter_internal(self, event):
         self.logger.info("ModeManager: Entering 'internal' state.")
         self.stop_all_screens()
+        self.cancel_menu_inactivity_timer()
         if self.internal_manager:
             start_uri = event.kwargs.get('start_uri')
             self.internal_manager.start_mode(start_uri=start_uri)

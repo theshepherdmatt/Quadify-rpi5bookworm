@@ -309,7 +309,7 @@ class VUScreen(BaseManager):
             icon_path = f"/home/volumio/Quadify/src/assets/images/menus/{service}.png"
             if os.path.exists(icon_path):
                 try:
-                    icon = Image.open(icon_path).convert("RGBA").resize((16, 16))
+                    icon = Image.open(icon_path).convert("RGBA").resize((12, 12))
                     icon_x = (width - icon.width) // 2
                     icon_y = info_y + info_h + 2
                     frame.paste(icon, (icon_x, icon_y), icon)
