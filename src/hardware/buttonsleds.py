@@ -266,6 +266,7 @@ class ButtonsLEDController:
                 self.light_button_led_for(LED.SPARE, 0.5)
             elif btn_id == 8:
                 subprocess.run(["sudo","systemctl","restart","quadify"], check=False)
+                subprocess.run(["sudo", "systemctl", "restart", "cava"], check=False)
                 self.light_button_led_for(LED.RELOAD, 0.5)
             else:
                 self.logger.warning(f"No action for button {btn_id}")

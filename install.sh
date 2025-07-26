@@ -417,6 +417,16 @@ EOF
     run_command "chown -R volumio:volumio /home/volumio/Quadify"
     run_command "chmod -R 777 /home/volumio/Quadify"
     log_message "success" "Permissions set for /home/volumio/Quadify."
+
+    # --- Ensure Samba user exists ---
+    if pdbedit -L | grep -q '^volumio:'; then
+        log_message "info" "Samba user 'volumio' already exists."
+    else
+        log_message "info" "Adding Samba user 'volumio'. Please enter a password:"
+        sudo smbpasswd -a volumio
+        log_message "success" "Samba user 'volumio' added."
+    fi
+
     show_random_tip
 }
 
