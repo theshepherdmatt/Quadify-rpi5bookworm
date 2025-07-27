@@ -261,7 +261,9 @@ class DigitalVUScreen(BaseManager):
             if self.is_active and self.mode_manager.get_mode() == 'digitalvuscreen' and self.current_state:
                 self.draw_display(self.current_state)
             time.sleep(0.05)
-
+        
+    def truncate(text, max_length=40):
+        return (text[:max_length-3] + "...") if len(text) > max_length else text
 
     # -------- VU Needle Drawing & Display --------
     def level_to_angle(self, level):
@@ -388,7 +390,7 @@ class DigitalVUScreen(BaseManager):
         try:
             title = data.get("title", "Unknown Title")
             artist = data.get("artist", "Unknown Artist")
-            max_length = 45
+            max_length = 40
             combined = f"{artist} - {title}"
             if len(combined) > max_length:
                 combined = combined[:max_length - 3] + "..."
