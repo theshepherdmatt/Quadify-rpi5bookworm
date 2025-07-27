@@ -53,6 +53,12 @@ class DigitalVUScreen(BaseManager):
         self.min_angle = -70
         self.max_angle = 70
 
+        self.left_peak_cell = 0
+        self.right_peak_cell = 0
+        self.left_peak_time = time.time()
+        self.right_peak_time = time.time()
+        self.peak_hold_ms = 1500  # Milliseconds to hold the peak marker
+
         # Spectrum (CAVA/FIFO) handling - pattern matches ModernScreen
         self.spectrum_thread = None
         self.running_spectrum = False
@@ -296,83 +302,90 @@ class DigitalVUScreen(BaseManager):
         width, height = self.display_manager.oled.size
 
         # --- Draw wide track progress bar above VU bars ---
+        seek_ms = data.get("seek", 0)
+        duration_s = data.get("duration", 1)
+        seek_s = max(0, seek_ms / 1000)
+        progress = max(0.0, min(seek_s / duration_s, 1.0))
 
-        # Get playback progress from state
-        seek_ms    = data.get("seek",   0)
-        duration_s = data.get("duration", 1)  # Avoid division by zero
-        seek_s     = max(0, seek_ms / 1000)
-        progress   = max(0.0, min(seek_s / duration_s, 1.0))
-
-        # Time formatting
         cur_min = int(seek_s // 60)
         cur_sec = int(seek_s % 60)
         tot_min = int(duration_s // 60)
         tot_sec = int(duration_s % 60)
-        current_time   = f"{cur_min}:{cur_sec:02d}"
+        current_time = f"{cur_min}:{cur_sec:02d}"
         total_duration = f"{tot_min}:{tot_sec:02d}"
 
-        # Drawing settings
         screen_width, _ = self.display_manager.oled.size
-        progress_margin = 2  # pixels from left/right edge
+        progress_margin = 2
         progress_width = screen_width - (progress_margin * 2)
         progress_x = progress_margin
+        time_y = 20
+        progress_y = 34
 
-        time_y = 20      # <-- Fixed vertical position for time/duration labels
-        progress_y = 34  # <-- Vertical position for progress bar itself
-
-        # Left time (current) - near left edge
+        # Time labels
         draw.text((2, time_y), current_time, font=self.font_artist, fill="white")
-
-        # Right time (total) - near right edge
         dur_w, _ = draw.textsize(total_duration, font=self.font_artist)
         draw.text((screen_width - dur_w - 2, time_y), total_duration, font=self.font_artist, fill="white")
 
-        # Progress line (background)
-        draw.line([progress_x, progress_y, progress_x + progress_width, progress_y],
-                fill="white", width=1)
-
-        # Progress indicator
+        # Progress bar
+        draw.line([progress_x, progress_y, progress_x + progress_width, progress_y], fill="white", width=1)
         indicator_x = progress_x + int(progress_width * progress)
-        draw.line([indicator_x, progress_y - 2, indicator_x, progress_y + 2],
-                fill="white", width=1)
-
-
+        draw.line([indicator_x, progress_y - 2, indicator_x, progress_y + 2], fill="white", width=1)
 
         # --- Draw horizontal bar VU meters at the bottom ---
+        num_cells = 64
+        cell_w = 2
+        cell_h = 5
+        cell_spacing = 7
+        left_row_y = 41
+        right_row_y = 57
+        row_x0 = 22
 
-        num_cells = 64         # Number of VU segments (match your bar length)
-        cell_w = 2             # Width of each bar segment (pixels)
-        cell_h = 5             # Height of each bar segment (pixels)
-        cell_spacing = 7       # Horizontal distance between bar segments (pixels)
-
-        # Set Y positions to the bottom of the screen
-        left_row_y = 41        # Y-position for Left (upper) bar (pixels from top)
-        right_row_y = 57       # Y-position for Right (lower) bar
-
-        row_x0 = 22            # X-position for the first cell (adjust to line up with your image)
-
-        # Convert VU level (0-255) to number of bar segments to display
         left_cells = int((left / 255) * num_cells)
         right_cells = int((right / 255) * num_cells)
 
-        # Draw Left channel bar (upper)
+        # --- PEAK TRACKING LOGIC ---
+        now = time.time()
+        # Left peak
+        if left_cells > self.left_peak_cell or now - self.left_peak_time > (self.peak_hold_ms / 1000):
+            self.left_peak_cell = left_cells
+            self.left_peak_time = now
+        elif left_cells < self.left_peak_cell:
+            if now - self.left_peak_time > (self.peak_hold_ms / 1000):
+                self.left_peak_cell = left_cells
+
+        # Right peak
+        if right_cells > self.right_peak_cell or now - self.right_peak_time > (self.peak_hold_ms / 1000):
+            self.right_peak_cell = right_cells
+            self.right_peak_time = now
+        elif right_cells < self.right_peak_cell:
+            if now - self.right_peak_time > (self.peak_hold_ms / 1000):
+                self.right_peak_cell = right_cells
+
+        # Draw VU bars
         for i in range(left_cells):
             x = row_x0 + i * cell_spacing
             y = left_row_y
             draw.rectangle([(x, y), (x + cell_w, y + cell_h)], fill="white")
-
-        # Draw Right channel bar (lower, closer to bottom edge)
         for i in range(right_cells):
             x = row_x0 + i * cell_spacing
             y = right_row_y
             draw.rectangle([(x, y), (x + cell_w, y + cell_h)], fill="white")
 
-        self.logger.debug("draw_display: Horizontal VU bars drawn at bottom.")
+        # Draw LEFT peak marker (red rectangle)
+        if self.left_peak_cell > 0:
+            peak_x = row_x0 + (self.left_peak_cell - 1) * cell_spacing
+            peak_y = left_row_y
+            draw.rectangle([(peak_x, peak_y), (peak_x + cell_w, peak_y + cell_h)], fill="white")
+        # Draw RIGHT peak marker (red rectangle)
+        if self.right_peak_cell > 0:
+            peak_x = row_x0 + (self.right_peak_cell - 1) * cell_spacing
+            peak_y = right_row_y
+            draw.rectangle([(peak_x, peak_y), (peak_x + cell_w, peak_y + cell_h)], fill="white")
 
+        self.logger.debug("draw_display: Horizontal VU bars and peak markers drawn.")
 
-
+        # --- Draw artist/title/info lines ---
         try:
-            # Artist - Title line with truncation
             title = data.get("title", "Unknown Title")
             artist = data.get("artist", "Unknown Artist")
             max_length = 45
@@ -384,7 +397,6 @@ class DigitalVUScreen(BaseManager):
             text_y = -4
             draw.text(((width - text_w) // 2, text_y), combined, font=self.font, fill="white")
 
-            # Bottom info line: Vol / Samplerate / Bitdepth
             samplerate = data.get("samplerate", "N/A")
             bitdepth = data.get("bitdepth", "N/A")
             volume = data.get("volume", "N/A")
