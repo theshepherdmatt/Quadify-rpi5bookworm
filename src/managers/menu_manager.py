@@ -59,7 +59,7 @@ class MenuManager:
 
     def start_mode(self, skip_initial_draw=False):
         self.is_active = True
-        self.current_menu_items = ["Stream", "Library", "Playlists", "Radio", "Config"]
+        self.current_menu_items = ["Library", "Stream", "Playlists", "Radio", "Config"]
         self.current_selection_index = 0
         self.window_start_index = 0
         if not skip_initial_draw:
@@ -128,7 +128,6 @@ class MenuManager:
 
     def config_menu(self):
         self.logger.info("MenuManager: Entering Config menu.")
-        self.current_menu_items = ["Option 1", "Option 2", "Back"]
         self.current_selection_index = 0
         self.window_start_index = 0
         self.display_menu()

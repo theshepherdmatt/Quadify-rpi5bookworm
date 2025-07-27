@@ -95,6 +95,10 @@ class ButtonsLEDController:
         self.button_thread = None
         self.volumio_monitor_thread = None
 
+        self.button8_down_time = None
+        self.button8_pending = False
+
+
     def _load_config(self, cfg_path):
         path = Path(cfg_path)
         if path.is_file():
@@ -145,6 +149,14 @@ class ButtonsLEDController:
         if self.volumio_monitor_thread and self.volumio_monitor_thread.is_alive():
             self.volumio_monitor_thread.join()
         self.logger.info("ButtonsLEDController stopped.")
+        
+    def restart_cava_only(self):
+        subprocess.run(["sudo", "systemctl", "restart", "cava"], check=False)
+
+    def restart_quadify_and_cava(self):
+        subprocess.run(["sudo", "systemctl", "restart", "quadify"], check=False)
+        subprocess.run(["sudo", "systemctl", "restart", "cava"], check=False)
+
 
     # -----------------------------------------------------------------
     # Monitoring Buttons
@@ -158,12 +170,37 @@ class ButtonsLEDController:
                 for c in range(2):
                     curr = matrix[r][c]
                     prev = self.prev_button_state[r][c]
-                    if curr == 0 and prev == 1:
-                        btn_id = self.button_map[r][c]
-                        self.logger.info(f"Button {btn_id} pressed.")
-                        self.handle_button_press(btn_id)
+                    btn_id = self.button_map[r][c]
+
+                    # --- Special logic for Button 8 (long press support) ---
+                    if btn_id == 8:
+                        # Button 8 pressed down
+                        if curr == 0 and prev == 1:
+                            self.button8_down_time = time.time()
+                            self.button8_pending = True
+                        # Button 8 released
+                        elif curr == 1 and prev == 0 and self.button8_pending:
+                            held_time = time.time() - self.button8_down_time if self.button8_down_time else 0
+                            if held_time >= 3.0:
+                                self.logger.info("Button 8 long press (restart CAVA only)")
+                                self.restart_cava_only()
+                            else:
+                                self.logger.info("Button 8 short press (restart Quadify and CAVA)")
+                                self.restart_quadify_and_cava()
+                            self.light_button_led_for(LED.RELOAD, 0.5)
+                            self.button8_pending = False
+
+                    # --- All other buttons (default: short press only) ---
+                    else:
+                        if curr == 0 and prev == 1:
+                            self.logger.info(f"Button {btn_id} pressed.")
+                            self.handle_button_press(btn_id)
+
+                    # Update previous state for this button
                     self.prev_button_state[r][c] = curr
+
             time.sleep(self.debounce_delay)
+
 
     def _read_matrix(self):
         default = [[1,1],[1,1],[1,1],[1,1]]
@@ -264,10 +301,6 @@ class ButtonsLEDController:
                 self.light_button_led_for(LED.REPEAT, 0.5)
             elif btn_id == 7:
                 self.light_button_led_for(LED.SPARE, 0.5)
-            elif btn_id == 8:
-                subprocess.run(["sudo","systemctl","restart","quadify"], check=False)
-                subprocess.run(["sudo", "systemctl", "restart", "cava"], check=False)
-                self.light_button_led_for(LED.RELOAD, 0.5)
             else:
                 self.logger.warning(f"No action for button {btn_id}")
         except Exception as e:

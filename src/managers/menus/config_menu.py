@@ -28,7 +28,6 @@ class ConfigMenu(BaseManager):
         self.menu_items = [
             "Display",
             "Clock",
-            "Screen+",
             "System",
             "Update",
             "Back"
@@ -39,7 +38,6 @@ class ConfigMenu(BaseManager):
         self.icons = {
             "Display": self.display_manager.icons.get("displaysettings"),
             "Clock": self.display_manager.icons.get("clocksettings"),
-            "Screen+": self.display_manager.icons.get("screensaversettings"),
             "System": self.display_manager.icons.get("systeminfo"),
             "Update": self.display_manager.icons.get("systemupdate"),
             "Back": self.display_manager.icons.get("back")  # Use an appropriate icon
@@ -166,8 +164,6 @@ class ConfigMenu(BaseManager):
             self.mode_manager.to_displaymenu()
         elif selected == "Clock":
             self.mode_manager.to_clockmenu()
-        elif selected == "Screen+":
-            self.mode_manager.to_screensavermenu()
         elif selected == "System":
             self.mode_manager.to_systeminfo()
         elif selected == "Update":

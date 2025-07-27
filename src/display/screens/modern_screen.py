@@ -32,6 +32,8 @@ class ModernScreen(BaseManager):
         self.running_spectrum = False
         self.spectrum_thread  = None
         self.spectrum_bars    = []
+        self.spectrum_mode = "bars"  # or "dots", "scope"
+        self.spectrum_mode = self.mode_manager.config.get("modern_spectrum_mode", "bars")
 
         # Font references
         self.font_title    = display_manager.fonts.get('song_font', ImageFont.load_default())
@@ -127,6 +129,7 @@ class ModernScreen(BaseManager):
 
         self.is_active = True
         self.reset_scrolling()
+        self.spectrum_mode = self.mode_manager.config.get("modern_spectrum_mode", "bars")
 
         # 1) Force an immediate getState
         try:
@@ -442,42 +445,63 @@ class ModernScreen(BaseManager):
 
 
     def _draw_spectrum(self, draw):
-        """
-        Draw vertical bar spectrum from self.spectrum_bars, 
-        or a blank region if the user disabled CAVA.
-        """
         width, height = self.display_manager.oled.size
         bar_region_height = height // 2
-        vertical_offset   = -8  # same offset as your bars
+        vertical_offset   = -8
 
-        # If user turned off CAVA or the thread isn't running,
-        # fill that region with black to 'clear' any old bars.
         if (not self.running_spectrum) or (not self.mode_manager.config.get("cava_enabled", False)):
             y_top = max(0, vertical_offset)
             y_bottom = min(height, bar_region_height + vertical_offset)
-
-            draw.rectangle(
-                [0, y_top, width, y_bottom],
-                fill="black"
-            )
+            draw.rectangle([0, y_top, width, y_bottom], fill="black")
             return
 
-        # Otherwise, user wants CAVA => draw bars
         bars = self.spectrum_bars
+        n = len(bars)
+        if n == 0:
+            return
+
         bar_width  = 2
         gap_width  = 3
         max_height = bar_region_height
-        start_x    = (width - (len(bars) * (bar_width + gap_width))) // 2
+        start_x    = (width - (n * (bar_width + gap_width))) // 2
 
-        for i, bar in enumerate(bars):
-            bar_val = max(0, min(bar, 255))
-            bar_h   = int((bar_val / 255.0) * max_height)
+        # ---- Bars ----
+        if self.spectrum_mode == "bars":
+            for i, bar in enumerate(bars):
+                bar_val = max(0, min(bar, 255))
+                bar_h   = int((bar_val / 255.0) * max_height)
+                x1 = start_x + i * (bar_width + gap_width)
+                x2 = x1 + bar_width
+                y1 = height - bar_h + vertical_offset
+                y2 = height + vertical_offset
+                draw.rectangle([x1, y1, x2, y2], fill=(60, 60, 60))
 
-            x1 = start_x + i * (bar_width + gap_width)
-            x2 = x1 + bar_width
-            y1 = height - bar_h + vertical_offset
-            y2 = height + vertical_offset
-            draw.rectangle([x1, y1, x2, y2], fill="#303030")
+        # ---- Dots ----
+        elif self.spectrum_mode == "dots":
+            dot_size = 3
+            dot_vertical_offset = 10  # Move all dots up by this amount
+            for i, bar in enumerate(bars):
+                bar_val = max(0, min(bar, 255))
+                bar_h = int((bar_val / 255.0) * max_height)
+                num_dots = bar_h // (dot_size - 1) if (dot_size - 1) else 1
+                x = start_x + i * (bar_width + gap_width)
+                for j in range(num_dots):
+                    y = (height - dot_vertical_offset) - (j * (dot_size + 1))
+                    draw.ellipse([x, y, x + dot_size, y + dot_size], fill=(60, 60, 60))
+
+
+        # ---- Oscilloscope ----
+        elif self.spectrum_mode == "scope":
+            scope_data = [int((bar / 255.0) * max_height) for bar in bars]
+            y_base = height + vertical_offset
+            prev_x = start_x
+            prev_y = y_base - scope_data[0]
+            for i, val in enumerate(scope_data[1:], 1):
+                x = start_x + i * (bar_width + gap_width)
+                y = y_base - val
+                draw.line([prev_x, prev_y, x, y], fill=(80, 80, 80), width=1)
+                prev_x, prev_y = x, y
+
 
     # ------------------------------------------------------------------
     #   External Interaction

@@ -77,7 +77,7 @@ class ModeManager:
         for key in (
             "display_mode", "clock_font_key", "show_seconds", "show_date",
             "screensaver_enabled", "screensaver_type", "screensaver_timeout",
-            "oled_brightness", "cava_enabled"
+            "oled_brightness", "cava_enabled", "modern_spectrum_mode"
         ):
             self.config[key] = preferences[key]
 
@@ -120,6 +120,8 @@ class ModeManager:
         self.previous_status = None
         self.pause_stop_timer = None
         self.pause_stop_delay = 1.5
+
+        self.first_state_handoff = True  # New flag
 
         self.logger.debug(f"ModeManager: idle_timeout={self.idle_timeout}, display_mode={self.config.get('display_mode')}")
 
@@ -185,7 +187,7 @@ class ModeManager:
         for key in (
             "display_mode", "clock_font_key", "show_seconds", "show_date",
             "screensaver_enabled", "screensaver_type", "screensaver_timeout",
-            "oled_brightness", "cava_enabled"
+            "oled_brightness", "cava_enabled", "modern_spectrum_mode"
         ):
             if key in self.config:
                 data[key] = self.config[key]
@@ -207,6 +209,7 @@ class ModeManager:
     def _load_preferences(self):
         default_preferences = {
             "display_mode": "original",
+            "modern_spectrum_mode": "bars",
             "clock_font_key": "default",
             "show_seconds": True,
             "show_date": True,
@@ -727,7 +730,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No menu_manager set.")
         self.reset_idle_timer()
-        self.start_menu_inactivity_timer()
+        #self.start_menu_inactivity_timer()
         self.update_current_mode()
 
     def enter_playlists(self, event):
@@ -776,7 +779,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No library_manager set.")
         self.reset_idle_timer()
-        self.start_menu_inactivity_timer()
+        #self.start_menu_inactivity_timer()
         self.update_current_mode()
 
     def enter_internal(self, event):
@@ -790,7 +793,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No internal_manager set.")
         self.reset_idle_timer()
-        self.start_menu_inactivity_timer()
+        #self.start_menu_inactivity_timer()
         self.update_current_mode()
 
     def enter_usb_library(self, event):
@@ -803,7 +806,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No usb_library_manager set.")
         self.reset_idle_timer()
-        self.start_menu_inactivity_timer()
+        #self.start_menu_inactivity_timer()
         self.update_current_mode()
 
     def enter_configmenu(self, event):
@@ -835,11 +838,22 @@ class ModeManager:
             service = state.get('service', '').lower()
             self.previous_status = self.current_status
             self.current_status = status
+
+            # Only run _handle_track_change for genuine track changes
             if self.previous_status == "play" and self.current_status == "stop":
                 self._handle_track_change()
-            # Pass the full state as the third parameter
-            self._handle_playback_states(status, service, state)
+
+            # On first state handoff, skip pause/stop timer logic
+            if getattr(self, "first_state_handoff", False):
+                self.logger.debug("ModeManager: Skipping pause/stop timer after initial handoff.")
+                self.first_state_handoff = False
+                # Still update screen/mode as normal
+                self._handle_playback_states(status, service, state, skip_pause_stop_timer=True)
+            else:
+                self._handle_playback_states(status, service, state)
+
             self.logger.debug("ModeManager: Completed process_state_change.")
+
 
 
     def _handle_track_change(self):
@@ -853,10 +867,10 @@ class ModeManager:
             self.pause_stop_timer.start()
             self.logger.debug("ModeManager: Started stop verification timer.")
 
-    def _handle_playback_states(self, status, service, state_data):
+    def _handle_playback_states(self, status, service, state_data, skip_pause_stop_timer=False):
         now = time.time()
         desired_mode = self.config.get("display_mode", "original")
-            
+
         # Skip rapid mode switches
         if (now - self.last_mode_change_time) < self.min_mode_switch_interval:
             self.logger.debug("ModeManager: Skipping a rapid mode switch due to cooldown.")
@@ -912,8 +926,8 @@ class ModeManager:
 
             self.reset_idle_timer()
         elif status == "pause":
-            self._start_pause_timer()
-
+            if not skip_pause_stop_timer:
+                self._start_pause_timer()
 
 
     def _start_pause_timer(self):

@@ -1,11 +1,12 @@
 {
   "display_mode": "modern",
-  "clock_font_key": "clock_sans",
+  "clock_font_key": "clock_digital",
   "show_seconds": false,
   "show_date": false,
   "screensaver_enabled": true,
   "screensaver_type": "geo",
   "screensaver_timeout": 3600,
-  "oled_brightness": 255,
-  "cava_enabled": true
+  "oled_brightness": 150,
+  "cava_enabled": true,
+  "modern_spectrum_mode": "bars"
 }
