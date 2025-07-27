@@ -434,7 +434,7 @@ def main():
             else:
                 mode_manager.trigger("to_original")
         elif status in ["pause", "stop"]:
-            mode_manager.trigger("to_clock")
+            mode_manager.trigger("to_menu")
         else:
             mode_manager.trigger("to_menu")
 
