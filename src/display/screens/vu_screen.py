@@ -26,7 +26,7 @@ class VUScreen(BaseManager):
         self.volumio_listener = volumio_listener
 
         # Font (use display_manager fonts, fallback to default)
-        self.font_artist = ImageFont.truetype("/home/volumio/Quadify/src/assets/fonts/OpenSans-Regular.ttf", 8)
+        self.font_artist = ImageFont.truetype("/home/volumio/Quadify/src/assets/fonts/OpenSans-Regular.ttf", 10)
         self.font_title = ImageFont.truetype("/home/volumio/Quadify/src/assets/fonts/OpenSans-Regular.ttf", 12)
         self.font = self.font_title
 
@@ -303,18 +303,6 @@ class VUScreen(BaseManager):
             info_w, info_h = draw.textsize(info_text, font=self.font_artist)
             info_y = text_y + text_h + 1
             draw.text(((width - info_w) // 2, info_y), info_text, font=self.font_artist, fill="white")
-
-            # Service icon centered below info
-            service = data.get("service", "").lower()
-            icon_path = f"/home/volumio/Quadify/src/assets/images/menus/{service}.png"
-            if os.path.exists(icon_path):
-                try:
-                    icon = Image.open(icon_path).convert("RGBA").resize((12, 12))
-                    icon_x = (width - icon.width) // 2
-                    icon_y = info_y + info_h + 2
-                    frame.paste(icon, (icon_x, icon_y), icon)
-                except Exception as e:
-                    self.logger.warning(f"Service icon error for '{service}': {e}")
 
             self.logger.debug("draw_display: Artist/title, info line, and icon drawn.")
         except Exception as e:
