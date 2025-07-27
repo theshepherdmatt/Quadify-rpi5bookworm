@@ -24,6 +24,7 @@ display:
   logo_path: "/home/volumio/Quadify/src/assets/images/gif/logo.gif"
   shutdown_path: "/home/volumio/Quadify/src/assets/images/shuttingdown.png"
   vuscreen_path: "/home/volumio/Quadify/src/assets/images/pngs/vuscreen.png"
+  digitalvuscreen_path: "/home/volumio/Quadify/src/assets/images/pngs/digitalvuscreen.png"
 
   rotation: 2  # Set rotation if needed (0, 90, 180, 270)
 

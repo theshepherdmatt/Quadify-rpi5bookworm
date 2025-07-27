@@ -46,10 +46,11 @@ class ManagerFactory:
         # Quoode/Quadify common screens
         webradio_screen      = self.create_webradio_screen()
         modern_screen        = self.create_modern_screen()
-        minimal_screen        = self.create_minimal_screen()
+        minimal_screen       = self.create_minimal_screen()
         original_screen      = self.create_original_screen()
-        airplay_screen      = self.create_airplay_screen()
-        vu_screen           = self.create_vu_screen()
+        airplay_screen       = self.create_airplay_screen()
+        vu_screen            = self.create_vu_screen()
+        digitalvu_screen     = self.create_digitalvu_screen()
 
         # Additional items referenced by new ModeManager states
         config_menu          = self.create_config_menu()
@@ -81,6 +82,7 @@ class ManagerFactory:
         self.mode_manager.set_original_screen(original_screen)
         self.mode_manager.set_airplay_screen(airplay_screen)
         self.mode_manager.set_vu_screen(vu_screen)
+        self.mode_manager.set_digitalvu_screen(digitalvu_screen)
 
         self.mode_manager.set_clock_menu(clock_menu)
         self.mode_manager.set_remote_menu(remote_menu)
@@ -242,6 +244,14 @@ class ManagerFactory:
     def create_vu_screen(self):
         from display.screens.vu_screen import VUScreen
         return VUScreen(
+            display_manager   = self.display_manager,
+            volumio_listener  = self.volumio_listener,
+            mode_manager      = self.mode_manager
+        )
+
+    def create_digitalvu_screen(self):
+        from display.screens.digitalvu_screen import DigitalVUScreen
+        return DigitalVUScreen(
             display_manager   = self.display_manager,
             volumio_listener  = self.volumio_listener,
             mode_manager      = self.mode_manager

@@ -25,7 +25,8 @@ class ModeManager:
         {'name': 'original',        'on_enter': 'enter_original'},
         {'name': 'modern',          'on_enter': 'enter_modern'},
         {'name': 'minimal',         'on_enter': 'enter_minimal'},
-        {'name': 'vuscreen',         'on_enter': 'enter_vuscreen'},
+        {'name': 'vuscreen',        'on_enter': 'enter_vuscreen'},
+        {'name': 'digitalvuscreen', 'on_enter': 'enter_digitalvuscreen'},
         {'name': 'systeminfo',      'on_enter': 'enter_systeminfo'},
         {'name': 'configmenu',      'on_enter': 'enter_configmenu'},
         {'name': 'systemupdate',    'on_enter': 'enter_systemupdate'},
@@ -99,6 +100,7 @@ class ModeManager:
         self.webradio_screen = None
         self.airplay_screen = None
         self.vu_screen = None
+        self.digitalvu_screen = None
         self.screensaver = None
         self.screensaver_menu = None
         self.display_menu = None
@@ -195,7 +197,7 @@ class ModeManager:
             self.logger.warning(f"ModeManager: Could not write to {self.preference_file_path}. Error: {e}")
 
     def set_display_mode(self, mode_name):
-        if mode_name in ("original", "modern", "minimal", "vuscreen"):
+        if mode_name in ("original", "modern", "minimal", "vuscreen", "digitalvuscreen"):
             self.config["display_mode"] = mode_name
             self.logger.info(f"ModeManager: Display mode set to '{mode_name}'.")
             self.save_preferences()
@@ -274,6 +276,9 @@ class ModeManager:
 
     def set_vu_screen(self, vu_screen):
         self.vu_screen = vu_screen
+
+    def set_digitalvu_screen(self, digitalvu_screen):
+        self.digitalvu_screen = digitalvu_screen
 
     def set_webradio_screen(self, webradio_screen):
         self.webradio_screen = webradio_screen
@@ -441,6 +446,8 @@ class ModeManager:
             self.minimal_screen.stop_mode()
         if self.vu_screen and self.vu_screen.is_active:
             self.vu_screen.stop_mode()
+        if self.digitalvu_screen and self.digitalvu_screen.is_active:
+            self.digitalvu_screen.stop_mode()
         if self.webradio_screen and self.webradio_screen.is_active:
             self.webradio_screen.stop_mode()
         if self.airplay_screen and self.airplay_screen.is_active:
@@ -547,6 +554,19 @@ class ModeManager:
             self.logger.warning("ModeManager: No vu_screen set.")
         self.update_current_mode()
         self.cancel_menu_inactivity_timer()  # No timeout on clock
+
+
+    def enter_digitalvuscreen(self, event):
+        self.logger.info("ModeManager: Entering 'digitalvuscreen' playback mode.")
+        self.stop_all_screens()
+        if self.digitalvu_screen:
+            self.digitalvu_screen.start_mode()
+            self.logger.info("ModeManager: DigitalVU screen started.")
+        else:
+            self.logger.warning("ModeManager: No digitalvu_screen set.")
+        self.update_current_mode()
+        self.cancel_menu_inactivity_timer()  # No timeout on clock
+
 
     def enter_spotify(self, event):
         self.logger.info("ModeManager: Entering 'spotify' state.")
@@ -876,6 +896,12 @@ class ModeManager:
                         self.last_mode_change_time = now
                     else:
                         self.logger.debug("Already in 'vuscreen' mode; no transition needed.")
+                elif desired_mode == "digitalvuscreen":
+                    if current_mode != "digitalvuscreen":
+                        self.to_digitalvuscreen()
+                        self.last_mode_change_time = now
+                    else:
+                        self.logger.debug("Already in 'digitalvuscreen' mode; no transition needed.")
                 else:
                     # Default to original
                     if current_mode != "original":
@@ -926,7 +952,7 @@ class ModeManager:
     def toggle_play_pause(self):
         current_mode = self.get_mode()
         self.logger.debug("toggle_play_pause: Current mode before toggling: %s", current_mode)
-        if current_mode in ['clock', 'original', 'modern', 'minimal', 'webradio', 'airplay', 'vuscreen']:
+        if current_mode in ['clock', 'original', 'modern', 'minimal', 'webradio', 'airplay', 'vuscreen', 'digitalvuscreen']:
             if current_mode == 'clock':
                 # Now that Clock implements toggle_play_pause, use it directly.
                 if hasattr(self.clock, "toggle_play_pause"):
@@ -941,6 +967,8 @@ class ModeManager:
                 self.minimal_screen.toggle_play_pause()
             elif current_mode == 'vuscreen' and self.vu_screen:
                 self.vu_screen.toggle_play_pause()
+            elif current_mode == 'digitalvuscreen' and self.digitalvu_screen:
+                self.digitalvu_screen.toggle_play_pause()
             elif current_mode == 'webradio' and self.webradio_screen:
                 self.webradio_screen.toggle_play_pause()
             elif current_mode == 'airplay' and self.webradio_screen:
@@ -967,6 +995,7 @@ class ModeManager:
                 "modern": self.to_modern,
                 "minimal": self.to_minimal,
                 "vuscreen": self.to_vuscreen,
+                "digitalvuscreen": self.to_digitalvuscreen,
                 "radiomanager": self.to_radiomanager,
                 "menu": self.to_menu,
                 "playlists": self.to_playlists,

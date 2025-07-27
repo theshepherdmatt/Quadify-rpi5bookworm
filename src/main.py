@@ -23,6 +23,7 @@ from display.screens.original_screen import OriginalScreen
 from display.screens.modern_screen import ModernScreen
 from display.screens.minimal_screen import MinimalScreen
 from display.screens.vu_screen import VUScreen
+from display.screens.digitalvu_screen import DigitalVUScreen
 from display.screens.system_info_screen import SystemInfoScreen
 from display.screensavers.snake_screensaver import SnakeScreensaver
 from display.screensavers.geo_screensaver import GeoScreensaver
@@ -424,6 +425,8 @@ def main():
                 mode_manager.trigger("to_webradio")
             elif display_mode == "vuscreen":
                 mode_manager.trigger("to_vuscreen")
+            elif display_mode == "digitalvuscreen":
+                mode_manager.trigger("to_digitalvuscreen")
             elif display_mode == "modern":
                 mode_manager.trigger("to_modern")
             elif display_mode == "minimal":
@@ -461,6 +464,10 @@ def main():
             volume_change = 10 if direction == 1 else -20
             mode_manager.vu_screen.adjust_volume(volume_change)
             logger.debug(f"VUScreen: Adjusted volume by {volume_change}")
+        elif current_mode == 'digitalvuscreen':
+            volume_change = 10 if direction == 1 else -20
+            mode_manager.digitalvu_screen.adjust_volume(volume_change)
+            logger.debug(f"DigitalVUScreen: Adjusted volume by {volume_change}")
         elif current_mode == 'webradio':
             volume_change = 10 if direction == 1 else -20
             mode_manager.webradio_screen.adjust_volume(volume_change)
@@ -535,6 +542,7 @@ def main():
             'modern': 'modern_screen',
             'minimal': 'minimal_screen',
             'vuscreen': 'vu_screen',
+            'digitalvuscreen': 'digitalvu_screen',
         }
 
         if current_mode in menu_select_mapping:

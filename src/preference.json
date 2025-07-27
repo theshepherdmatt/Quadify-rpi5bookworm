@@ -1,5 +1,5 @@
 {
-  "display_mode": "vuscreen",
+  "display_mode": "digitalvuscreen",
   "clock_font_key": "clock_sans",
   "show_seconds": false,
   "show_date": false,
