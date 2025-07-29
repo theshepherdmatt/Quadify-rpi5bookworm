@@ -38,7 +38,8 @@ Supported features include:
 
 Clone this repository:
 
-```git clone https://github.com/theshepherdmatt/Quadify-Beta.git
+```
+git clone https://github.com/theshepherdmatt/Quadify-Beta.git
 mv Quadify-Beta Quadify
 cd Quadify
 sudo bash install.sh
