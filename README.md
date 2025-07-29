@@ -38,10 +38,11 @@ Supported features include:
 
 Clone this repository:
 
-```bash
-git clone https://github.com/theshepherdmatt/Quadify.git
+```git clone https://github.com/theshepherdmatt/Quadify-Beta.git
+mv Quadify-Beta Quadify
 cd Quadify
 sudo bash install.sh
+
 ```
 
 Follow the on-screen prompts. A reboot may be required after installation (you will be notified if so).
