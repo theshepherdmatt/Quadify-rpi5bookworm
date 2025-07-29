@@ -171,11 +171,11 @@ class ConfigMenu(BaseManager):
         elif selected == "IRremote":
             self.mode_manager.to_remotemenu()
         elif selected == "Back":
-            self.mode_manager.back()
+            self.mode_manager.to_menu()
         else:
             self.logger.warning(f"ConfigMenu: Unrecognised selection: {selected}")
 
     def back(self):
         if self.is_active:
             self.stop_mode()
-        self.mode_manager.back()
+        self.mode_manager.to_menu()

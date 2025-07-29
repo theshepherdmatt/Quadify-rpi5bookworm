@@ -63,6 +63,8 @@ class VolumioListener:
         self.socketIO.on('pushTrack', self.on_push_track)
         self.socketIO.on('pushToastMessage', self.on_push_toast_message)
         self.socketIO.on('volume', self.set_volume)
+        self.socketIO.on('pushBrowseSources', self.on_push_browse_sources)
+
     
     def set_volume(self, value):
         """Set the volume to a specific value, increase/decrease, or mute/unmute."""
@@ -136,11 +138,13 @@ class VolumioListener:
             self.schedule_reconnect()
 
     def on_connect(self):
-        """Handle successful connection."""
         self.connected.send(self)
         self.logger.info("[VolumioListener] Connected to Volumio.")
         self._reconnect_attempt = 1  # Reset reconnect attempts
         self.socketIO.emit('getState')
+        # Explicitly browse root after connect (wait a fraction of a second for socket to settle)
+        threading.Timer(0.2, lambda: self.fetch_browse_library("")).start()
+
 
     def is_connected(self):
         """Check if the client is connected to Volumio."""
@@ -151,6 +155,20 @@ class VolumioListener:
         self.disconnected.send(self)
         self.logger.warning("[VolumioListener] Disconnected from Volumio.")
         self.schedule_reconnect()
+
+    def on_push_browse_sources(self, data):
+        self.logger.info("[VolumioListener] Received pushBrowseSources event.")
+        # Optionally: log the new sources for debug
+        self.logger.debug(f"[VolumioListener] Sources: {data}")
+        # Now trigger your menu to refresh.
+        # This could be via a direct reference, signal, or callback—see below!
+        if hasattr(self, "menu_manager"):
+            self.menu_manager.refresh_main_menu()
+            self.menu_manager.display_menu()
+        else:
+            # Or use a signal if you wire it that way
+            if hasattr(self, "sources_changed"):
+                self.sources_changed.send(self, sources=data)
 
     def schedule_reconnect(self):
         """Schedule a reconnection attempt."""
@@ -173,6 +191,16 @@ class VolumioListener:
                 self.current_volume = data["volume"]
         self.state_changed.send(self, state=data)
 
+    def extract_streaming_services(self, navigation):
+        STREAMING_SERVICES = {"tidal", "qobuz", "spotify"}
+        found = []
+        lists = navigation.get("lists", [])
+        for item in lists:
+            name = item.get("plugin_name", "").lower()
+            if name in STREAMING_SERVICES:
+                found.append(name)
+        return found
+
     def on_push_browse_library(self, data):
         """Handle 'pushBrowseLibrary' events."""
         self.logger.info("[VolumioListener] Received pushBrowseLibrary event.")
@@ -181,16 +209,24 @@ class VolumioListener:
             self.logger.warning("[VolumioListener] No navigation data received.")
             return
 
+        # NEW: If root, extract streaming services
+        uri = navigation.get('uri', '').strip().lower()
+        if uri in ('', '/'):
+            streaming_found = self.extract_streaming_services(navigation)
+            self.logger.info(f"[VolumioListener] Streaming services available: {streaming_found}")
+            if hasattr(self, "streaming_services_changed"):
+                self.streaming_services_changed.send(self, streaming_services=streaming_found)
+
         with self.browse_lock:
             service = self.last_browse_service
-            uri = self.last_browse_uri
+            last_uri = self.last_browse_uri
             # Reset the tracking after using
             self.last_browse_service = None
             self.last_browse_uri = None
 
-        self.logger.debug(f"[VolumioListener] Using URI: {uri}, Service: {service}")
+        self.logger.debug(f"[VolumioListener] Using URI: {last_uri}, Service: {service}")
 
-        if not service or not uri:
+        if not service or not last_uri:
             # If service or uri was not tracked, attempt to infer
             uri = navigation.get('uri', '').strip().lower()
             if not uri:
@@ -201,7 +237,6 @@ class VolumioListener:
 
         # Emit a generic navigation_received signal with service and uri
         self.navigation_received.send(self, navigation=navigation, service=service, uri=uri)
-
 
 
     def on_push_track(self, data):
@@ -232,6 +267,8 @@ class VolumioListener:
 
     def fetch_browse_library(self, uri):
         if self.socketIO.connected:
+            # DEFAULT TO 'music-library' IF BLANK OR NONE
+            uri = uri or "music-library"
             service = self.get_service_from_uri(uri)
             with self.browse_lock:
                 self.last_browse_service = service
@@ -244,35 +281,41 @@ class VolumioListener:
 
     def get_service_from_uri(self, uri):
         self.logger.debug(f"Determining service for URI: {uri}")
-        
-        # Normalize Spotify URIs to handle both types consistently
+
+        if not uri:
+            self.logger.info("No URI provided, using default or skipping service detection.")
+            return None
+
         if uri.startswith("spotify") or uri.startswith("spop"):
             self.logger.debug("Identified service: spotify")
             return 'spotify'
-
         if uri.startswith("qobuz://"):
             self.logger.debug("Identified service: qobuz")
             return 'qobuz'
-        elif uri.startswith("tidal://"):
+        if uri.startswith("tidal://"):
             self.logger.debug("Identified service: tidal")
             return 'tidal'
-        elif uri.startswith("radio/"):
+        if uri.startswith("radio/"):
             self.logger.debug("Identified service: webradio")
             return 'webradio'
-        elif uri == "mer":
+        if uri == "mer":
             return 'motherearthradio'
-        elif uri == "rparadise":
+        if uri == "rparadise":
             return 'radioparadise'
-        elif uri.startswith("playlists") or uri.startswith("playlist://"):
+        if uri.startswith("playlists") or uri.startswith("playlist://"):
             self.logger.debug("Identified service: playlists")
             return 'playlists'
-        elif uri.startswith("music-library/NAS"):
+        if uri.startswith("music-library/NAS"):
             self.logger.debug("Identified service: library")
             return 'library'
-        elif uri.startswith("music-library/USB"):
+        if uri.startswith("music-library/USB"):
             self.logger.debug("Identified service: usblibrary")
             return 'usblibrary'
-        else:
-            self.logger.warning(f"Unrecognized URI scheme: {uri}")
-            return None
+        if uri == "music-library":    # <------ ADD THIS!
+            self.logger.debug("Identified service: library (root)")
+            return 'library'
+        # If you use albums:// or similar, add them here as well!
+        self.logger.warning(f"Unrecognized URI scheme: {uri}")
+        return None
+
         

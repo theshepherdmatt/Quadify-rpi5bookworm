@@ -1,7 +1,9 @@
 # src/managers/manager_factory.py
 
 import logging
-
+import os
+import glob
+from PIL import Image
 
 class ManagerFactory:
     """
@@ -23,6 +25,7 @@ class ManagerFactory:
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(logging.INFO)
         self.logger.info("ManagerFactory initialized.")
+
 
     def setup_mode_manager(self):
         """
@@ -182,7 +185,7 @@ class ManagerFactory:
         return LibraryManager(
             display_manager   = self.display_manager,
             volumio_config    = self.config.get('volumio', {}),
-            mode_manager      = self.mode_manager
+            mode_manager      = self.mode_manager,
         )
     
     def create_internal_manager(self):

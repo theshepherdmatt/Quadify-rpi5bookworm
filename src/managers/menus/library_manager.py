@@ -210,45 +210,51 @@ class LibraryManager(BaseManager):
         selected_item = self.current_menu_items[self.current_selection_index]
         self.logger.info(f"LibraryManager: Selected item: {selected_item}")
 
+        # Handle 'Back' navigation
         if selected_item.get("title") == "Back":
             self.back()
             return
 
+        # Handle explicit submenu actions
         if 'action' in selected_item:
-            # Handle submenu actions
             action = selected_item.get('action')
             data = selected_item.get('data')
             self.perform_action(action, data)
-        else:
-            item_type = selected_item.get("type", "").lower()
+            return
 
-            if item_type in ["folder", "streaming-category", "streaming-folder", "remdisk"]:
-                # Check if the selected item is an album
-                if self.is_album_folder(selected_item):
-                    # Display album options (submenu)
-                    self.logger.info(f"LibraryManager: Displaying options for album: {selected_item.get('title')}")
-                    self.display_folder_or_album_options(selected_item)
-                else:
-                    # Navigate into the folder
-                    self.logger.info(f"LibraryManager: Navigating into: {selected_item.get('title')}")
-                    self.menu_stack.append(self.current_path)  # Save the current path
-                    self.current_path = selected_item.get("uri")
-                    self.display_loading_screen()
-                    self.fetch_navigation(self.current_path)
+        # Map Volumio's various folder-like types to a single check
+        folder_types = ["folder", "internal-folder", "usb-folder", "nas-folder", 
+                        "streaming-category", "streaming-folder", "remdisk"]
 
-            elif item_type == "song":
-                # Play the selected song
-                self.logger.info(f"LibraryManager: Playing song: {selected_item.get('title')}")
-                self.replace_and_play(selected_item)
+        item_type = selected_item.get("type", "").lower()
 
-            elif item_type == "webradio":
-                # Handle web radio streams if necessary
-                self.logger.info(f"LibraryManager: Playing web radio: {selected_item.get('title')}")
-                self.replace_and_play(selected_item)
-
+        if item_type in folder_types:
+            # Check if this is actually an album folder
+            if self.is_album_folder(selected_item):
+                self.logger.info(f"LibraryManager: Displaying options for album: {selected_item.get('title')}")
+                self.display_folder_or_album_options(selected_item)
             else:
-                self.logger.warning(f"LibraryManager: Unknown item type '{item_type}'.")
-                self.display_error_message("Invalid Selection", "Selected item is not recognized.")
+                # Navigate into the folder
+                self.logger.info(f"LibraryManager: Navigating into: {selected_item.get('title')}")
+                self.menu_stack.append(self.current_path)  # Save the current path
+                self.current_path = selected_item.get("uri")
+                self.display_loading_screen()
+                self.fetch_navigation(self.current_path)
+            return
+
+        if item_type == "song":
+            self.logger.info(f"LibraryManager: Playing song: {selected_item.get('title')}")
+            self.replace_and_play(selected_item)
+            return
+
+        if item_type == "webradio":
+            self.logger.info(f"LibraryManager: Playing web radio: {selected_item.get('title')}")
+            self.replace_and_play(selected_item)
+            return
+
+        # Handle unknown or unhandled types gracefully
+        self.logger.warning(f"LibraryManager: Unknown item type '{item_type}'.")
+        self.display_error_message("Invalid Selection", "Selected item is not recognized.")
 
     def is_album_folder(self, item):
         """Determine if the folder represents an album."""

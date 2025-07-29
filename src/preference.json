@@ -1,6 +1,6 @@
 {
   "display_mode": "modern",
-  "clock_font_key": "clock_digital",
+  "clock_font_key": "clock_sans",
   "show_seconds": false,
   "show_date": false,
   "screensaver_enabled": true,
@@ -8,5 +8,5 @@
   "screensaver_timeout": 3600,
   "oled_brightness": 150,
   "cava_enabled": true,
-  "modern_spectrum_mode": "bars"
+  "modern_spectrum_mode": "dots"
 }

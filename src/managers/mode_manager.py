@@ -44,6 +44,9 @@ class ModeManager:
         {'name': 'radioparadise',   'on_enter': 'enter_radioparadise'},
         {'name': 'remotemenu',      'on_enter': 'enter_remotemenu'},
         {'name': 'airplay',          'on_enter': 'enter_airplay'},
+        {'name': 'artists',          'on_enter': 'enter_artists'},
+        {'name': 'albums',          'on_enter': 'enter_albums'},
+        {'name': 'genres',          'on_enter': 'enter_genres'},
     ]
 
     def __init__(self, display_manager, clock, volumio_listener,
@@ -385,6 +388,10 @@ class ModeManager:
         self.machine.add_transition('to_airplay',     source='*', dest='airplay', before='push_current_state')
         self.machine.add_transition('to_motherearthradio',  source='*', dest='motherearthradio', before='push_current_state')
         self.machine.add_transition('to_radioparadise', source='*', dest='radioparadise', before='push_current_state')
+        self.machine.add_transition('to_albums', source='*', dest='albums', before='push_current_state')
+        self.machine.add_transition('to_artists', source='*', dest='artists', before='push_current_state')
+        self.machine.add_transition('to_genres', source='*', dest='genres', before='push_current_state')
+
 
     # --- Custom trigger() Method ---
     def trigger(self, event_name, **kwargs):
@@ -826,6 +833,40 @@ class ModeManager:
         if self.screensaver:
             self.screensaver.stop_screensaver()
         self.to_clock()
+
+    def enter_albums(self, event):
+        self.logger.info("ModeManager: Entering 'albums' state.")
+        self.stop_all_screens()
+        if self.library_manager:
+            self.library_manager.start_mode(start_uri="albums://")
+            self.logger.info("ModeManager: LibraryManager started for Albums.")
+        else:
+            self.logger.warning("ModeManager: No library_manager set.")
+        self.reset_idle_timer()
+        self.update_current_mode()
+
+    def enter_genres(self, event):
+        self.logger.info("ModeManager: Entering 'genres' state.")
+        self.stop_all_screens()
+        if self.library_manager:
+            self.library_manager.start_mode(start_uri="genres://")
+            self.logger.info("ModeManager: LibraryManager started for Genres.")
+        else:
+            self.logger.warning("ModeManager: No library_manager set.")
+        self.reset_idle_timer()
+        self.update_current_mode()
+
+    def enter_artists(self, event):
+        self.logger.info("ModeManager: Entering 'artists' state.")
+        self.stop_all_screens()
+        if self.library_manager:
+            self.library_manager.start_mode(start_uri="artists://")
+            self.logger.info("ModeManager: LibraryManager started for Artist.")
+        else:
+            self.logger.warning("ModeManager: No library_manager set.")
+        self.reset_idle_timer()
+        self.update_current_mode()
+
 
     # --- Playback / Volumio State Handling ---
     def process_state_change(self, sender, state, **kwargs):

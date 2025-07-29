@@ -34,6 +34,7 @@ from managers.mode_manager import ModeManager
 from managers.manager_factory import ManagerFactory
 from controls.rotary_control import RotaryControl
 from network.volumio_listener import VolumioListener
+from assets.images.convert2 import main as convert_icons_main
 
 def load_config(config_path='/config.yaml'):
     abs_path = os.path.abspath(config_path)
@@ -95,6 +96,8 @@ def main():
 
     buttons_leds = ButtonsLEDController()
     buttons_leds.start()
+
+    convert_icons_main()
  
     import smbus2
 
@@ -411,6 +414,7 @@ def main():
     )
     manager_factory.setup_mode_manager()
     volumio_listener.mode_manager = mode_manager
+    volumio_listener.menu_manager = mode_manager.menu_manager
 
     # --- Handoff buffered state from DummyModeManager if available ---
     if hasattr(dummy_mode_manager, 'last_state') and dummy_mode_manager.last_state:
