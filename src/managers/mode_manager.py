@@ -30,8 +30,10 @@ class ModeManager:
         {'name': 'systeminfo',      'on_enter': 'enter_systeminfo'},
         {'name': 'configmenu',      'on_enter': 'enter_configmenu'},
         {'name': 'systemupdate',    'on_enter': 'enter_systemupdate'},
-        {'name': 'radiomanager',    'on_enter': 'enter_radiomanager'},
         {'name': 'menu',            'on_enter': 'enter_menu'},
+        {'name': 'remotemenu',      'on_enter': 'enter_remotemenu'},
+        {'name': 'airplay',          'on_enter': 'enter_airplay'},
+
         {'name': 'playlists',       'on_enter': 'enter_playlists'},
         {'name': 'tidal',           'on_enter': 'enter_tidal'},
         {'name': 'qobuz',           'on_enter': 'enter_qobuz'},
@@ -42,8 +44,6 @@ class ModeManager:
         {'name': 'webradio',        'on_enter': 'enter_webradio'},
         {'name': 'motherearthradio', 'on_enter': 'enter_motherearthradio'},
         {'name': 'radioparadise',   'on_enter': 'enter_radioparadise'},
-        {'name': 'remotemenu',      'on_enter': 'enter_remotemenu'},
-        {'name': 'airplay',          'on_enter': 'enter_airplay'},
         {'name': 'artists',          'on_enter': 'enter_artists'},
         {'name': 'albums',          'on_enter': 'enter_albums'},
         {'name': 'genres',          'on_enter': 'enter_genres'},
@@ -91,16 +91,7 @@ class ModeManager:
         # References to other managers/screens (set via ManagerFactory or manually)
         self.menu_manager = None
         self.config_menu = None
-        self.playlist_manager = None
-        self.radio_manager = None
-        self.tidal_manager = None
-        self.qobuz_manager = None
-        self.motherearth_manager = None
-        self.radioparadise_manager = None
-        self.spotify_manager = None
         self.library_manager = None
-        self.internal_manager = None
-        self.usb_library_manager = None
         self.original_screen = None
         self.modern_screen = None
         self.minimal_screen = None
@@ -245,35 +236,8 @@ class ModeManager:
     def set_config_menu(self, config_menu):
         self.config_menu = config_menu
 
-    def set_playlist_manager(self, playlist_manager):
-        self.playlist_manager = playlist_manager
-
-    def set_radio_manager(self, radio_manager):
-        self.radio_manager = radio_manager
-
-    def set_motherearth_manager(self, motherearth_manager):
-        self.motherearth_manager = motherearth_manager
-
-    def set_radioparadise_manager(self, radioparadise_manager):
-        self.radioparadise_manager = radioparadise_manager
-
-    def set_tidal_manager(self, tidal_manager):
-        self.tidal_manager = tidal_manager
-
-    def set_qobuz_manager(self, qobuz_manager):
-        self.qobuz_manager = qobuz_manager
-
-    def set_spotify_manager(self, spotify_manager):
-        self.spotify_manager = spotify_manager
-
     def set_library_manager(self, library_manager):
         self.library_manager = library_manager
-
-    def set_internal_manager(self, internal_manager):
-        self.internal_manager = internal_manager
-
-    def set_usb_library_manager(self, usb_library_manager):
-        self.usb_library_manager = usb_library_manager
 
     def set_original_screen(self, original_screen):
         self.original_screen = original_screen
@@ -435,26 +399,8 @@ class ModeManager:
             self.remote_menu.stop_mode()
         if self.display_menu and self.display_menu.is_active:
             self.display_menu.stop_mode()
-        if self.radio_manager and self.radio_manager.is_active:
-            self.radio_manager.stop_mode()
-        if self.motherearth_manager and self.motherearth_manager.is_active:
-            self.motherearth_manager.stop_mode()
-        if self.radioparadise_manager and self.radioparadise_manager.is_active:
-            self.radioparadise_manager.stop_mode()
-        if self.playlist_manager and self.playlist_manager.is_active:
-            self.playlist_manager.stop_mode()
-        if self.tidal_manager and self.tidal_manager.is_active:
-            self.tidal_manager.stop_mode()
-        if self.qobuz_manager and self.qobuz_manager.is_active:
-            self.qobuz_manager.stop_mode()
-        if self.spotify_manager and self.spotify_manager.is_active:
-            self.spotify_manager.stop_mode()
         if self.library_manager and self.library_manager.is_active:
             self.library_manager.stop_mode()
-        if self.internal_manager and self.internal_manager.is_active:
-            self.internal_manager.stop_mode()
-        if self.usb_library_manager and self.usb_library_manager.is_active:
-            self.usb_library_manager.stop_mode()
         if self.original_screen and self.original_screen.is_active:
             self.original_screen.stop_mode()
         if self.modern_screen and self.modern_screen.is_active:
@@ -632,37 +578,23 @@ class ModeManager:
         
     # --- Menu Managers ---
 
-    def enter_radiomanager(self, event):
-        self.logger.info("ModeManager: Entering 'radiomanager' state.")
+    def enter_configmenu(self, event):
+        self.logger.info("ModeManager: Entering 'configmenu'.")
         self.stop_all_screens()
-        if self.radio_manager:
-            self.radio_manager.start_mode()
-            self.logger.info("ModeManager: RadioManager started.")
+        if self.config_menu:
+            self.config_menu.start_mode()
+            self.logger.info("ModeManager: Config menu started.")
         else:
-            self.logger.warning("ModeManager: No radio_manager set.")
+            self.logger.warning("ModeManager: No config_menu set.")
         self.reset_idle_timer()
         self.start_menu_inactivity_timer()
         self.update_current_mode()
 
-    def enter_motherearthradio(self, event):
-        self.logger.info("Motherearth: Entering 'motherearthradio' state.")
-        self.stop_all_screens()
-        if self.motherearth_manager:
-            self.motherearth_manager.start_mode()
-            self.logger.info("Motherearth: Motherearth started.")
-        else:
-            self.logger.warning("Motherearth: No motherearth_manager set.")
-        self.update_current_mode()
-
-    def enter_radioparadise(self, event):
-        self.logger.info("RadioParadise: Entering 'radioparadise' state.")
-        self.stop_all_screens()
-        if self.radioparadise_manager:
-            self.radioparadise_manager.start_mode()
-            self.logger.info("RadioParadise: RadioParadise started.")
-        else:
-            self.logger.warning("RadioParadise: No radioparadise_manager set.")
-        self.update_current_mode()
+    def exit_screensaver(self):
+        self.logger.info("ModeManager: Exiting screensaver mode.")
+        if self.screensaver:
+            self.screensaver.stop_screensaver()
+        self.to_clock()
 
     def enter_screensaver(self, event):
         self.logger.info("ModeManager: Entering 'screensaver' state.")
@@ -747,40 +679,7 @@ class ModeManager:
         #self.start_menu_inactivity_timer()
         self.update_current_mode()
 
-    def enter_playlists(self, event):
-        self.logger.info("ModeManager: Entering 'playlists' state.")
-        self.stop_all_screens()
-        if self.library_manager:
-            self.library_manager.start_mode(start_uri="playlists")
-            self.logger.info("ModeManager: LibraryManager started for playlists.")
-        else:
-            self.logger.warning("ModeManager: No playlists_manager set.")
-        self.reset_idle_timer()
-        self.update_current_mode()
-
-    def enter_tidal(self, event):
-        self.logger.info("ModeManager: Entering 'tidal' state.")
-        self.stop_all_screens()
-        if self.library_manager:
-            self.library_manager.start_mode(start_uri="tidal://") 
-            self.logger.info("ModeManager: LibraryManager started in Tidal mode.")
-        else:
-            self.logger.warning("ModeManager: No library_manager set.")
-        self.reset_idle_timer()
-        self.start_menu_inactivity_timer()
-        self.update_current_mode()
-
-    def enter_qobuz(self, event):
-        self.logger.info("ModeManager: Entering 'qobuz' state.")
-        self.stop_all_screens()
-        if self.qobuz_manager:
-            self.qobuz_manager.start_mode()
-            self.logger.info("ModeManager: QobuzManager started.")
-        else:
-            self.logger.warning("ModeManager: No qobuz_manager set.")
-        self.reset_idle_timer()
-        self.start_menu_inactivity_timer()
-        self.update_current_mode()
+    # --- Other Managers ---
 
     def enter_library(self, event):
         self.logger.info("ModeManager: Entering 'library' state.")
@@ -795,50 +694,71 @@ class ModeManager:
         #self.start_menu_inactivity_timer()
         self.update_current_mode()
 
-    def enter_internal(self, event):
-        self.logger.info("ModeManager: Entering 'internal' state.")
+    def enter_tidal(self, event):
+        self.logger.info("ModeManager: Entering 'tidal' state.")
         self.stop_all_screens()
-        self.cancel_menu_inactivity_timer()
-        if self.internal_manager:
-            start_uri = event.kwargs.get('start_uri')
-            self.internal_manager.start_mode(start_uri=start_uri)
-            self.logger.info("ModeManager: InternalManager started.")
+        if self.library_manager:
+            self.library_manager.start_mode(start_uri="tidal://")
+            self.logger.info("ModeManager: LibraryManager started for Tidal.")
         else:
-            self.logger.warning("ModeManager: No internal_manager set.")
+            self.logger.warning("ModeManager: No library_manager set.")
         self.reset_idle_timer()
-        #self.start_menu_inactivity_timer()
         self.update_current_mode()
 
-    def enter_usb_library(self, event):
-        self.logger.info("ModeManager: Entering 'usblibrary' state.")
+    def enter_qobuz(self, event):
+        self.logger.info("ModeManager: Entering 'qobuz' state.")
         self.stop_all_screens()
-        if self.usb_library_manager:
-            start_uri = event.kwargs.get('start_uri')
-            self.usb_library_manager.start_mode(start_uri=start_uri)
-            self.logger.info("ModeManager: USBLibraryManager started.")
+        if self.library_manager:
+            self.library_manager.start_mode(start_uri="qobuz://")
+            self.logger.info("ModeManager: LibraryManager started for Qobuz.")
         else:
-            self.logger.warning("ModeManager: No usb_library_manager set.")
+            self.logger.warning("ModeManager: No library_manager set.")
         self.reset_idle_timer()
-        #self.start_menu_inactivity_timer()
         self.update_current_mode()
 
-    def enter_configmenu(self, event):
-        self.logger.info("ModeManager: Entering 'configmenu'.")
+    def enter_spotify(self, event):
+        self.logger.info("ModeManager: Entering 'spotify' state.")
         self.stop_all_screens()
-        if self.config_menu:
-            self.config_menu.start_mode()
-            self.logger.info("ModeManager: Config menu started.")
+        if self.library_manager:
+            self.library_manager.start_mode(start_uri="spop://")
+            self.logger.info("ModeManager: LibraryManager started for Spotify.")
         else:
-            self.logger.warning("ModeManager: No config_menu set.")
+            self.logger.warning("ModeManager: No library_manager set.")
         self.reset_idle_timer()
-        self.start_menu_inactivity_timer()
         self.update_current_mode()
 
-    def exit_screensaver(self):
-        self.logger.info("ModeManager: Exiting screensaver mode.")
-        if self.screensaver:
-            self.screensaver.stop_screensaver()
-        self.to_clock()
+    def enter_playlists(self, event):
+        self.logger.info("ModeManager: Entering 'albums' state.")
+        self.stop_all_screens()
+        if self.library_manager:
+            self.library_manager.start_mode(start_uri="playlists://")
+            self.logger.info("ModeManager: LibraryManager started for Playlists.")
+        else:
+            self.logger.warning("ModeManager: No library_manager set.")
+        self.reset_idle_timer()
+        self.update_current_mode()
+
+    def enter_playlists(self, event):
+        self.logger.info("ModeManager: Entering 'albums' state.")
+        self.stop_all_screens()
+        if self.library_manager:
+            self.library_manager.start_mode(start_uri="playlists://")
+            self.logger.info("ModeManager: LibraryManager started for Playlists.")
+        else:
+            self.logger.warning("ModeManager: No library_manager set.")
+        self.reset_idle_timer()
+        self.update_current_mode()
+
+    def enter_webradio(self, event):
+        self.logger.info("ModeManager: Entering 'albums' state.")
+        self.stop_all_screens()
+        if self.library_manager:
+            self.library_manager.start_mode(start_uri="webradio://")
+            self.logger.info("ModeManager: LibraryManager started for WebRadio.")
+        else:
+            self.logger.warning("ModeManager: No library_manager set.")
+        self.reset_idle_timer()
+        self.update_current_mode()
 
     def enter_albums(self, event):
         self.logger.info("ModeManager: Entering 'albums' state.")

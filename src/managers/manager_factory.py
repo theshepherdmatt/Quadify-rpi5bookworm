@@ -35,16 +35,7 @@ class ManagerFactory:
 
         # Quadify "menu" managers
         menu_manager         = self.create_menu_manager()
-        tidal_manager        = self.create_tidal_manager()
-        qobuz_manager        = self.create_qobuz_manager()
-        playlist_manager     = self.create_playlist_manager()
-        motherearth_manager  = self.create_motherearth_manager()
-        radioparadise_manager = self.create_radioparadise_manager()
-        radio_manager        = self.create_radio_manager()
-        spotify_manager      = self.create_spotify_manager()
         library_manager      = self.create_library_manager()
-        internal_manager      = self.create_internal_manager()
-        usb_library_manager  = self.create_usb_library_manager()
 
         # Quoode/Quadify common screens
         webradio_screen      = self.create_webradio_screen()
@@ -68,16 +59,7 @@ class ManagerFactory:
         # ----- Assign them to ModeManager via the set_* methods -----
         self.mode_manager.set_menu_manager(menu_manager)
         self.mode_manager.set_config_menu(config_menu)
-        self.mode_manager.set_tidal_manager(tidal_manager)
-        self.mode_manager.set_qobuz_manager(qobuz_manager)
-        self.mode_manager.set_playlist_manager(playlist_manager)
-        self.mode_manager.set_radio_manager(radio_manager)
-        self.mode_manager.set_motherearth_manager(motherearth_manager)
-        self.mode_manager.set_radioparadise_manager(radioparadise_manager)
-        self.mode_manager.set_spotify_manager(spotify_manager)
         self.mode_manager.set_library_manager(library_manager)
-        self.mode_manager.set_internal_manager(internal_manager)
-        self.mode_manager.set_usb_library_manager(usb_library_manager)
 
         self.mode_manager.set_webradio_screen(webradio_screen)
         self.mode_manager.set_modern_screen(modern_screen)
@@ -123,62 +105,6 @@ class ManagerFactory:
             mode_manager      = self.mode_manager
         )
 
-    def create_tidal_manager(self):
-        from .menus.tidal_manager import TidalManager
-        return TidalManager(
-            display_manager   = self.display_manager,
-            volumio_listener  = self.volumio_listener,
-            mode_manager      = self.mode_manager
-        )
-
-    def create_qobuz_manager(self):
-        from .menus.qobuz_manager import QobuzManager
-        return QobuzManager(
-            display_manager   = self.display_manager,
-            volumio_listener  = self.volumio_listener,
-            mode_manager      = self.mode_manager
-        )
-
-    def create_playlist_manager(self):
-        from .menus.playlist_manager import PlaylistManager
-        return PlaylistManager(
-            display_manager   = self.display_manager,
-            volumio_listener  = self.volumio_listener,
-            mode_manager      = self.mode_manager
-        )
-
-    def create_radio_manager(self):
-        from .menus.radio_manager import RadioManager
-        return RadioManager(
-            display_manager   = self.display_manager,
-            volumio_listener  = self.volumio_listener,
-            mode_manager      = self.mode_manager
-        )
-    
-    def create_motherearth_manager(self):
-        from .menus.motherearth_manager import MotherEarthManager
-        return MotherEarthManager(
-            display_manager   = self.display_manager,
-            volumio_listener  = self.volumio_listener,
-            mode_manager      = self.mode_manager
-        )
-
-    def create_radioparadise_manager(self):
-        from .menus.radioparadise_manager import RadioParadiseManager
-        return RadioParadiseManager(
-            display_manager   = self.display_manager,
-            volumio_listener  = self.volumio_listener,
-            mode_manager      = self.mode_manager
-        )
-
-
-    def create_spotify_manager(self):
-        from .menus.spotify_manager import SpotifyManager
-        return SpotifyManager(
-            display_manager   = self.display_manager,
-            volumio_listener  = self.volumio_listener,
-            mode_manager      = self.mode_manager
-        )
 
     def create_library_manager(self):
         from .menus.library_manager import LibraryManager
@@ -187,24 +113,9 @@ class ManagerFactory:
             volumio_config    = self.config.get('volumio', {}),
             mode_manager      = self.mode_manager,
             service_type    = "library",
-            root_uri        = "music-library/NAS/Music"
+            root_uri        = "music-library"
         )
     
-    def create_internal_manager(self):
-        from .menus.internal_manager import InternalManager
-        return InternalManager(
-            display_manager   = self.display_manager,
-            volumio_config    = self.config.get('volumio', {}),
-            mode_manager      = self.mode_manager
-        )
-
-    def create_usb_library_manager(self):
-        from .menus.usb_library_manager import USBLibraryManager
-        return USBLibraryManager(
-            display_manager   = self.display_manager,
-            volumio_listener  = self.volumio_listener,
-            mode_manager      = self.mode_manager
-        )
 
     def create_webradio_screen(self):
         from display.screens.webradio_screen import WebRadioScreen
@@ -263,7 +174,7 @@ class ManagerFactory:
         )
 
     # ----------------------------------------------------------------
-    #  New create methods for Quoode/Quadify synergy
+    #  New create methods for Quadify synergy
     # ----------------------------------------------------------------
 
     def create_clock_menu(self):

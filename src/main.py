@@ -175,13 +175,8 @@ def main():
 
         select_mapping = {
             "menu": lambda: mode_manager.menu_manager.select_item(),
-            "tidal": lambda: mode_manager.tidal_manager.select_item(),
-            "qobuz": lambda: mode_manager.qobuz_manager.select_item(),
-            "spotify": lambda: mode_manager.spotify_manager.select_item(),
             "library": lambda: mode_manager.library_manager.select_item(),
-            "radiomanager": lambda: mode_manager.radio_manager.select_item(),
-            "motherearthradio": lambda: mode_manager.motherearth_manager.select_item(),
-            "radioparadise": lambda: mode_manager.radioparadise_manager.select_item(),
+
             "playlists": lambda: mode_manager.playlist_manager.select_item(),
             "configmenu": lambda: mode_manager.config_menu.select_item(),
             "remotemenu": lambda: mode_manager.remote_menu.select_item(),
@@ -194,14 +189,7 @@ def main():
 
         scroll_mapping = {
             "scroll_up": {
-                "tidal": lambda: mode_manager.tidal_manager.scroll_selection(-1),
-                "qobuz": lambda: mode_manager.qobuz_manager.scroll_selection(-1),
-                "spotify": lambda: mode_manager.spotify_manager.scroll_selection(-1),
                 "library": lambda: mode_manager.library_manager.scroll_selection(-1),
-                "radiomanager": lambda: mode_manager.radio_manager.scroll_selection(-1),
-                "motherearthradio": lambda: mode_manager.motherearth_manager.scroll_selection(-1),
-                "radioparadise": lambda: mode_manager.radioparadise_manager.scroll_selection(-1),
-                "playlists": lambda: mode_manager.playlist_manager.scroll_selection(-1),
                 "configmenu": lambda: mode_manager.config_menu.scroll_selection(-1),
                 "remotemenu": lambda: mode_manager.remote_menu.scroll_selection(-1),
                 "displaymenu": lambda: mode_manager.display_menu.scroll_selection(-1),
@@ -211,14 +199,7 @@ def main():
                 "systeminfo": lambda: mode_manager.system_info_screen.scroll_selection(-1),
             },
             "scroll_down": {
-                "tidal": lambda: mode_manager.tidal_manager.scroll_selection(1),
-                "qobuz": lambda: mode_manager.qobuz_manager.scroll_selection(1),
-                "spotify": lambda: mode_manager.spotify_manager.scroll_selection(1),
                 "library": lambda: mode_manager.library_manager.scroll_selection(1),
-                "radiomanager": lambda: mode_manager.radio_manager.scroll_selection(1),
-                "motherearthradio": lambda: mode_manager.motherearth_manager.scroll_selection(1),
-                "radioparadise": lambda: mode_manager.radioparadise_manager.scroll_selection(1),
-                "playlists": lambda: mode_manager.playlist_manager.scroll_selection(1),
                 "configmenu": lambda: mode_manager.config_menu.scroll_selection(1),
                 "remotemenu": lambda: mode_manager.remote_menu.scroll_selection(1),
                 "displaymenu": lambda: mode_manager.display_menu.scroll_selection(1),
@@ -496,23 +477,23 @@ def main():
         elif current_mode == 'tidal':
             mode_manager.library_manager.scroll_selection(direction)
         elif current_mode == 'qobuz':
-            mode_manager.qobuz_manager.scroll_selection(direction)
+            mode_manager.library_manager.scroll_selection(direction)
         elif current_mode == 'spotify':
-            mode_manager.spotify_manager.scroll_selection(direction)
+            mode_manager.library_manager.scroll_selection(direction)
         elif current_mode == 'playlists':
             mode_manager.library_manager.scroll_selection(direction)
         elif current_mode == 'radiomanager':
-            mode_manager.radio_manager.scroll_selection(direction)
+            mode_manager.library_manager.scroll_selection(direction)
         elif current_mode == 'motherearthradio':
-            mode_manager.motherearth_manager.scroll_selection(direction)
+            mode_manager.library_manager.scroll_selection(direction)
         elif current_mode == 'radioparadise':
-            mode_manager.radioparadise_manager.scroll_selection(direction)
+            mode_manager.library_manager.scroll_selection(direction)
         elif current_mode == 'library':
             mode_manager.library_manager.scroll_selection(direction)
         elif current_mode == 'internal':
-            mode_manager.internal_manager.scroll_selection(direction)
+            mode_manager.library_manager.scroll_selection(direction)
         elif current_mode == 'usblibrary':
-            mode_manager.usb_library_manager.scroll_selection(direction)
+            mode_manager.library_manager.scroll_selection(direction)
         elif current_mode == 'albums':
             mode_manager.library_manager.scroll_selection(direction)
         elif current_mode == 'artists':
@@ -541,13 +522,13 @@ def main():
             'remotemenu': mode_manager.remote_menu.select_item,
             'displaymenu': mode_manager.display_menu.select_item,
             'tidal': mode_manager.library_manager.select_item,
-            'qobuz': mode_manager.qobuz_manager.select_item,
-            'spotify': mode_manager.spotify_manager.select_item,
+            'qobuz': mode_manager.library_manager.select_item,
+            'spotify': mode_manager.library_manager.select_item,
             'library': mode_manager.library_manager.select_item,
-            'internal': mode_manager.internal_manager.select_item,
-            'radiomanager': mode_manager.radio_manager.select_item,
-            'motherearthradio': mode_manager.motherearth_manager.select_item,
-            'radioparadise': mode_manager.radioparadise_manager.select_item,
+            'internal': mode_manager.library_manager.select_item,
+            'radiomanager': mode_manager.library_manager.select_item,
+            'motherearthradio': mode_manager.library_manager.select_item,
+            'radioparadise': mode_manager.library_manager.select_item,
             'playlists': mode_manager.library_manager.select_item,
             'albums': mode_manager.library_manager.select_item,
             'genres': mode_manager.library_manager.select_item,

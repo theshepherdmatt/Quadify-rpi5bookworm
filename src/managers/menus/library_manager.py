@@ -204,7 +204,7 @@ class LibraryManager(BaseManager):
             return
 
         folder_types = [
-            "folder", "album", "internal-folder", "usb-folder", "nas-folder",
+            "folder", "album", "internal-folder", "usb-folder", "nas-folder", "album_folder",
             "streaming-category", "streaming-folder", "remdisk"
         ]
         song_types = [
