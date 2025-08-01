@@ -366,7 +366,7 @@ class LibraryManager(BaseManager):
                 idx = self.window_start_index + i
                 if idx >= len(self.current_menu_items):
                     break
-                arrow = "→ " if idx == self.current_selection_index else "  "
+                arrow = "->" if idx == self.current_selection_index else "  "
                 fill = "white" if idx == self.current_selection_index else "gray"
                 item_title = truncate(item.get("title", "Unknown"), 20)
                 draw_obj.text((0, y + i * self.line_spacing), f"{arrow}{item_title}", font=font, fill=fill)
