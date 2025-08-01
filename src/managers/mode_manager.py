@@ -47,6 +47,10 @@ class ModeManager:
         {'name': 'artists',          'on_enter': 'enter_artists'},
         {'name': 'albums',          'on_enter': 'enter_albums'},
         {'name': 'genres',          'on_enter': 'enter_genres'},
+        {'name': 'favourites',      'on_enter': 'enter_favourites'},
+        {'name': 'last100',         'on_enter': 'enter_last100'},
+        {'name': 'mediaservers',    'on_enter': 'enter_mediaservers'},
+
     ]
 
     def __init__(self, display_manager, clock, volumio_listener,
@@ -391,6 +395,9 @@ class ModeManager:
         self.machine.add_transition('to_albums', source='*', dest='albums', before='push_current_state')
         self.machine.add_transition('to_artists', source='*', dest='artists', before='push_current_state')
         self.machine.add_transition('to_genres', source='*', dest='genres', before='push_current_state')
+        self.machine.add_transition('to_favourites', source='*', dest='favourites', before='push_current_state')
+        self.machine.add_transition('to_last100', source='*', dest='last100', before='push_current_state')
+        self.machine.add_transition('to_mediaservers', source='*', dest='mediaservers', before='push_current_state')
 
 
     # --- Custom trigger() Method ---
@@ -743,23 +750,22 @@ class ModeManager:
     def enter_playlists(self, event):
         self.logger.info("ModeManager: Entering 'playlists' state.")
         self.stop_all_screens()
-        if self.playlist_manager:
-            self.playlist_manager.start_mode()
-            self.logger.info("ModeManager: PlaylistManager started.")
+        if self.library_manager:
+            self.library_manager.start_mode(start_uri="playlists")
+            self.logger.info("ModeManager: LibraryManager started for playlists.")
         else:
-            self.logger.warning("ModeManager: No playlist_manager set.")
+            self.logger.warning("ModeManager: No playlists_manager set.")
         self.reset_idle_timer()
-        self.start_menu_inactivity_timer()
         self.update_current_mode()
 
     def enter_tidal(self, event):
         self.logger.info("ModeManager: Entering 'tidal' state.")
         self.stop_all_screens()
-        if self.tidal_manager:
-            self.tidal_manager.start_mode()
-            self.logger.info("ModeManager: TidalManager started.")
+        if self.library_manager:
+            self.library_manager.start_mode(start_uri="tidal://") 
+            self.logger.info("ModeManager: LibraryManager started in Tidal mode.")
         else:
-            self.logger.warning("ModeManager: No tidal_manager set.")
+            self.logger.warning("ModeManager: No library_manager set.")
         self.reset_idle_timer()
         self.start_menu_inactivity_timer()
         self.update_current_mode()
@@ -862,6 +868,39 @@ class ModeManager:
         if self.library_manager:
             self.library_manager.start_mode(start_uri="artists://")
             self.logger.info("ModeManager: LibraryManager started for Artist.")
+        else:
+            self.logger.warning("ModeManager: No library_manager set.")
+        self.reset_idle_timer()
+        self.update_current_mode()
+
+    def enter_favourites(self, event):
+        self.logger.info("ModeManager: Entering 'favourites' state.")
+        self.stop_all_screens()
+        if self.library_manager:
+            self.library_manager.start_mode(start_uri="favourites")
+            self.logger.info("ModeManager: LibraryManager started for favourites.")
+        else:
+            self.logger.warning("ModeManager: No library_manager set.")
+        self.reset_idle_timer()
+        self.update_current_mode()
+
+    def enter_last100(self, event):
+        self.logger.info("ModeManager: Entering 'last100' state.")
+        self.stop_all_screens()
+        if self.library_manager:
+            self.library_manager.start_mode(start_uri="Last_100")
+            self.logger.info("ModeManager: LibraryManager started for Last 100.")
+        else:
+            self.logger.warning("ModeManager: No library_manager set.")
+        self.reset_idle_timer()
+        self.update_current_mode()
+
+    def enter_mediaservers(self, event):
+        self.logger.info("ModeManager: Entering 'media servers' state.")
+        self.stop_all_screens()
+        if self.library_manager:
+            self.library_manager.start_mode(start_uri="upnp")
+            self.logger.info("ModeManager: LibraryManager started for Media Servers.")
         else:
             self.logger.warning("ModeManager: No library_manager set.")
         self.reset_idle_timer()

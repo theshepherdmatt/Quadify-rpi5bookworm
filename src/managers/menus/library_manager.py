@@ -1,183 +1,107 @@
-
-# src/managers/library_manager.py
-
 import os
+import json
 import logging
 import requests
 import threading
-from threading import Thread, Event
+from threading import Event, Thread
 from requests.adapters import HTTPAdapter
 from urllib.parse import quote
 from urllib3.util.retry import Retry
-from PIL import Image, ImageDraw, ImageFont
-from managers.base_manager import BaseManager  # Adjust import based on your project structure
+from PIL import ImageFont
+
+from managers.base_manager import BaseManager  # Adjust as per your project structure
 
 class LibraryManager(BaseManager):
-    def __init__(self, display_manager, volumio_config, mode_manager, window_size=3, y_offset=0, line_spacing=16):
+    def __init__(self, display_manager, volumio_config, mode_manager, service_type, root_uri, window_size=3, y_offset=0, line_spacing=16):
         super().__init__(display_manager, volumio_config, mode_manager)
 
-        # REST API setup
+        # API setup
         self.volumio_host = volumio_config.get('host', 'localhost')
         self.volumio_port = volumio_config.get('port', 3000)
         self.base_url = f"http://{self.volumio_host}:{self.volumio_port}"
 
-        # Initialize session with retry logic
+        # Session with retries
         self.session = requests.Session()
         retries = Retry(total=3, backoff_factor=0.3, status_forcelist=[500, 502, 503, 504])
         self.session.mount('http://', HTTPAdapter(max_retries=retries))
         self.session.mount('https://', HTTPAdapter(max_retries=retries))
 
-        self.mode_name = "library"
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(logging.INFO)
-        self.logger.info("LibraryManager initialized.")
 
-        # Thread-safety lock
         self.selection_lock = threading.Lock()
-
-        # Initialize state variables
-        self.current_menu_items = []
-        self.current_selection_index = 0
-        self.window_start_index = 0
         self.is_active = False
 
-        # Display settings
-        self.window_size = window_size  # Number of menu items to display
+        self.window_size = window_size
         self.y_offset = y_offset
         self.line_spacing = line_spacing
         self.font_key = 'menu_font'
 
-        # Initialize menu stack for navigation
+        self.service_type = service_type  # e.g., 'library', 'tidal', 'qobuz'
+        self.root_uri = root_uri          # e.g., 'music-library/NAS/Music', 'tidal', 'qobuz://'
+
         self.menu_stack = []
+        self.current_menu_items = []
+        self.current_selection_index = 0
+        self.window_start_index = 0
 
-        # Current path context
-        self.default_start_uri = "music-library"  # Default starting URI
-        self.current_path = self.default_start_uri  # Starting at the root
+        self.current_path = self.root_uri
 
-        # Event to synchronize playback commands
-        self.playback_event = Event()
-
-        # Load configuration from config.yaml (assuming BaseManager has a method or attribute for this)
-        self.config = self.display_manager.config  # Adjust based on actual implementation
-
-        # Extract display settings
+        self.config = self.display_manager.config
         display_config = self.config.get('display', {})
         self.icon_dir = display_config.get('icon_dir', '/home/volumio/Quadify/src/assets/images')
 
-        # Register mode change callback
         if hasattr(self.mode_manager, "add_on_mode_change_callback"):
             self.mode_manager.add_on_mode_change_callback(self.handle_mode_change)
 
-
     def handle_mode_change(self, current_mode):
-        """Handle mode changes."""
-        self.logger.info(f"LibraryManager handling mode change to: {current_mode}")
-        if current_mode == "library":
-            self.logger.info("Entering Library mode.")
-            self.start_mode(start_uri="music-library/NAS/Music")  # Start directly in "Music" folder
-        elif current_mode == "usblibrary":
-            self.logger.info("Entering USB Library mode.")
-            self.start_mode(start_uri="music-library/USB")
+        self.logger.info(f"[{self.service_type}] Mode change: {current_mode}")
+        if current_mode == self.service_type:
+            self.start_mode()
         elif self.is_active:
-            self.logger.info("Exiting Library mode.")
             self.stop_mode()
 
     def start_mode(self, start_uri=None):
         if self.is_active:
-            self.logger.debug("LibraryManager: Library mode already active.")
+            self.logger.debug(f"[{self.service_type}] Already active, ignoring start_mode()")
             return
-
-        self.logger.info("LibraryManager: Starting Library mode.")
         self.is_active = True
-
-        # Reset selection indices
         self.current_selection_index = 0
         self.window_start_index = 0
-
-        # Clear the menu stack to prevent residual states
-        self.menu_stack = []
-
-        # Use the provided start_uri or default to "music-library"
-        self.current_path = start_uri if start_uri else self.default_start_uri
-        self.logger.info(f"LibraryManager: Starting navigation at URI: {self.current_path}")
-
+        self.menu_stack.clear()
+        self.current_path = start_uri or self.root_uri
+        self.logger.info(f"[{self.service_type}] Starting mode with URI: {self.current_path}")
         self.display_loading_screen()
         self.fetch_navigation(self.current_path)
-
-        # Log the reset state
-        self.logger.debug(f"LibraryManager: Mode active: {self.is_active}, Selection Index: {self.current_selection_index}, Window Start Index: {self.window_start_index}")
-
-        # Start timeout timer (e.g. 5 seconds)
         self.timeout_timer = threading.Timer(3.0, self.library_timeout)
         self.timeout_timer.start()
 
     def library_timeout(self):
-        """Called when library navigation has not loaded within the timeout period."""
         if not self.current_menu_items:
-            self.logger.warning("LibraryManager: Timeout reached, no navigation data received.")
-
-            def draw(draw_obj):
-                draw_obj.text(
-                    (10, self.y_offset),
-                    "Your library is not loading...",
-                    font=self.display_manager.fonts.get(self.font_key, ImageFont.load_default()),
-                    fill="white"
-                )
-                draw_obj.text(
-                    (10, self.y_offset + self.line_spacing),
-                    "Have you enabled it via Volumio?",
-                    font=self.display_manager.fonts.get(self.font_key, ImageFont.load_default()),
-                    fill="white"
-                )
-
-            self.display_manager.draw_custom(draw)
-            
-            # Automatically navigate back to the menu after 5 seconds.
-            import threading
+            self.logger.warning(f"[{self.service_type}] Timeout: No items loaded for path '{self.current_path}'.")
+            self.display_message("Your library is not loading...", "Have you enabled it via Volumio?")
             threading.Timer(5.0, self.mode_manager.to_menu).start()
 
-
     def stop_mode(self):
-        if not self.is_active:
-            self.logger.debug("LibraryManager: Library mode already inactive.")
-            return
+        self.logger.info(f"[{self.service_type}] Stopping mode and clearing display.")
         self.is_active = False
         self.display_manager.clear_screen()
-        self.logger.info("LibraryManager: Stopped Library mode and cleared display.")
 
     def fetch_navigation(self, uri):
-        """Fetch navigation data dynamically for any folder in the music library."""
-        self.logger.info(f"LibraryManager: Fetching navigation data for URI: {uri}")
+        self.logger.info(f"[{self.service_type}] Fetching navigation for URI: {uri}")
         try:
-            # API request to fetch navigation data
-            response = self.session.get(f"{self.base_url}/api/v1/browse?uri={quote(uri)}")
-            self.logger.debug(f"LibraryManager: Received Status Code: {response.status_code}")
-            self.logger.debug(f"LibraryManager: Received Response: {response.text}")
-
-            # Handle non-200 status codes
-            if response.status_code != 200:
-                self.logger.error(f"LibraryManager: Failed to fetch data. Status Code: {response.status_code}")
-                self.display_error_message("Fetch Error", f"Failed to fetch data: {response.status_code}")
+            resp = self.session.get(f"{self.base_url}/api/v1/browse?uri={quote(uri)}")
+            if resp.status_code != 200:
+                self.logger.error(f"[{self.service_type}] Fetch Error: Status {resp.status_code} for URI '{uri}'")
+                self.display_message("Fetch Error", f"Failed: {resp.status_code}")
                 return
-
-            # Parse the response JSON
-            data = response.json()
-            navigation = data.get("navigation", {})
-            lists = navigation.get("lists", [])
-
-            if not lists:
-                self.logger.warning("LibraryManager: No lists available in the navigation data.")
-                self.display_no_items()
-                return
-
-            # Process the first list (typically the relevant one)
-            items = lists[0].get("items", [])
+            nav = resp.json().get("navigation", {})
+            items = nav.get("lists", [{}])[0].get("items", [])
             if not items:
-                self.logger.info("LibraryManager: No items in the current folder.")
-                self.display_no_items()
+                self.logger.warning(f"[{self.service_type}] No items in folder '{uri}'.")
+                self.display_message("No Items", "This folder is empty.")
                 return
-
-            # Update current menu items
+            self.logger.debug(f"[{self.service_type}] {len(items)} items loaded from '{uri}'.")
             self.current_menu_items = [
                 {
                     "title": item.get("title", "Untitled"),
@@ -189,414 +113,319 @@ class LibraryManager(BaseManager):
                 for item in items
             ]
             self.current_menu_items.append({"title": "Back", "uri": None, "type": "back"})
-
-            self.logger.info(f"LibraryManager: Fetched {len(self.current_menu_items)} items for URI: {uri}")
             if self.is_active:
                 self.display_menu()
-
-        except ValueError as ve:
-            self.logger.error(f"LibraryManager: JSON decoding failed: {ve}")
-            self.display_error_message("Fetch Error", f"Invalid response format: {ve}")
         except Exception as e:
-            self.logger.error(f"LibraryManager: Exception occurred while fetching navigation: {str(e)}")
-            self.display_error_message("Fetch Error", f"An error occurred: {str(e)}")
+            self.logger.error(f"[{self.service_type}] Exception in fetch_navigation: {e}")
+            self.display_message("Error", str(e))
+
+    def play_streaming_song(self, item):
+        """
+        Play a song/track for streaming services like Tidal or Qobuz, etc.
+        """
+        service = item.get("service", self.service_type)
+        uri = item.get("uri")
+        self.logger.info(f"[{self.service_type}] Playing streaming item via replaceAndPlay: {item}")
+        if not uri:
+            self.display_message("Playback Error", "No URI for this item.")
+            return
+        try:
+            # Prefer SocketIO if available (for Volumio streaming services)
+            if hasattr(self.display_manager, "volumio_listener") and hasattr(self.display_manager.volumio_listener, "socketIO"):
+                self.display_manager.volumio_listener.socketIO.emit('replaceAndPlay', {
+                    "item": {
+                        "service": service,
+                        "uri": uri
+                    }
+                })
+            else:
+                # fallback to HTTP API
+                url = f"{self.base_url}/api/v1/replaceAndPlay"
+                data = {"name": item.get("title", ""), "service": service, "uri": uri}
+                self.session.post(url, json=data)
+            self.display_message("Playback Started", f"Playing: {item.get('title', '')}")
+        except Exception as e:
+            self.display_message("Playback Error", str(e))
+
+    def navigate_streaming_folder(self, uri):
+        """
+        Navigate into a Tidal/Qobuz/etc folder/category by emitting a browseLibrary request.
+        """
+        # If you have a socketIO connection, use it:
+        if hasattr(self.display_manager, "volumio_listener") and hasattr(self.display_manager.volumio_listener, "fetch_browse_library"):
+            self.display_manager.volumio_listener.fetch_browse_library(uri)
+        else:
+            # fallback to HTTP GET
+            self.fetch_navigation(uri)
+
 
     def select_item(self):
-        """Handle the selection of the current menu item."""
         if not self.is_active or not self.current_menu_items:
-            self.logger.warning("LibraryManager: Select attempted while inactive or no items available.")
+            return
+        selected = self.current_menu_items[self.current_selection_index]
+        self.logger.info(f"[{self.service_type}] Selected item: {json.dumps(selected, indent=2)}")
+
+        # --- Handle synthetic submenu actions first ---
+        if "action" in selected:
+            self.logger.info(f"[{self.service_type}] Performing album action: {selected['action']}")
+            self.perform_action(selected["action"], selected.get("data", {}))
             return
 
-        selected_item = self.current_menu_items[self.current_selection_index]
-        self.logger.info(f"LibraryManager: Selected item: {selected_item}")
-
-        # Handle 'Back' navigation
-        if selected_item.get("title") == "Back":
+        if selected["title"] == "Back":
+            self.logger.debug(f"[{self.service_type}] 'Back' selected, returning to previous menu.")
             self.back()
             return
 
-        # Handle explicit submenu actions
-        if 'action' in selected_item:
-            action = selected_item.get('action')
-            data = selected_item.get('data')
-            self.perform_action(action, data)
-            return
+        item_type = selected.get("type", "")
+        service = selected.get("service", self.service_type)
+        uri = selected.get("uri", "")
 
-        # Map Volumio's various folder-like types to a single check
-        folder_types = ["folder", "internal-folder", "usb-folder", "nas-folder", 
-                        "streaming-category", "streaming-folder", "remdisk"]
-
-        item_type = selected_item.get("type", "").lower()
-
-        if item_type in folder_types:
-            # Check if this is actually an album folder
-            if self.is_album_folder(selected_item):
-                self.logger.info(f"LibraryManager: Displaying options for album: {selected_item.get('title')}")
-                self.display_folder_or_album_options(selected_item)
-            else:
-                # Navigate into the folder
-                self.logger.info(f"LibraryManager: Navigating into: {selected_item.get('title')}")
-                self.menu_stack.append(self.current_path)  # Save the current path
-                self.current_path = selected_item.get("uri")
+        # --- Handle Tidal/Qobuz "item-no-menu": treat as folder if there's a URI ---
+        if item_type == "item-no-menu":
+            if uri:  # treat as a navigable folder, like old TidalManager
+                self.logger.info(f"[{self.service_type}] Navigating into item-no-menu: '{selected.get('title')}' ({uri})")
+                self.push_path(self.current_path)
+                self.current_path = uri
                 self.display_loading_screen()
                 self.fetch_navigation(self.current_path)
+                return
+            else:  # block if truly not navigable
+                self.logger.info(f"[{self.service_type}] '{selected.get('title','')}' is not selectable (type: {item_type}, no uri).")
+                self.display_message("Not available", f"'{selected.get('title', '')}' cannot be opened.")
+                return
+
+        # --- (The rest is as before) ---
+        unsupported_types = [
+            "item-no-play", "divider", "header", "section", "none",
+        ]
+        if item_type in unsupported_types:
+            self.logger.info(f"[{self.service_type}] '{selected.get('title','')}' is not selectable (type: {item_type}).")
+            self.display_message("Not available", f"'{selected.get('title', '')}' cannot be opened.")
             return
 
-        if item_type == "song":
-            self.logger.info(f"LibraryManager: Playing song: {selected_item.get('title')}")
-            self.replace_and_play(selected_item)
+        folder_types = [
+            "folder", "album", "internal-folder", "usb-folder", "nas-folder",
+            "streaming-category", "streaming-folder", "remdisk"
+        ]
+        song_types = [
+            "song", "track", "audio", "file", "playlist", "album",
+            "play_album", "play_song", "select_songs"
+        ]
+
+        # --- Streaming plugin handling (Tidal, Qobuz, etc) ---
+        streaming_services = ("tidal", "qobuz", "deezer", "spotify")
+        if service in streaming_services or (uri.startswith("tidal://") or uri.startswith("qobuz://")):
+            # Play song directly if it's a track, or contains "/song/"
+            if item_type == "song" or (uri and "/song/" in uri):
+                self.logger.info(f"[{service}] Streaming plugin: playing song '{selected.get('title')}'")
+                self.play_streaming_song(selected)
+                return
+            # Otherwise, treat as folder/category: navigate further
+            if uri:
+                self.logger.info(f"[{service}] Streaming plugin: navigating into '{selected.get('title')}' ({uri})")
+                self.push_path(self.current_path)
+                self.current_path = uri
+                self.display_loading_screen()
+                self.navigate_streaming_folder(uri)
+                return
+            self.display_message("Not available", f"'{selected.get('title', '')}' cannot be opened.")
             return
 
-        if item_type == "webradio":
-            self.logger.info(f"LibraryManager: Playing web radio: {selected_item.get('title')}")
-            self.replace_and_play(selected_item)
-            return
+        self.logger.info(f"[{self.service_type}] Item type: '{item_type}'")
+        if item_type in folder_types:
+            if self.is_album_folder(selected):
+                self.logger.info(f"[{self.service_type}] Detected album folder: '{selected.get('title')}'. Showing album options.")
+                self.display_album_options(selected)
+            else:
+                self.logger.info(f"[{self.service_type}] Entering folder: '{selected.get('title')}'")
+                self.push_path(self.current_path)
+                self.current_path = selected["uri"]
+                self.display_loading_screen()
+                self.fetch_navigation(self.current_path)
+        elif item_type in song_types or item_type == "webradio":
+            self.logger.info(f"[{self.service_type}] Playing item: '{selected.get('title')}'")
+            self.replace_and_play(selected)
+        else:
+            self.logger.warning(f"[{self.service_type}] Unknown type: {item_type}, item: {json.dumps(selected, indent=2)}")
+            self.display_message("Unknown Type", f"Type: {item_type}")
 
-        # Handle unknown or unhandled types gracefully
-        self.logger.warning(f"LibraryManager: Unknown item type '{item_type}'.")
-        self.display_error_message("Invalid Selection", "Selected item is not recognized.")
 
     def is_album_folder(self, item):
-        """Determine if the folder represents an album."""
-        # Adjust the logic based on your folder structure
-        # For example, if albums are folders that contain only songs, we can check that
         folder_uri = item.get("uri")
         if not folder_uri:
             return False
-
         try:
-            # Fetch the contents of the folder
-            response = self.session.get(f"{self.base_url}/api/v1/browse?uri={quote(folder_uri)}")
-            if response.status_code != 200:
-                self.logger.warning(f"LibraryManager: Failed to fetch contents for album check: {folder_uri}")
-                return False
-
-            folder_data = response.json()
-            items = folder_data.get("navigation", {}).get("lists", [{}])[0].get("items", [])
-
-            # If all items are songs, or there are no subfolders, consider it an album
-            has_songs = any(item.get("type", "").lower() == "song" for item in items)
-            has_subfolders = any(item.get("type", "").lower() == "folder" for item in items)
-
-            is_album = has_songs and not has_subfolders
-            return is_album
-
+            resp = self.session.get(f"{self.base_url}/api/v1/browse?uri={quote(folder_uri)}")
+            items = resp.json().get("navigation", {}).get("lists", [{}])[0].get("items", [])
+            has_songs = any(i.get("type", "") == "song" for i in items)
+            has_folders = any(i.get("type", "") in ["folder", "album"] for i in items)
+            self.logger.debug(f"[{self.service_type}] Album folder check for '{item.get('title', '')}': has_songs={has_songs}, has_folders={has_folders}")
+            return has_songs and not has_folders
         except Exception as e:
-            self.logger.error(f"LibraryManager: Exception during album check: {e}")
+            self.logger.error(f"[{self.service_type}] Exception in is_album_folder: {e}")
             return False
 
-    def display_folder_or_album_options(self, folder_item):
-        """Display options for a selected album as a new menu."""
-        self.logger.info(f"LibraryManager: Displaying options for album: {folder_item.get('title')}")
-
-        # Define the submenu with icons
+    def display_album_options(self, album_item):
+        self.logger.info(f"[{self.service_type}] Displaying album options for album: {album_item.get('title', '')}")
         options = [
-            {"title": "Play Album", "action": "play_album", "data": folder_item, "icon": "play"},
-            {"title": "Select Songs", "action": "select_songs", "data": folder_item, "icon": "songs"},
-            {"title": "Back", "action": "back", "icon": "back"}
+            {"title": "Play Album", "action": "play_album", "data": album_item},
+            {"title": "Select Songs", "action": "select_songs", "data": album_item},
+            {"title": "Back", "action": "back"}
         ]
-
-        # Push the options menu onto the stack
-        self.push_menu(options, menu_title=f"Album: {folder_item.get('title')}")
+        self.push_submenu(options, menu_title=f"Album: {album_item.get('title', '')}")
 
     def perform_action(self, action, data):
-        """Perform an action based on the menu selection."""
+        self.logger.info(f"[{self.service_type}] Performing action: '{action}' on '{data.get('title', '')}'")
         if action == "play_album":
-            self.logger.info(f"LibraryManager: Playing entire album: {data.get('title')}")
             self.play_album_or_folder(data)
         elif action == "select_songs":
-            self.logger.info(f"LibraryManager: Fetching songs for album: {data.get('title')}")
-            self.menu_stack.append(self.current_path)  # Save current path
+            self.push_path(self.current_path)
             self.current_path = data.get("uri")
             self.display_loading_screen()
             self.fetch_navigation(self.current_path)
         elif action == "back":
-            self.logger.info("LibraryManager: Going back to the previous menu.")
-            self.pop_menu()
+            self.back()
         else:
-            self.logger.warning(f"LibraryManager: Unknown action '{action}'.")
-            self.display_error_message("Invalid Action", "This action is not recognized.")
+            self.display_message("Invalid Action", action)
 
     def play_album_or_folder(self, folder_item):
-        """Play all songs in a folder or album."""
         folder_uri = folder_item.get("uri")
         if not folder_uri:
-            self.logger.error("LibraryManager: Selected folder does not have a valid URI.")
-            self.display_error_message("Playback Error", "Selected folder cannot be played.")
+            self.display_message("Playback Error", "No URI")
             return
+        Thread(target=self._play_album_thread, args=(folder_uri, folder_item.get("title", "")), daemon=True).start()
 
-        self.logger.info(f"LibraryManager: Playing all songs from folder: {folder_item.get('title')}")
-        Thread(target=self._play_album_or_folder_thread, args=(folder_uri, folder_item.get('title')), daemon=True).start()
-
-    def _play_album_or_folder_thread(self, folder_uri, album_title):
-        """Thread to handle playing all songs in a folder."""
+    def _play_album_thread(self, album_uri, album_title):
         try:
-            # Step 1: Replace current queue with album's tracks and start playback
-            replace_and_play_url = f"{self.base_url}/api/v1/replaceAndPlay"
-            data = {
-                "name": album_title,
-                "service": "mpd",
-                "uri": folder_uri
-            }
-            replace_response = self.session.post(replace_and_play_url, json=data)
-
-            if replace_response.status_code == 200:
-                self.logger.info(f"LibraryManager: Playback started successfully for the album: {album_title}")
-                self.display_success_message("Playback Started", f"Playing album: {album_title}")
-            else:
-                self.logger.error(f"LibraryManager: Failed to start playback for album: {album_title}. Status Code: {replace_response.status_code}, Response: {replace_response.text}")
-                self.display_error_message("Playback Error", f"Failed to start playback: {replace_response.status_code}")
-
+            # Fetch the album's content (list all tracks)
+            resp = self.session.get(f"{self.base_url}/api/v1/browse?uri={quote(album_uri)}")
+            if resp.status_code != 200:
+                self.display_message("Playback Error", f"Failed to fetch album: {resp.status_code}")
+                return
+            items = resp.json().get("navigation", {}).get("lists", [{}])[0].get("items", [])
+            # Filter out only songs/tracks (you can tweak types as needed)
+            track_uris = [
+                item.get("uri")
+                for item in items
+                if item.get("type") in ("song", "track", "audio", "file") and item.get("uri")
+            ]
+            if not track_uris:
+                self.display_message("Playback Error", f"No tracks found in {album_title}")
+                return
+            # Start playback with the first song
+            first_track = track_uris[0]
+            self.session.post(
+                f"{self.base_url}/api/v1/replaceAndPlay",
+                json={"name": album_title, "service": self.service_type, "uri": first_track}
+            )
+            # Optionally, queue the rest of the tracks (not strictly necessary but mirrors album play behaviour)
+            for uri in track_uris[1:]:
+                self.session.post(
+                    f"{self.base_url}/api/v1/addToQueue",
+                    json={"name": album_title, "service": self.service_type, "uri": uri}
+                )
+            self.display_message("Playback Started", f"Playing: {album_title}")
         except Exception as e:
-            self.logger.error(f"LibraryManager: Failed to play album: {str(e)}")
-            self.display_error_message("Playback Error", f"Could not play album: {str(e)}")
+            self.display_message("Playback Error", str(e))
 
     def replace_and_play(self, item):
-        """Replace current queue and play the selected item."""
-        song_uri = item.get("uri")
-        if not song_uri:
-            self.logger.error("LibraryManager: Selected item does not have a valid URI.")
-            self.display_error_message("Playback Error", "Selected item cannot be played.")
+        uri = item.get("uri")
+        if not uri:
+            self.display_message("Playback Error", "No URI")
             return
-
-        self.logger.info(f"LibraryManager: Replacing and playing item: {item.get('title')}")
         try:
-            replace_and_play_url = f"{self.base_url}/api/v1/replaceAndPlay"
-            data = {
-                "name": item.get("title", "Untitled"),
-                "service": item.get("service", "mpd"),
-                "uri": song_uri
-            }
-            response = self.session.post(replace_and_play_url, json=data)
-
-            if response.status_code == 200:
-                self.logger.info(f"LibraryManager: Playback started successfully for: {item.get('title')}")
-                self.display_success_message("Playback Started", f"Playing: {item.get('title')}")
+            url = f"{self.base_url}/api/v1/replaceAndPlay"
+            data = {"name": item.get("title", ""), "service": item.get("service", self.service_type), "uri": uri}
+            resp = self.session.post(url, json=data)
+            if resp.status_code == 200:
+                self.display_message("Playback Started", f"Playing: {item.get('title', '')}")
             else:
-                self.logger.error(f"LibraryManager: Failed to start playback. Status Code: {response.status_code}, Response: {response.text}")
-                self.display_error_message("Playback Error", f"Failed to start playback: {response.status_code}")
-
+                self.display_message("Playback Error", f"Failed: {resp.status_code}")
         except Exception as e:
-            self.logger.error(f"LibraryManager: Exception occurred while trying to play item: {str(e)}")
-            self.display_error_message("Playback Error", f"Could not play item: {str(e)}")
+            self.display_message("Playback Error", str(e))
 
     def display_loading_screen(self):
-        """Show a loading screen."""
-        self.logger.info("LibraryManager: Displaying loading screen.")
-
-        def draw(draw_obj):
-            # Display loading text
-            draw_obj.text(
-                (0, self.y_offset),
-                "Loading...",
-                font=self.display_manager.fonts.get(self.font_key, ImageFont.load_default()),
-                fill="white"
-            )
-
-        self.display_manager.draw_custom(draw)
+        self.display_message("Loading...", "")
 
     def display_menu(self):
-        """Display the current menu."""
-        # Determine the menu title based on current path
-        menu_title = self.current_path.split("/")[-1] if "/" in self.current_path else self.current_path
-
-        # If a submenu is active, the top of the stack contains the submenu title
-        is_submenu = bool(self.menu_stack and isinstance(self.menu_stack[-1], dict) and "menu_title" in self.menu_stack[-1])
-        if is_submenu:
-            menu_title = self.menu_stack[-1].get("menu_title", menu_title)
-
-        self.logger.info(f"LibraryManager: Displaying menu: {menu_title}")
-
+        if self.menu_stack and self.menu_stack[-1]["type"] == "submenu":
+            menu_title = self.menu_stack[-1].get("menu_title", "Library")
+        else:
+            menu_title = self.current_path.split("/")[-1] if "/" in self.current_path else self.current_path
         visible_items = self.get_visible_window(self.current_menu_items)
-        self.logger.debug(f"LibraryManager: Visible items: {visible_items}")
+        font = self.display_manager.fonts.get(self.font_key, ImageFont.load_default())
+
+        def truncate(text, maxlen):
+            return text if len(text) <= maxlen else text[:maxlen - 3] + "..."
 
         def draw(draw_obj):
-            y_position = self.y_offset
-
-            # Display the menu title
-            draw_obj.text(
-                (0, y_position),
-                menu_title[:20],  # Ensure the title fits the width
-                font=self.display_manager.fonts.get(self.font_key, ImageFont.load_default()),
-                fill="yellow"
-            )
-            y_position += self.line_spacing
-
-            # Display each menu item
+            y = self.y_offset
+            draw_obj.text((0, y), truncate(menu_title, 20), font=font, fill="yellow")
+            y += self.line_spacing
             for i, item in enumerate(visible_items):
-                actual_index = self.window_start_index + i
-                if actual_index >= len(self.current_menu_items):
-                    break  # Prevent index out of range
-
-                arrow = "-> " if actual_index == self.current_selection_index else "   "
-                item_title = item.get("title", "Unknown")
-                fill_color = "white" if actual_index == self.current_selection_index else "gray"
-
-                # No icon, just display the text
-                draw_obj.text(
-                    (0, y_position + i * self.line_spacing),
-                    f"{arrow}{item_title}",
-                    font=self.display_manager.fonts.get(self.font_key, ImageFont.load_default()),
-                    fill=fill_color
-                )
-
+                idx = self.window_start_index + i
+                if idx >= len(self.current_menu_items):
+                    break
+                arrow = "→ " if idx == self.current_selection_index else "  "
+                fill = "white" if idx == self.current_selection_index else "gray"
+                item_title = truncate(item.get("title", "Unknown"), 20)
+                draw_obj.text((0, y + i * self.line_spacing), f"{arrow}{item_title}", font=font, fill=fill)
         self.display_manager.draw_custom(draw)
 
-    def push_menu(self, menu_items, menu_title=""):
-        """Push a new menu onto the stack and display it."""
-        # Save the current menu state
-        self.menu_stack.append({
-            "menu_items": self.current_menu_items.copy(),
-            "selection_index": self.current_selection_index,
-            "window_start_index": self.window_start_index,
-            "menu_title": menu_title if menu_title else "Options"
-        })
-
-        # Update to the new submenu
-        self.current_menu_items = menu_items
-        self.current_selection_index = 0
-        self.window_start_index = 0
-
-        # Display the submenu
-        self.display_menu()
-
-    def pop_menu(self):
-        """Pop the top menu from the stack and display the previous menu."""
-        if not self.menu_stack:
-            self.logger.warning("LibraryManager: Menu stack is empty, cannot pop.")
-            return
-
-        previous_menu = self.menu_stack.pop()
-        self.current_menu_items = previous_menu["menu_items"]
-        self.current_selection_index = previous_menu["selection_index"]
-        self.window_start_index = previous_menu["window_start_index"]
-        menu_title = previous_menu["menu_title"]
-
-        self.logger.info(f"LibraryManager: Returning to menu: {menu_title}")
-
-        # Display the previous menu
-        self.display_menu()
-
     def get_visible_window(self, items):
-        """Return the visible window of items based on the current selection and window size."""
         if self.current_selection_index < self.window_start_index:
             self.window_start_index = self.current_selection_index
         elif self.current_selection_index >= self.window_start_index + self.window_size:
             self.window_start_index = self.current_selection_index - self.window_size + 1
-
         self.window_start_index = max(0, self.window_start_index)
-        self.window_start_index = min(
-            self.window_start_index, max(0, len(items) - self.window_size)
-        )
-        return items[self.window_start_index : self.window_start_index + self.window_size]
+        self.window_start_index = min(self.window_start_index, max(0, len(items) - self.window_size))
+        return items[self.window_start_index: self.window_start_index + self.window_size]
 
     def scroll_selection(self, direction):
-        """Scroll the selection up or down."""
         if not self.is_active or not self.current_menu_items:
-            self.logger.warning("LibraryManager: Scroll attempted with no active items.")
             return
-
-        previous_index = self.current_selection_index
+        prev_index = self.current_selection_index
         self.current_selection_index += direction
-        self.current_selection_index = max(
-            0, min(self.current_selection_index, len(self.current_menu_items) - 1)
-        )
-
-        self.logger.debug(f"LibraryManager: Scrolled from {previous_index} to {self.current_selection_index}.")
+        self.current_selection_index = max(0, min(self.current_selection_index, len(self.current_menu_items) - 1))
         self.display_menu()
 
-    def display_no_items(self):
-        """Display a message if no items are available."""
-        self.logger.info("LibraryManager: No items available.")
-
+    def display_message(self, title, message):
+        font = self.display_manager.fonts.get(self.font_key, ImageFont.load_default())
         def draw(draw_obj):
-            draw_obj.text(
-                (0, self.y_offset),
-                "No Items Available",
-                font=self.display_manager.fonts.get(self.font_key, ImageFont.load_default()),
-                fill="white"
-            )
-
+            draw_obj.text((0, self.y_offset), title[:20], font=font, fill="yellow")
+            draw_obj.text((0, self.y_offset + self.line_spacing), message[:20], font=font, fill="white")
         self.display_manager.draw_custom(draw)
 
-    def display_error_message(self, title, message):
-        """Display an error message on the screen."""
-        self.logger.info(f"LibraryManager: Displaying error message: {title} - {message}")
+    def push_submenu(self, menu_items, menu_title=""):
+        self.menu_stack.append({
+            "type": "submenu",
+            "menu_items": self.current_menu_items.copy(),
+            "selection_index": self.current_selection_index,
+            "window_start_index": self.window_start_index,
+            "menu_title": menu_title or "Options"
+        })
+        self.current_menu_items = menu_items
+        self.current_selection_index = 0
+        self.window_start_index = 0
+        self.display_menu()
 
-        def draw(draw_obj):
-            # Display title
-            draw_obj.text(
-                (0, self.y_offset),
-                f"Error: {title}",
-                font=self.display_manager.fonts.get(self.font_key, ImageFont.load_default()),
-                fill="red"
-            )
-            # Display message
-            draw_obj.text(
-                (0, self.y_offset + self.line_spacing),
-                message[:20],  # Truncate to fit
-                font=self.display_manager.fonts.get(self.font_key, ImageFont.load_default()),
-                fill="white"
-            )
-
-        self.display_manager.draw_custom(draw)
-
-    def display_success_message(self, title, message):
-        """Display a success message on the screen."""
-        self.logger.info(f"LibraryManager: Displaying success message: {title} - {message}")
-
-        def draw(draw_obj):
-            # Display title
-            draw_obj.text(
-                (0, self.y_offset),
-                f"{title}",
-                font=self.display_manager.fonts.get(self.font_key, ImageFont.load_default()),
-                fill="green"
-            )
-            # Display message
-            draw_obj.text(
-                (0, self.y_offset + self.line_spacing),
-                message[:20],  # Truncate to fit
-                font=self.display_manager.fonts.get(self.font_key, ImageFont.load_default()),
-                fill="white"
-            )
-
-        self.display_manager.draw_custom(draw)
-
-    def go_back(self):
-        """Handle going back to the previous navigation level."""
-        if self.menu_stack:
-            # Check if we're in a submenu
-            if isinstance(self.menu_stack[-1], dict) and "menu_title" in self.menu_stack[-1]:
-                self.pop_menu()
-            else:
-                self.current_path = self.menu_stack.pop()
-                self.display_loading_screen()
-                self.fetch_navigation(self.current_path)
-        else:
-            self.logger.info("LibraryManager: Already at root level, cannot go back.")
-            self.stop_mode()  # Optionally exit the mode if at root
-            
-
-    def update_song_info(self, state):
-        """Update the playback metrics display based on the current state."""
-        self.logger.info("LibraryManager: Updating playback metrics display.")
-
-        # Extract relevant playback information
-        sample_rate = state.get("samplerate", "Unknown Sample Rate")
-        bitdepth = state.get("bitdepth", "Unknown Bit Depth")
-        volume = state.get("volume", "Unknown Volume")
-
-        # Log or display the extracted information
-        self.logger.info(f"Sample Rate: {sample_rate}, Bit Depth: {bitdepth}, Volume: {volume}")
+    def push_path(self, path):
+        self.menu_stack.append({"type": "path", "path": path})
 
     def back(self):
-        if self.menu_stack:
-            self.pop_menu()
-        else:
-            if self.is_active:
-                self.stop_mode()
+        if not self.menu_stack:
+            self.stop_mode()
             self.mode_manager.back()
+            return
+        last = self.menu_stack.pop()
+        if last["type"] == "submenu":
+            self.current_menu_items = last["menu_items"]
+            self.current_selection_index = last["selection_index"]
+            self.window_start_index = last["window_start_index"]
+            self.display_menu()
+        elif last["type"] == "path":
+            self.current_path = last["path"]
+            self.display_loading_screen()
+            self.fetch_navigation(self.current_path)
 
-        # Optional: Update the screen with this information if needed
-        # You can call methods on `self.display_manager` or another appropriate object
+    # Optionally, add update_song_info and other UI utilities as needed

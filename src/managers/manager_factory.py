@@ -186,6 +186,8 @@ class ManagerFactory:
             display_manager   = self.display_manager,
             volumio_config    = self.config.get('volumio', {}),
             mode_manager      = self.mode_manager,
+            service_type    = "library",
+            root_uri        = "music-library/NAS/Music"
         )
     
     def create_internal_manager(self):

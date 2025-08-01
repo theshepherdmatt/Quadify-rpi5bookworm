@@ -494,13 +494,13 @@ def main():
         elif current_mode == 'displaymenu':
             mode_manager.display_menu.scroll_selection(direction)
         elif current_mode == 'tidal':
-            mode_manager.tidal_manager.scroll_selection(direction)
+            mode_manager.library_manager.scroll_selection(direction)
         elif current_mode == 'qobuz':
             mode_manager.qobuz_manager.scroll_selection(direction)
         elif current_mode == 'spotify':
             mode_manager.spotify_manager.scroll_selection(direction)
         elif current_mode == 'playlists':
-            mode_manager.playlist_manager.scroll_selection(direction)
+            mode_manager.library_manager.scroll_selection(direction)
         elif current_mode == 'radiomanager':
             mode_manager.radio_manager.scroll_selection(direction)
         elif current_mode == 'motherearthradio':
@@ -513,6 +513,18 @@ def main():
             mode_manager.internal_manager.scroll_selection(direction)
         elif current_mode == 'usblibrary':
             mode_manager.usb_library_manager.scroll_selection(direction)
+        elif current_mode == 'albums':
+            mode_manager.library_manager.scroll_selection(direction)
+        elif current_mode == 'artists':
+            mode_manager.library_manager.scroll_selection(direction)
+        elif current_mode == 'genres':
+            mode_manager.library_manager.scroll_selection(direction)
+        elif current_mode == 'last100':
+            mode_manager.library_manager.scroll_selection(direction)
+        elif current_mode == 'mediaservers':
+            mode_manager.library_manager.scroll_selection(direction)
+        elif current_mode == 'favourites':
+            mode_manager.library_manager.scroll_selection(direction)
         else:
             logger.warning(f"Unhandled mode: {current_mode}; no rotary action performed.")
 
@@ -528,7 +540,7 @@ def main():
             'clockmenu': mode_manager.clock_menu.select_item,
             'remotemenu': mode_manager.remote_menu.select_item,
             'displaymenu': mode_manager.display_menu.select_item,
-            'tidal': mode_manager.tidal_manager.select_item,
+            'tidal': mode_manager.library_manager.select_item,
             'qobuz': mode_manager.qobuz_manager.select_item,
             'spotify': mode_manager.spotify_manager.select_item,
             'library': mode_manager.library_manager.select_item,
@@ -536,7 +548,14 @@ def main():
             'radiomanager': mode_manager.radio_manager.select_item,
             'motherearthradio': mode_manager.motherearth_manager.select_item,
             'radioparadise': mode_manager.radioparadise_manager.select_item,
-            'playlists': mode_manager.playlist_manager.select_item,
+            'playlists': mode_manager.library_manager.select_item,
+            'albums': mode_manager.library_manager.select_item,
+            'genres': mode_manager.library_manager.select_item,
+            'artists': mode_manager.library_manager.select_item,
+            'favourites': mode_manager.library_manager.select_item,
+            'mediaservers': mode_manager.library_manager.select_item,
+            'last100': mode_manager.library_manager.select_item,
+
             # Add any other menu/submenu modes here as needed
         }
 
