@@ -61,24 +61,10 @@ class LibraryManager(BaseManager):
         elif self.is_active:
             self.stop_mode()
 
-    def start_mode(self, service_type=None, start_uri=None):
-        """Activate the library browser.
-
-        Parameters
-        ----------
-        service_type: Optional[str]
-            Set the current service (e.g. 'library', 'tidal').  If omitted the
-            previous value is used.  This allows the same manager instance to be
-            reused for multiple sources.
-        start_uri: Optional[str]
-            Starting URI for navigation.  Defaults to ``self.root_uri``.
-        """
-
+    def start_mode(self, start_uri=None):
         if self.is_active:
             self.logger.debug(f"[{self.service_type}] Already active, ignoring start_mode()")
             return
-        if service_type:
-            self.service_type = service_type
         self.is_active = True
         self.current_selection_index = 0
         self.window_start_index = 0

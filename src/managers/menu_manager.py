@@ -23,8 +23,6 @@ class MenuManager:
         self.menu_type = menu_type
         self.font_key = 'menu_font'
         self.bold_font_key = 'menu_font_bold'
-        self.line_spacing = 16
-        self.y_offset = 0
         self.lock = threading.Lock()
 
         # Menu label mapping for display
@@ -170,27 +168,48 @@ class MenuManager:
         return mapping.get(plugin, name.upper().replace(' ', '_'))
 
     def draw_menu(self, offset_x=0):
-        """Render the main menu as a text-based list."""
         with self.lock:
             visible_items = self.get_visible_window(self.current_menu_items, self.window_size)
-            font = self.display_manager.fonts.get(self.font_key, ImageFont.load_default())
-            bold_font = self.display_manager.fonts.get(self.bold_font_key, font)
+            icon_size = 40
+            spacing = 10
+            total_width = self.display_manager.oled.width
+            total_height = self.display_manager.oled.height
+            total_icons_width = len(visible_items) * icon_size + (len(visible_items) - 1) * spacing
+            x_offset = (total_width - total_icons_width) // 2 + offset_x
+            y_position = (total_height - icon_size) // 2 - 10
 
-            def truncate(text, maxlen=20):
-                return text if len(text) <= maxlen else text[: maxlen - 3] + "..."
+            base_image = Image.new("RGB", self.display_manager.oled.size, "black")
+            draw_obj = ImageDraw.Draw(base_image)
 
-            def draw(draw_obj):
-                y = self.y_offset
-                draw_obj.text((0, y), "Main Menu", font=bold_font, fill="yellow")
-                y += self.line_spacing
-                for i, item in enumerate(visible_items):
-                    idx = self.window_start_index + i
-                    label = self.label_map.get(item, item.replace('_', ' ').title())
-                    arrow = "→ " if idx == self.current_selection_index else "  "
-                    fill = "white" if idx == self.current_selection_index else "gray"
-                    draw_obj.text((0, y + i * self.line_spacing), f"{arrow}{truncate(label)}", font=font, fill=fill)
+            for i, item in enumerate(visible_items):
+                actual_index = self.window_start_index + i
+                icon = self.icon_cache.get(item) or self.static_icons.get(item)
+                if not icon:
+                    self.logger.warning(f"No icon cached for {item}, skipping.")
+                    continue
+                if icon.mode == "RGBA":
+                    background = Image.new("RGB", icon.size, (0, 0, 0))
+                    background.paste(icon, mask=icon.split()[3])
+                    icon = background
+                icon = icon.resize((icon_size, icon_size), Image.LANCZOS)
+                x = x_offset + i * (icon_size + spacing)
+                y_adjustment = -5 if actual_index == self.current_selection_index else 0
+                base_image.paste(icon, (x, y_position + y_adjustment))
 
-            self.display_manager.draw_custom(draw)
+                # Display mapped label or fallback to key
+                label = self.label_map.get(item, item.title().replace('_', ' '))
+                font = self.display_manager.fonts.get(
+                    self.bold_font_key if actual_index == self.current_selection_index else self.font_key,
+                    ImageFont.load_default(),
+                )
+                text_color = "white" if actual_index == self.current_selection_index else "black"
+                tw, th = draw_obj.textsize(label, font=font)
+                text_x = x + (icon_size - tw) // 2
+                text_y = y_position + icon_size - 2
+                draw_obj.text((text_x, text_y), label, font=font, fill=text_color)
+
+            base_image = base_image.convert(self.display_manager.oled.mode)
+            self.display_manager.oled.display(base_image)
 
     def display_menu(self):
         self.draw_menu(offset_x=0)
