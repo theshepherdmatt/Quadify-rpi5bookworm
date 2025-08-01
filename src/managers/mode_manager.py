@@ -42,6 +42,7 @@ class ModeManager:
         {'name': 'webradio',        'on_enter': 'enter_webradio'},
         {'name': 'motherearthradio', 'on_enter': 'enter_motherearthradio'},
         {'name': 'radioparadise',   'on_enter': 'enter_radioparadise'},
+        {'name': 'radio',           'on_enter': 'enter_radio'},
 
         {'name': 'library',         'on_enter': 'enter_library'},
         {'name': 'internal',         'on_enter': 'enter_internal'},
@@ -108,6 +109,7 @@ class ModeManager:
         self.remote_menu = None
         self.system_info_screen = None
         self.system_update_menu = None
+        self.radio_manager = None
 
         # Idle/Screensaver logic
         self.idle_timer = None
@@ -147,7 +149,7 @@ class ModeManager:
         self.menu_modes = {
             "menu", "playlists", "tidal", "qobuz", "library", "internal", "usblibrary",
             "configmenu", "displaymenu", "clockmenu", "remotemenu",
-            "radiomanager", "motherearthradio", "radioparadise",
+            "radio", "motherearthradio", "radioparadise",
             "systeminfo", "systemupdate", "spotify", "webradio", "airplay"
         }
 
@@ -243,6 +245,9 @@ class ModeManager:
 
     def set_streaming_manager(self, streaming_manager):
         self.streaming_manager = streaming_manager
+
+    def set_radio_manager(self, radio_manager):
+        self.radio_manager = radio_manager
 
     def set_original_screen(self, original_screen):
         self.original_screen = original_screen
@@ -348,7 +353,7 @@ class ModeManager:
         self.machine.add_transition('to_vuscreen',     source='*', dest='vuscreen', before='push_current_state')
         self.machine.add_transition('to_systeminfo',   source='*', dest='systeminfo', before='push_current_state')
         self.machine.add_transition('to_systemupdate', source='*', dest='systemupdate', before='push_current_state')
-        self.machine.add_transition('to_radiomanager', source='*', dest='radiomanager', before='push_current_state')
+        self.machine.add_transition('to_radio',        source='*', dest='radio', before='push_current_state')
         self.machine.add_transition('to_menu',         source='*', dest='menu', before='push_current_state')
         self.machine.add_transition('to_airplay',     source='*', dest='airplay', before='push_current_state')
 
@@ -407,6 +412,8 @@ class ModeManager:
             self.library_manager.stop_mode()
         if self.streaming_manager and self.streaming_manager.is_active:
             self.streaming_manager.stop_mode()
+        if self.radio_manager and self.radio_manager.is_active:
+            self.radio_manager.stop_mode()
 
         if self.original_screen and self.original_screen.is_active:
             self.original_screen.stop_mode()
@@ -422,8 +429,6 @@ class ModeManager:
             self.webradio_screen.stop_mode()
         if self.airplay_screen and self.airplay_screen.is_active:
             self.airplay_screen.stop_mode()
-        if self.webradio_screen and self.webradio_screen.is_active:
-            self.webradio_screen.stop_mode()
         if self.system_info_screen and self.system_info_screen.is_active:
             self.system_info_screen.stop_mode()
         if self.system_update_menu and self.system_update_menu.is_active:
@@ -692,6 +697,17 @@ class ModeManager:
         self.reset_idle_timer()
         self.update_current_mode()
 
+    def enter_radio(self, event):
+        self.logger.info("ModeManager: Entering 'radio' state.")
+        self.stop_all_screens()
+        if self.radio_manager:
+            self.radio_manager.start_mode()
+            self.logger.info("ModeManager: RadioManager started.")
+        else:
+            self.logger.warning("ModeManager: No radio_manager set.")
+        self.reset_idle_timer()
+        self.update_current_mode()
+
     def enter_webradio(self, event):
         self.logger.info("ModeManager: Entering 'webradio' state.")
         self.stop_all_screens()
@@ -704,10 +720,10 @@ class ModeManager:
         self.cancel_menu_inactivity_timer()  # No timeout on clock
 
     def enter_playlists(self, event):
-        self.logger.info("ModeManager: Entering 'albums' state.")
+        self.logger.info("ModeManager: Entering 'playlist' state.")
         self.stop_all_screens()
         if self.library_manager:
-            self.library_manager.start_mode(start_uri="playlists://")
+            self.library_manager.start_mode(start_uri="playlists")
             self.logger.info("ModeManager: LibraryManager started for Playlists.")
         else:
             self.logger.warning("ModeManager: No library_manager set.")
@@ -964,7 +980,7 @@ class ModeManager:
                 "minimal": self.to_minimal,
                 "vuscreen": self.to_vuscreen,
                 "digitalvuscreen": self.to_digitalvuscreen,
-                "radiomanager": self.to_radiomanager,
+                "radio": self.to_radiomanager,
                 "menu": self.to_menu,
                 "playlists": self.to_playlists,
                 "library": self.to_library,

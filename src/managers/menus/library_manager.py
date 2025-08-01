@@ -177,6 +177,22 @@ class LibraryManager(BaseManager):
             "play_album", "play_song", "select_songs"
         ]
 
+        # --- This is the critical block for playlists! ---
+        # Playlists need playPlaylist command instead of replace_and_play
+        if self.current_path.startswith("playlists") and item_type == "playlist":
+            playlist_name = selected.get("title")
+            if playlist_name:
+                self.logger.info(f"[{self.service_type}] Playing playlist via playPlaylist: {playlist_name}")
+                # Use your VolumioListener or socketIO directly as in your old code:
+                if hasattr(self, "volumio_listener") and hasattr(self.volumio_listener, "socketIO"):
+                    self.volumio_listener.socketIO.emit("playPlaylist", {"name": playlist_name})
+                    self.display_message("Playback Started", f"Playing playlist: {playlist_name}")
+                else:
+                    self.display_message("Error", "SocketIO unavailable for playlist playback.")
+            else:
+                self.display_message("Playback Error", "No playlist name")
+            return
+
         if item_type in folder_types:
             if self.is_album_folder(selected):
                 self.logger.info(f"[{self.service_type}] Detected album folder: '{selected.get('title')}'. Showing album options.")
@@ -193,6 +209,7 @@ class LibraryManager(BaseManager):
         else:
             self.logger.warning(f"[{self.service_type}] Unknown type: {item_type}, item: {json.dumps(selected, indent=2)}")
             self.display_message("Unknown Type", f"Type: {item_type}")
+
 
     def is_album_folder(self, item):
         folder_uri = item.get("uri")

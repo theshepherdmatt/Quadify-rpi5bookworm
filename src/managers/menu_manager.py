@@ -170,8 +170,8 @@ class MenuManager:
     def draw_menu(self, offset_x=0):
         with self.lock:
             visible_items = self.get_visible_window(self.current_menu_items, self.window_size)
-            icon_size = 40
-            spacing = 10
+            icon_size = 50
+            spacing = 5
             total_width = self.display_manager.oled.width
             total_height = self.display_manager.oled.height
             total_icons_width = len(visible_items) * icon_size + (len(visible_items) - 1) * spacing
@@ -245,7 +245,7 @@ class MenuManager:
         if key in ["MUSIC_LIBRARY", "LIBRARY"]:
             self.mode_manager.to_library()
         elif key == "WEB_RADIO":
-            self.mode_manager.to_radiomanager()
+            self.mode_manager.to_radio()
         elif key == "PLAYLISTS":
             self.mode_manager.to_playlists()
         elif key == "CONFIG":

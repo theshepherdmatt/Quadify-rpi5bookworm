@@ -37,6 +37,7 @@ class ManagerFactory:
         menu_manager         = self.create_menu_manager()
         library_manager      = self.create_library_manager()
         streaming_manager    = self.create_streaming_manager(service_name="tidal", root_uri="tidal://")
+        radio_manager        = self.create_radio_manager()
 
         # Quoode/Quadify common screens
         webradio_screen      = self.create_webradio_screen()
@@ -62,6 +63,7 @@ class ManagerFactory:
         self.mode_manager.set_config_menu(config_menu)
         self.mode_manager.set_library_manager(library_manager)
         self.mode_manager.set_streaming_manager(streaming_manager)
+        self.mode_manager.set_radio_manager(radio_manager)
 
         self.mode_manager.set_webradio_screen(webradio_screen)
         self.mode_manager.set_modern_screen(modern_screen)
@@ -127,6 +129,14 @@ class ManagerFactory:
             mode_manager      = self.mode_manager,
             service_name      = service_name,
             root_uri          = root_uri
+        )
+    
+    def create_radio_manager(self):
+        from .menus.radio_manager import RadioManager
+        return RadioManager(
+            display_manager   = self.display_manager,
+            volumio_listener  = self.volumio_listener,
+            mode_manager      = self.mode_manager
         )
     
     def create_webradio_screen(self):
