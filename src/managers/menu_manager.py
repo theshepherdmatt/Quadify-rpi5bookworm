@@ -250,16 +250,18 @@ class MenuManager:
             self.mode_manager.to_playlists()
         elif key == "CONFIG":
             self.mode_manager.to_configmenu()
+            
         elif key == "TIDAL":
-            self.mode_manager.to_tidal()
+            self.mode_manager.trigger("to_streaming", service_name="tidal", start_uri="tidal://")
         elif key == "QOBUZ":
-            self.mode_manager.to_qobuz()
+            self.mode_manager.trigger("to_streaming", service_name="qobuz", start_uri="qobuz://")
+        elif key == "SPOTIFY":
+            self.mode_manager.trigger("to_streaming", service_name="spotify", start_uri="spotify://")
+
         elif key in ["RADIO_PARADISE", "RADIO-P"]:
             self.mode_manager.to_radioparadise()
         elif key in ["MOTHEREARTH", "MOTHER-E"]:
             self.mode_manager.to_motherearthradio()
-        elif key == "SPOTIFY":
-            self.mode_manager.to_spotify()
         elif key == "ALBUMS":
             self.mode_manager.to_albums()
         elif key == "ARTISTS":

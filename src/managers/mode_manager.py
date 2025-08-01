@@ -5,6 +5,8 @@ import threading
 import time
 import subprocess
 from transitions import Machine
+from .menus.streaming_manager import StreamingManager
+
 
 class ModeManager:
     """
@@ -34,23 +36,22 @@ class ModeManager:
         {'name': 'remotemenu',      'on_enter': 'enter_remotemenu'},
         {'name': 'airplay',          'on_enter': 'enter_airplay'},
 
+
+        {'name': 'streaming',       'on_enter': 'enter_streaming'},
         {'name': 'playlists',       'on_enter': 'enter_playlists'},
-        {'name': 'tidal',           'on_enter': 'enter_tidal'},
-        {'name': 'qobuz',           'on_enter': 'enter_qobuz'},
-        {'name': 'library',         'on_enter': 'enter_library'},
-        {'name': 'internal',         'on_enter': 'enter_internal'},
-        {'name': 'usblibrary',      'on_enter': 'enter_usb_library'},
-        {'name': 'spotify',         'on_enter': 'enter_spotify'},
         {'name': 'webradio',        'on_enter': 'enter_webradio'},
         {'name': 'motherearthradio', 'on_enter': 'enter_motherearthradio'},
         {'name': 'radioparadise',   'on_enter': 'enter_radioparadise'},
+
+        {'name': 'library',         'on_enter': 'enter_library'},
+        {'name': 'internal',         'on_enter': 'enter_internal'},
+        {'name': 'usblibrary',      'on_enter': 'enter_usb_library'},
         {'name': 'artists',          'on_enter': 'enter_artists'},
         {'name': 'albums',          'on_enter': 'enter_albums'},
         {'name': 'genres',          'on_enter': 'enter_genres'},
         {'name': 'favourites',      'on_enter': 'enter_favourites'},
         {'name': 'last100',         'on_enter': 'enter_last100'},
         {'name': 'mediaservers',    'on_enter': 'enter_mediaservers'},
-
     ]
 
     def __init__(self, display_manager, clock, volumio_listener,
@@ -92,6 +93,7 @@ class ModeManager:
         self.menu_manager = None
         self.config_menu = None
         self.library_manager = None
+        self.streaming_manager = None
         self.original_screen = None
         self.modern_screen = None
         self.minimal_screen = None
@@ -239,6 +241,9 @@ class ModeManager:
     def set_library_manager(self, library_manager):
         self.library_manager = library_manager
 
+    def set_streaming_manager(self, streaming_manager):
+        self.streaming_manager = streaming_manager
+
     def set_original_screen(self, original_screen):
         self.original_screen = original_screen
 
@@ -340,29 +345,28 @@ class ModeManager:
         self.machine.add_transition('to_original',     source='*', dest='original', before='push_current_state')
         self.machine.add_transition('to_modern',       source='*', dest='modern', before='push_current_state')
         self.machine.add_transition('to_minimal',      source='*', dest='minimal', before='push_current_state')
-        self.machine.add_transition('to_vuscreen',      source='*', dest='vuscreen', before='push_current_state')
+        self.machine.add_transition('to_vuscreen',     source='*', dest='vuscreen', before='push_current_state')
         self.machine.add_transition('to_systeminfo',   source='*', dest='systeminfo', before='push_current_state')
         self.machine.add_transition('to_systemupdate', source='*', dest='systemupdate', before='push_current_state')
         self.machine.add_transition('to_radiomanager', source='*', dest='radiomanager', before='push_current_state')
         self.machine.add_transition('to_menu',         source='*', dest='menu', before='push_current_state')
-        self.machine.add_transition('to_playlists',    source='*', dest='playlists', before='push_current_state')
-        self.machine.add_transition('to_tidal',        source='*', dest='tidal', before='push_current_state')
-        self.machine.add_transition('to_qobuz',        source='*', dest='qobuz', before='push_current_state')
-        self.machine.add_transition('to_library',      source='*', dest='library', before='push_current_state')
-        self.machine.add_transition('to_internal',      source='*', dest='internal', before='push_current_state')
-        self.machine.add_transition('to_usb_library',  source='*', dest='usblibrary', before='push_current_state')
-        self.machine.add_transition('to_spotify',      source='*', dest='spotify', before='push_current_state')
-        self.machine.add_transition('to_webradio',     source='*', dest='webradio', before='push_current_state')
         self.machine.add_transition('to_airplay',     source='*', dest='airplay', before='push_current_state')
-        self.machine.add_transition('to_motherearthradio',  source='*', dest='motherearthradio', before='push_current_state')
-        self.machine.add_transition('to_radioparadise', source='*', dest='radioparadise', before='push_current_state')
-        self.machine.add_transition('to_albums', source='*', dest='albums', before='push_current_state')
-        self.machine.add_transition('to_artists', source='*', dest='artists', before='push_current_state')
-        self.machine.add_transition('to_genres', source='*', dest='genres', before='push_current_state')
-        self.machine.add_transition('to_favourites', source='*', dest='favourites', before='push_current_state')
-        self.machine.add_transition('to_last100', source='*', dest='last100', before='push_current_state')
-        self.machine.add_transition('to_mediaservers', source='*', dest='mediaservers', before='push_current_state')
 
+        self.machine.add_transition('to_streaming',    source='*', dest='streaming', before='push_current_state')
+        self.machine.add_transition('to_webradio',     source='*', dest='webradio', before='push_current_state')
+        self.machine.add_transition('to_motherearthradio',  source='*', dest='motherearthradio', before='push_current_state')
+        self.machine.add_transition('to_radioparadise', source='*', dest='radioparadise', before='push_current_state')  
+
+        self.machine.add_transition('to_library',      source='*', dest='library', before='push_current_state')
+        self.machine.add_transition('to_internal',     source='*', dest='internal', before='push_current_state')
+        self.machine.add_transition('to_usb_library',  source='*', dest='usblibrary', before='push_current_state')
+        self.machine.add_transition('to_albums',        source='*', dest='albums', before='push_current_state')
+        self.machine.add_transition('to_artists',       source='*', dest='artists', before='push_current_state')
+        self.machine.add_transition('to_genres',        source='*', dest='genres', before='push_current_state')
+        self.machine.add_transition('to_favourites',    source='*', dest='favourites', before='push_current_state')
+        self.machine.add_transition('to_last100',       source='*', dest='last100', before='push_current_state')
+        self.machine.add_transition('to_mediaservers',  source='*', dest='mediaservers', before='push_current_state')
+        self.machine.add_transition('to_playlists',    source='*', dest='playlists', before='push_current_state')
 
     # --- Custom trigger() Method ---
     def trigger(self, event_name, **kwargs):
@@ -401,6 +405,9 @@ class ModeManager:
             self.display_menu.stop_mode()
         if self.library_manager and self.library_manager.is_active:
             self.library_manager.stop_mode()
+        if self.streaming_manager and self.streaming_manager.is_active:
+            self.streaming_manager.stop_mode()
+
         if self.original_screen and self.original_screen.is_active:
             self.original_screen.stop_mode()
         if self.modern_screen and self.modern_screen.is_active:
@@ -518,7 +525,6 @@ class ModeManager:
         self.update_current_mode()
         self.cancel_menu_inactivity_timer()  # No timeout on clock
 
-
     def enter_digitalvuscreen(self, event):
         self.logger.info("ModeManager: Entering 'digitalvuscreen' playback mode.")
         self.stop_all_screens()
@@ -527,29 +533,6 @@ class ModeManager:
             self.logger.info("ModeManager: DigitalVU screen started.")
         else:
             self.logger.warning("ModeManager: No digitalvu_screen set.")
-        self.update_current_mode()
-        self.cancel_menu_inactivity_timer()  # No timeout on clock
-
-
-    def enter_spotify(self, event):
-        self.logger.info("ModeManager: Entering 'spotify' state.")
-        self.stop_all_screens()
-        if self.spotify_manager:
-            self.spotify_manager.start_mode()
-            self.logger.info("ModeManager: SpotifyManager started.")
-        else:
-            self.logger.warning("ModeManager: No spotify_manager set.")
-        self.update_current_mode()
-        self.cancel_menu_inactivity_timer()  # No timeout on clock
-
-    def enter_webradio(self, event):
-        self.logger.info("ModeManager: Entering 'webradio' state.")
-        self.stop_all_screens()
-        if self.webradio_screen:
-            self.webradio_screen.start_mode()
-            self.logger.info("ModeManager: WebRadioScreen started.")
-        else:
-            self.logger.warning("ModeManager: No webradio_screen set.")
         self.update_current_mode()
         self.cancel_menu_inactivity_timer()  # No timeout on clock
 
@@ -681,80 +664,51 @@ class ModeManager:
 
     # --- Other Managers ---
 
+    def enter_streaming(self, event):
+        self.logger.info("ModeManager: Entering 'streaming' state.")
+        self.stop_all_screens()
+        service_name = event.kwargs.get('service_name')
+        start_uri = event.kwargs.get('start_uri')
+        self.streaming_manager = StreamingManager(
+            self.display_manager,
+            self.volumio_listener,
+            self,
+            service_name=service_name,
+            root_uri=start_uri
+        )
+        self.streaming_manager.start_mode()
+        self.logger.info(f"ModeManager: StreamingManager started for {service_name}.")
+        self.reset_idle_timer()
+        self.update_current_mode()
+
     def enter_library(self, event):
         self.logger.info("ModeManager: Entering 'library' state.")
         self.stop_all_screens()
         if self.library_manager:
-            start_uri = event.kwargs.get('start_uri')
-            self.library_manager.start_mode(start_uri=start_uri)
+            self.library_manager.start_mode()
             self.logger.info("ModeManager: LibraryManager started.")
-        else:
-            self.logger.warning("ModeManager: No library_manager set.")
-        self.reset_idle_timer()
-        #self.start_menu_inactivity_timer()
-        self.update_current_mode()
-
-    def enter_tidal(self, event):
-        self.logger.info("ModeManager: Entering 'tidal' state.")
-        self.stop_all_screens()
-        if self.library_manager:
-            self.library_manager.start_mode(start_uri="tidal://")
-            self.logger.info("ModeManager: LibraryManager started for Tidal.")
-        else:
-            self.logger.warning("ModeManager: No library_manager set.")
-        self.reset_idle_timer()
-        self.update_current_mode()
-
-    def enter_qobuz(self, event):
-        self.logger.info("ModeManager: Entering 'qobuz' state.")
-        self.stop_all_screens()
-        if self.library_manager:
-            self.library_manager.start_mode(start_uri="qobuz://")
-            self.logger.info("ModeManager: LibraryManager started for Qobuz.")
-        else:
-            self.logger.warning("ModeManager: No library_manager set.")
-        self.reset_idle_timer()
-        self.update_current_mode()
-
-    def enter_spotify(self, event):
-        self.logger.info("ModeManager: Entering 'spotify' state.")
-        self.stop_all_screens()
-        if self.library_manager:
-            self.library_manager.start_mode(start_uri="spop://")
-            self.logger.info("ModeManager: LibraryManager started for Spotify.")
-        else:
-            self.logger.warning("ModeManager: No library_manager set.")
-        self.reset_idle_timer()
-        self.update_current_mode()
-
-    def enter_playlists(self, event):
-        self.logger.info("ModeManager: Entering 'albums' state.")
-        self.stop_all_screens()
-        if self.library_manager:
-            self.library_manager.start_mode(start_uri="playlists://")
-            self.logger.info("ModeManager: LibraryManager started for Playlists.")
-        else:
-            self.logger.warning("ModeManager: No library_manager set.")
-        self.reset_idle_timer()
-        self.update_current_mode()
-
-    def enter_playlists(self, event):
-        self.logger.info("ModeManager: Entering 'albums' state.")
-        self.stop_all_screens()
-        if self.library_manager:
-            self.library_manager.start_mode(start_uri="playlists://")
-            self.logger.info("ModeManager: LibraryManager started for Playlists.")
         else:
             self.logger.warning("ModeManager: No library_manager set.")
         self.reset_idle_timer()
         self.update_current_mode()
 
     def enter_webradio(self, event):
+        self.logger.info("ModeManager: Entering 'webradio' state.")
+        self.stop_all_screens()
+        if self.webradio_screen:
+            self.webradio_screen.start_mode()
+            self.logger.info("ModeManager: WebRadioScreen started.")
+        else:
+            self.logger.warning("ModeManager: No webradio_screen set.")
+        self.update_current_mode()
+        self.cancel_menu_inactivity_timer()  # No timeout on clock
+
+    def enter_playlists(self, event):
         self.logger.info("ModeManager: Entering 'albums' state.")
         self.stop_all_screens()
         if self.library_manager:
-            self.library_manager.start_mode(start_uri="webradio://")
-            self.logger.info("ModeManager: LibraryManager started for WebRadio.")
+            self.library_manager.start_mode(start_uri="playlists://")
+            self.logger.info("ModeManager: LibraryManager started for Playlists.")
         else:
             self.logger.warning("ModeManager: No library_manager set.")
         self.reset_idle_timer()
@@ -1013,12 +967,10 @@ class ModeManager:
                 "radiomanager": self.to_radiomanager,
                 "menu": self.to_menu,
                 "playlists": self.to_playlists,
-                "tidal": self.to_tidal,
-                "qobuz": self.to_qobuz,
                 "library": self.to_library,
+                "streaming": self.to_streaming,
                 "internal": self.to_internal,
                 "usblibrary": self.to_usb_library,
-                "spotify": self.to_spotify,
                 "webradio": self.to_webradio,
                 "airplay": self.to_airplay,
                 "motherearthradio": self.to_motherearthradio,

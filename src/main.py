@@ -176,6 +176,7 @@ def main():
         select_mapping = {
             "menu": lambda: mode_manager.menu_manager.select_item(),
             "library": lambda: mode_manager.library_manager.select_item(),
+            "streaming": lambda: mode_manager.streaming_manager.select_item(),
 
             "playlists": lambda: mode_manager.playlist_manager.select_item(),
             "configmenu": lambda: mode_manager.config_menu.select_item(),
@@ -190,6 +191,7 @@ def main():
         scroll_mapping = {
             "scroll_up": {
                 "library": lambda: mode_manager.library_manager.scroll_selection(-1),
+                "streaming": lambda: mode_manager.streaming_manager.scroll_selection(-1),
                 "configmenu": lambda: mode_manager.config_menu.scroll_selection(-1),
                 "remotemenu": lambda: mode_manager.remote_menu.scroll_selection(-1),
                 "displaymenu": lambda: mode_manager.display_menu.scroll_selection(-1),
@@ -200,6 +202,7 @@ def main():
             },
             "scroll_down": {
                 "library": lambda: mode_manager.library_manager.scroll_selection(1),
+                "streaming": lambda: mode_manager.streaming_manager.scroll_selection(1),
                 "configmenu": lambda: mode_manager.config_menu.scroll_selection(1),
                 "remotemenu": lambda: mode_manager.remote_menu.scroll_selection(1),
                 "displaymenu": lambda: mode_manager.display_menu.scroll_selection(1),
@@ -474,12 +477,8 @@ def main():
             mode_manager.screensaver_menu.scroll_selection(direction)
         elif current_mode == 'displaymenu':
             mode_manager.display_menu.scroll_selection(direction)
-        elif current_mode == 'tidal':
-            mode_manager.library_manager.scroll_selection(direction)
-        elif current_mode == 'qobuz':
-            mode_manager.library_manager.scroll_selection(direction)
-        elif current_mode == 'spotify':
-            mode_manager.library_manager.scroll_selection(direction)
+        elif current_mode == 'streaming':
+            mode_manager.streaming_manager.scroll_selection(direction)
         elif current_mode == 'playlists':
             mode_manager.library_manager.scroll_selection(direction)
         elif current_mode == 'radiomanager':
@@ -521,9 +520,9 @@ def main():
             'clockmenu': mode_manager.clock_menu.select_item,
             'remotemenu': mode_manager.remote_menu.select_item,
             'displaymenu': mode_manager.display_menu.select_item,
-            'tidal': mode_manager.library_manager.select_item,
-            'qobuz': mode_manager.library_manager.select_item,
-            'spotify': mode_manager.library_manager.select_item,
+
+            'streaming': mode_manager.streaming_manager.select_item,
+ 
             'library': mode_manager.library_manager.select_item,
             'internal': mode_manager.library_manager.select_item,
             'radiomanager': mode_manager.library_manager.select_item,

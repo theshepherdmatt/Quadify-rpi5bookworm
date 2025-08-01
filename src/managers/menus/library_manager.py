@@ -3,28 +3,48 @@ import json
 import logging
 import requests
 import threading
-from threading import Event, Thread
+from threading import Thread
 from requests.adapters import HTTPAdapter
 from urllib.parse import quote
 from urllib3.util.retry import Retry
 from PIL import ImageFont
 
-from managers.base_manager import BaseManager  # Adjust as per your project structure
+from managers.base_manager import BaseManager
+
+FRIENDLY_LABELS = {
+    "music-library": "Music Library",
+    "library": "Music Library",
+    "artists": "Artists",
+    "albums": "Albums",
+    "genres": "Genres",
+    "webradio": "Web Radio",
+    "radio": "Web Radio",
+    "radio_paradise": "Radio Paradise",
+    "internal": "Internal",
+    "config": "Config",
+    "nas": "NAS",
+    "usb": "USB",
+    "playlists": "Playlists",
+    "motherearth": "Mother Earth",
+    "favourites": "Favourites",
+    "favorites": "Favourites",
+    "last_100": "Last 100",
+    "mediaservers": "Media Servers",
+    "upnp": "UPnP",
+}
 
 class LibraryManager(BaseManager):
-    def __init__(self, display_manager, volumio_config, mode_manager, service_type, root_uri, window_size=3, y_offset=0, line_spacing=16):
+    def __init__(self, display_manager, volumio_config, mode_manager, volumio_listener, service_type, root_uri, window_size=3, y_offset=0, line_spacing=16):
         super().__init__(display_manager, volumio_config, mode_manager)
 
-        # API setup
         self.volumio_host = volumio_config.get('host', 'localhost')
         self.volumio_port = volumio_config.get('port', 3000)
         self.base_url = f"http://{self.volumio_host}:{self.volumio_port}"
+        self.volumio_listener = volumio_listener
 
-        # Session with retries
         self.session = requests.Session()
         retries = Retry(total=3, backoff_factor=0.3, status_forcelist=[500, 502, 503, 504])
         self.session.mount('http://', HTTPAdapter(max_retries=retries))
-        self.session.mount('https://', HTTPAdapter(max_retries=retries))
 
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(logging.INFO)
@@ -37,14 +57,12 @@ class LibraryManager(BaseManager):
         self.line_spacing = line_spacing
         self.font_key = 'menu_font'
 
-        self.service_type = service_type  # e.g., 'library', 'tidal', 'qobuz'
-        self.root_uri = root_uri          # e.g., 'music-library/NAS/Music', 'tidal', 'qobuz://'
-
+        self.service_type = service_type  # e.g., 'library'
+        self.root_uri = root_uri          # e.g., 'music-library/NAS/Music'
         self.menu_stack = []
         self.current_menu_items = []
         self.current_selection_index = 0
         self.window_start_index = 0
-
         self.current_path = self.root_uri
 
         self.config = self.display_manager.config
@@ -96,6 +114,9 @@ class LibraryManager(BaseManager):
                 self.display_message("Fetch Error", f"Failed: {resp.status_code}")
                 return
             nav = resp.json().get("navigation", {})
+
+            info = nav.get("info", {})
+            self.menu_title = info.get("title") or info.get("name") or (uri.split("/")[-1] if "/" in uri else uri)
             items = nav.get("lists", [{}])[0].get("items", [])
             if not items:
                 self.logger.warning(f"[{self.service_type}] No items in folder '{uri}'.")
@@ -119,46 +140,6 @@ class LibraryManager(BaseManager):
             self.logger.error(f"[{self.service_type}] Exception in fetch_navigation: {e}")
             self.display_message("Error", str(e))
 
-    def play_streaming_song(self, item):
-        """
-        Play a song/track for streaming services like Tidal or Qobuz, etc.
-        """
-        service = item.get("service", self.service_type)
-        uri = item.get("uri")
-        self.logger.info(f"[{self.service_type}] Playing streaming item via replaceAndPlay: {item}")
-        if not uri:
-            self.display_message("Playback Error", "No URI for this item.")
-            return
-        try:
-            # Prefer SocketIO if available (for Volumio streaming services)
-            if hasattr(self.display_manager, "volumio_listener") and hasattr(self.display_manager.volumio_listener, "socketIO"):
-                self.display_manager.volumio_listener.socketIO.emit('replaceAndPlay', {
-                    "item": {
-                        "service": service,
-                        "uri": uri
-                    }
-                })
-            else:
-                # fallback to HTTP API
-                url = f"{self.base_url}/api/v1/replaceAndPlay"
-                data = {"name": item.get("title", ""), "service": service, "uri": uri}
-                self.session.post(url, json=data)
-            self.display_message("Playback Started", f"Playing: {item.get('title', '')}")
-        except Exception as e:
-            self.display_message("Playback Error", str(e))
-
-    def navigate_streaming_folder(self, uri):
-        """
-        Navigate into a Tidal/Qobuz/etc folder/category by emitting a browseLibrary request.
-        """
-        # If you have a socketIO connection, use it:
-        if hasattr(self.display_manager, "volumio_listener") and hasattr(self.display_manager.volumio_listener, "fetch_browse_library"):
-            self.display_manager.volumio_listener.fetch_browse_library(uri)
-        else:
-            # fallback to HTTP GET
-            self.fetch_navigation(uri)
-
-
     def select_item(self):
         if not self.is_active or not self.current_menu_items:
             return
@@ -177,24 +158,8 @@ class LibraryManager(BaseManager):
             return
 
         item_type = selected.get("type", "")
-        service = selected.get("service", self.service_type)
         uri = selected.get("uri", "")
 
-        # --- Handle Tidal/Qobuz "item-no-menu": treat as folder if there's a URI ---
-        if item_type == "item-no-menu":
-            if uri:  # treat as a navigable folder, like old TidalManager
-                self.logger.info(f"[{self.service_type}] Navigating into item-no-menu: '{selected.get('title')}' ({uri})")
-                self.push_path(self.current_path)
-                self.current_path = uri
-                self.display_loading_screen()
-                self.fetch_navigation(self.current_path)
-                return
-            else:  # block if truly not navigable
-                self.logger.info(f"[{self.service_type}] '{selected.get('title','')}' is not selectable (type: {item_type}, no uri).")
-                self.display_message("Not available", f"'{selected.get('title', '')}' cannot be opened.")
-                return
-
-        # --- (The rest is as before) ---
         unsupported_types = [
             "item-no-play", "divider", "header", "section", "none",
         ]
@@ -205,33 +170,13 @@ class LibraryManager(BaseManager):
 
         folder_types = [
             "folder", "album", "internal-folder", "usb-folder", "nas-folder", "album_folder",
-            "streaming-category", "streaming-folder", "remdisk"
+            "remdisk"
         ]
         song_types = [
             "song", "track", "audio", "file", "playlist", "album",
             "play_album", "play_song", "select_songs"
         ]
 
-        # --- Streaming plugin handling (Tidal, Qobuz, etc) ---
-        streaming_services = ("tidal", "qobuz", "deezer", "spotify")
-        if service in streaming_services or (uri.startswith("tidal://") or uri.startswith("qobuz://")):
-            # Play song directly if it's a track, or contains "/song/"
-            if item_type == "song" or (uri and "/song/" in uri):
-                self.logger.info(f"[{service}] Streaming plugin: playing song '{selected.get('title')}'")
-                self.play_streaming_song(selected)
-                return
-            # Otherwise, treat as folder/category: navigate further
-            if uri:
-                self.logger.info(f"[{service}] Streaming plugin: navigating into '{selected.get('title')}' ({uri})")
-                self.push_path(self.current_path)
-                self.current_path = uri
-                self.display_loading_screen()
-                self.navigate_streaming_folder(uri)
-                return
-            self.display_message("Not available", f"'{selected.get('title', '')}' cannot be opened.")
-            return
-
-        self.logger.info(f"[{self.service_type}] Item type: '{item_type}'")
         if item_type in folder_types:
             if self.is_album_folder(selected):
                 self.logger.info(f"[{self.service_type}] Detected album folder: '{selected.get('title')}'. Showing album options.")
@@ -248,7 +193,6 @@ class LibraryManager(BaseManager):
         else:
             self.logger.warning(f"[{self.service_type}] Unknown type: {item_type}, item: {json.dumps(selected, indent=2)}")
             self.display_message("Unknown Type", f"Type: {item_type}")
-
 
     def is_album_folder(self, item):
         folder_uri = item.get("uri")
@@ -297,33 +241,49 @@ class LibraryManager(BaseManager):
 
     def _play_album_thread(self, album_uri, album_title):
         try:
-            # Fetch the album's content (list all tracks)
+            if album_uri.startswith("albums://"):
+                from urllib.parse import unquote
+                parts = unquote(album_uri[9:]).split("/", 1)
+                if len(parts) == 2:
+                    artist, album = parts
+                    resolved_uri = f"music-library/INTERNAL/Music/{artist}/{album}"
+                    album_uri = resolved_uri
+                    self.logger.info(f"[{self.service_type}] Resolved albums:// to: {album_uri}")
+                else:
+                    self.display_message("Playback Error", f"Could not resolve album index URI: {album_uri}")
+                    return
+
             resp = self.session.get(f"{self.base_url}/api/v1/browse?uri={quote(album_uri)}")
             if resp.status_code != 200:
                 self.display_message("Playback Error", f"Failed to fetch album: {resp.status_code}")
                 return
             items = resp.json().get("navigation", {}).get("lists", [{}])[0].get("items", [])
-            # Filter out only songs/tracks (you can tweak types as needed)
-            track_uris = [
-                item.get("uri")
-                for item in items
-                if item.get("type") in ("song", "track", "audio", "file") and item.get("uri")
+            playable_tracks = [
+                item for item in items
+                if (
+                    item.get("type") in ("song", "track", "audio", "file")
+                    and item.get("uri")
+                )
             ]
-            if not track_uris:
-                self.display_message("Playback Error", f"No tracks found in {album_title}")
+            if not playable_tracks:
+                self.display_message("Playback Error", f"No playback tracks: {album_title}")
                 return
-            # Start playback with the first song
-            first_track = track_uris[0]
+
+            first = playable_tracks[0]
             self.session.post(
                 f"{self.base_url}/api/v1/replaceAndPlay",
-                json={"name": album_title, "service": self.service_type, "uri": first_track}
+                json={"name": album_title, "service": "mpd", "uri": first.get("uri")}
             )
-            # Optionally, queue the rest of the tracks (not strictly necessary but mirrors album play behaviour)
-            for uri in track_uris[1:]:
+            for item in playable_tracks[1:]:
                 self.session.post(
                     f"{self.base_url}/api/v1/addToQueue",
-                    json={"name": album_title, "service": self.service_type, "uri": uri}
+                    json={"name": album_title, "service": "mpd", "uri": item.get("uri")}
                 )
+
+            play_url = f"{self.base_url}/api/v1/commands"
+            play_data = {"cmd": "play"}
+            self.session.post(play_url, json=play_data)
+
             self.display_message("Playback Started", f"Playing: {album_title}")
         except Exception as e:
             self.display_message("Playback Error", str(e))
@@ -351,7 +311,20 @@ class LibraryManager(BaseManager):
         if self.menu_stack and self.menu_stack[-1]["type"] == "submenu":
             menu_title = self.menu_stack[-1].get("menu_title", "Library")
         else:
-            menu_title = self.current_path.split("/")[-1] if "/" in self.current_path else self.current_path
+            candidates = [
+                self.current_path.split("://")[0] if "://" in self.current_path else None,
+                self.current_path.split("/")[-1] if "/" in self.current_path else self.current_path,
+                self.service_type,
+                self.root_uri
+            ]
+            menu_title = ""
+            for c in candidates:
+                if c and c.lower() in FRIENDLY_LABELS:
+                    menu_title = FRIENDLY_LABELS[c.lower()]
+                    break
+            if not menu_title:
+                menu_title = (self.current_path or self.service_type or "Library").replace("_", " ").title()
+
         visible_items = self.get_visible_window(self.current_menu_items)
         font = self.display_manager.fonts.get(self.font_key, ImageFont.load_default())
 
@@ -384,7 +357,6 @@ class LibraryManager(BaseManager):
     def scroll_selection(self, direction):
         if not self.is_active or not self.current_menu_items:
             return
-        prev_index = self.current_selection_index
         self.current_selection_index += direction
         self.current_selection_index = max(0, min(self.current_selection_index, len(self.current_menu_items) - 1))
         self.display_menu()
@@ -427,5 +399,3 @@ class LibraryManager(BaseManager):
             self.current_path = last["path"]
             self.display_loading_screen()
             self.fetch_navigation(self.current_path)
-
-    # Optionally, add update_song_info and other UI utilities as needed
