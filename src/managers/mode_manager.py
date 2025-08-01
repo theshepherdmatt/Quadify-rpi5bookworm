@@ -41,7 +41,6 @@ class ModeManager:
         {'name': 'internal',         'on_enter': 'enter_internal'},
         {'name': 'usblibrary',      'on_enter': 'enter_usb_library'},
         {'name': 'spotify',         'on_enter': 'enter_spotify'},
-        {'name': 'radiomanager',    'on_enter': 'enter_radiomanager'},
         {'name': 'webradio',        'on_enter': 'enter_webradio'},
         {'name': 'motherearthradio', 'on_enter': 'enter_motherearthradio'},
         {'name': 'radioparadise',   'on_enter': 'enter_radioparadise'},
@@ -686,41 +685,20 @@ class ModeManager:
         self.logger.info("ModeManager: Entering 'library' state.")
         self.stop_all_screens()
         if self.library_manager:
-            start_uri = event.kwargs.get('start_uri', "music-library")
-            self.library_manager.start_mode(service_type="library", start_uri=start_uri)
+            start_uri = event.kwargs.get('start_uri')
+            self.library_manager.start_mode(start_uri=start_uri)
             self.logger.info("ModeManager: LibraryManager started.")
         else:
             self.logger.warning("ModeManager: No library_manager set.")
         self.reset_idle_timer()
-        self.update_current_mode()
-
-    def enter_internal(self, event):
-        self.logger.info("ModeManager: Entering 'internal' state.")
-        self.stop_all_screens()
-        if self.library_manager:
-            self.library_manager.start_mode(service_type="internal", start_uri="music-library/INTERNAL")
-            self.logger.info("ModeManager: LibraryManager started for Internal.")
-        else:
-            self.logger.warning("ModeManager: No library_manager set.")
-        self.reset_idle_timer()
-        self.update_current_mode()
-
-    def enter_usb_library(self, event):
-        self.logger.info("ModeManager: Entering 'usblibrary' state.")
-        self.stop_all_screens()
-        if self.library_manager:
-            self.library_manager.start_mode(service_type="usblibrary", start_uri="music-library/USB")
-            self.logger.info("ModeManager: LibraryManager started for USB library.")
-        else:
-            self.logger.warning("ModeManager: No library_manager set.")
-        self.reset_idle_timer()
+        #self.start_menu_inactivity_timer()
         self.update_current_mode()
 
     def enter_tidal(self, event):
         self.logger.info("ModeManager: Entering 'tidal' state.")
         self.stop_all_screens()
         if self.library_manager:
-            self.library_manager.start_mode(service_type="tidal", start_uri="tidal://")
+            self.library_manager.start_mode(start_uri="tidal://")
             self.logger.info("ModeManager: LibraryManager started for Tidal.")
         else:
             self.logger.warning("ModeManager: No library_manager set.")
@@ -731,7 +709,7 @@ class ModeManager:
         self.logger.info("ModeManager: Entering 'qobuz' state.")
         self.stop_all_screens()
         if self.library_manager:
-            self.library_manager.start_mode(service_type="qobuz", start_uri="qobuz://")
+            self.library_manager.start_mode(start_uri="qobuz://")
             self.logger.info("ModeManager: LibraryManager started for Qobuz.")
         else:
             self.logger.warning("ModeManager: No library_manager set.")
@@ -742,7 +720,7 @@ class ModeManager:
         self.logger.info("ModeManager: Entering 'spotify' state.")
         self.stop_all_screens()
         if self.library_manager:
-            self.library_manager.start_mode(service_type="spotify", start_uri="spop://")
+            self.library_manager.start_mode(start_uri="spop://")
             self.logger.info("ModeManager: LibraryManager started for Spotify.")
         else:
             self.logger.warning("ModeManager: No library_manager set.")
@@ -750,21 +728,32 @@ class ModeManager:
         self.update_current_mode()
 
     def enter_playlists(self, event):
-        self.logger.info("ModeManager: Entering 'playlists' state.")
+        self.logger.info("ModeManager: Entering 'albums' state.")
         self.stop_all_screens()
         if self.library_manager:
-            self.library_manager.start_mode(service_type="playlists", start_uri="playlists://")
+            self.library_manager.start_mode(start_uri="playlists://")
             self.logger.info("ModeManager: LibraryManager started for Playlists.")
         else:
             self.logger.warning("ModeManager: No library_manager set.")
         self.reset_idle_timer()
         self.update_current_mode()
 
-    def enter_radiomanager(self, event):
-        self.logger.info("ModeManager: Entering 'webradio' state.")
+    def enter_playlists(self, event):
+        self.logger.info("ModeManager: Entering 'albums' state.")
         self.stop_all_screens()
         if self.library_manager:
-            self.library_manager.start_mode(service_type="webradio", start_uri="webradio://")
+            self.library_manager.start_mode(start_uri="playlists://")
+            self.logger.info("ModeManager: LibraryManager started for Playlists.")
+        else:
+            self.logger.warning("ModeManager: No library_manager set.")
+        self.reset_idle_timer()
+        self.update_current_mode()
+
+    def enter_webradio(self, event):
+        self.logger.info("ModeManager: Entering 'albums' state.")
+        self.stop_all_screens()
+        if self.library_manager:
+            self.library_manager.start_mode(start_uri="webradio://")
             self.logger.info("ModeManager: LibraryManager started for WebRadio.")
         else:
             self.logger.warning("ModeManager: No library_manager set.")
@@ -775,7 +764,7 @@ class ModeManager:
         self.logger.info("ModeManager: Entering 'albums' state.")
         self.stop_all_screens()
         if self.library_manager:
-            self.library_manager.start_mode(service_type="albums", start_uri="albums://")
+            self.library_manager.start_mode(start_uri="albums://")
             self.logger.info("ModeManager: LibraryManager started for Albums.")
         else:
             self.logger.warning("ModeManager: No library_manager set.")
@@ -786,7 +775,7 @@ class ModeManager:
         self.logger.info("ModeManager: Entering 'genres' state.")
         self.stop_all_screens()
         if self.library_manager:
-            self.library_manager.start_mode(service_type="genres", start_uri="genres://")
+            self.library_manager.start_mode(start_uri="genres://")
             self.logger.info("ModeManager: LibraryManager started for Genres.")
         else:
             self.logger.warning("ModeManager: No library_manager set.")
@@ -797,7 +786,7 @@ class ModeManager:
         self.logger.info("ModeManager: Entering 'artists' state.")
         self.stop_all_screens()
         if self.library_manager:
-            self.library_manager.start_mode(service_type="artists", start_uri="artists://")
+            self.library_manager.start_mode(start_uri="artists://")
             self.logger.info("ModeManager: LibraryManager started for Artist.")
         else:
             self.logger.warning("ModeManager: No library_manager set.")
@@ -808,7 +797,7 @@ class ModeManager:
         self.logger.info("ModeManager: Entering 'favourites' state.")
         self.stop_all_screens()
         if self.library_manager:
-            self.library_manager.start_mode(service_type="favourites", start_uri="favourites")
+            self.library_manager.start_mode(start_uri="favourites")
             self.logger.info("ModeManager: LibraryManager started for favourites.")
         else:
             self.logger.warning("ModeManager: No library_manager set.")
@@ -819,7 +808,7 @@ class ModeManager:
         self.logger.info("ModeManager: Entering 'last100' state.")
         self.stop_all_screens()
         if self.library_manager:
-            self.library_manager.start_mode(service_type="last100", start_uri="Last_100")
+            self.library_manager.start_mode(start_uri="Last_100")
             self.logger.info("ModeManager: LibraryManager started for Last 100.")
         else:
             self.logger.warning("ModeManager: No library_manager set.")
@@ -830,7 +819,7 @@ class ModeManager:
         self.logger.info("ModeManager: Entering 'media servers' state.")
         self.stop_all_screens()
         if self.library_manager:
-            self.library_manager.start_mode(service_type="upnp", start_uri="upnp")
+            self.library_manager.start_mode(start_uri="upnp")
             self.logger.info("ModeManager: LibraryManager started for Media Servers.")
         else:
             self.logger.warning("ModeManager: No library_manager set.")
