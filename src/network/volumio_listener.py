@@ -38,6 +38,7 @@ class VolumioListener:
         self.spotify_navigation_received = Signal('spotify_navigation_received')
         self.library_navigation_received = Signal('library_navigation_received')
         self.usb_library_navigation_received = Signal('usb_library_navigation_received')
+        self.albums_navigation_received = Signal('albums_navigation_received')
 
         # Internal state
         self.current_state = {}
@@ -311,7 +312,7 @@ class VolumioListener:
         if uri.startswith("music-library/USB"):
             self.logger.debug("Identified service: usblibrary")
             return 'usblibrary'
-        if uri == "music-library":    # <------ ADD THIS!
+        if uri == "music-library":   
             self.logger.debug("Identified service: library (root)")
             return 'library'
         # If you use albums:// or similar, add them here as well!

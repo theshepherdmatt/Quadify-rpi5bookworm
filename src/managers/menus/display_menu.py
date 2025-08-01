@@ -244,9 +244,12 @@ class DisplayMenu(BaseManager):
         if selected:
             self.logger.info(f"DisplayMenu: Setting Modern-VU spectrum mode => {selected}")
             self.mode_manager.config["modern_spectrum_mode"] = selected
+            # Force mode to modern
+            self.mode_manager.set_display_mode("modern")
             self.mode_manager.save_preferences()
         else:
             self.logger.warning(f"DisplayMenu: Unknown Modern-VU style => {style_name}")
+
 
     def _handle_brightness(self, level):
         brightness_map = {"Low": 50, "Medium": 150, "High": 255}

@@ -238,36 +238,26 @@ class ButtonsLEDController:
         try:
             # 1) Run volumio status
             res = subprocess.run(["volumio", "status"], capture_output=True, text=True)
-
             if res.returncode == 0:
-                # 2) Attempt JSON parse
-                try:
-                    data = json.loads(res.stdout)
-                    # "status" might be "play", "pause", or "stop"
-                    state = data.get("status", "").lower()
+                data = json.loads(res.stdout)
+                state = data.get("status", "").lower()
+                prev_led_state = self.status_led_state
 
-                    if state == "play":
-                        self.status_led_state = LED.PLAY.value
-                    elif state in ["pause", "stop"]:
-                        self.status_led_state = LED.PAUSE.value
-                    else:
-                        self.status_led_state = 0
+                if state == "play":
+                    self.status_led_state = LED.PLAY.value
+                elif state in ["pause", "stop"]:
+                    self.status_led_state = LED.PAUSE.value
+                else:
+                    self.status_led_state = 0
 
-                    self.control_leds()
-                except json.JSONDecodeError:
-                    # 3) Fallback if not valid JSON (rare)
-                    text = res.stdout.lower()
-                    if "status" in text and "play" in text:
-                        self.status_led_state = LED.PLAY.value
-                    elif "status" in text and ("pause" in text or "stop" in text):
-                        self.status_led_state = LED.PAUSE.value
-                    else:
-                        self.status_led_state = 0
+                # **Clear ephemeral LED if Volumio state has changed**
+                if self.current_button_led_state and self.status_led_state != prev_led_state:
+                    self.current_button_led_state = 0
 
-                    self.control_leds()
-
+                self.control_leds()
         except Exception as e:
             self.logger.error(f"update_play_pause_led => {e}")
+
 
     # -----------------------------------------------------------------
     # Button Press => ephemeral LED
@@ -282,11 +272,11 @@ class ButtonsLEDController:
             if btn_id == 1:
                 # "Play"
                 subprocess.run(["volumio","play"], check=False)
-                self.light_button_led_for(LED.PLAY, 0.5)
+                #self.light_button_led_for(LED.PLAY, 0.5)
             elif btn_id == 2:
                 # "Pause"
                 subprocess.run(["volumio","pause"], check=False)
-                self.light_button_led_for(LED.PAUSE, 0.5)
+                #self.light_button_led_for(LED.PAUSE, 0.5)
             elif btn_id == 3:
                 subprocess.run(["volumio","previous"], check=False)
                 self.light_button_led_for(LED.PREV, 0.5)
