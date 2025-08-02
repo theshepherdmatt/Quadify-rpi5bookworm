@@ -980,7 +980,7 @@ class ModeManager:
                 "minimal": self.to_minimal,
                 "vuscreen": self.to_vuscreen,
                 "digitalvuscreen": self.to_digitalvuscreen,
-                "radio": self.to_radiomanager,
+                "radio": self.to_radio,
                 "menu": self.to_menu,
                 "playlists": self.to_playlists,
                 "library": self.to_library,

@@ -32,7 +32,7 @@ class MenuManager:
             "ALBUMS": "Albums",
             "GENRES": "Genres",
             "WEB_RADIO": "Radio",
-            "RADIO_PARADISE": "Radio Paradise",
+            "RADIO_PARADISE": "Radio\nParadise",
             "TIDAL": "Tidal",
             "INTERNAL": "Internal",
             "CONFIG": "Config",
@@ -41,10 +41,10 @@ class MenuManager:
             "PLAYLISTS": "Playlists",
             "SPOTIFY": "Spotify",
             "QOBUZ": "Qobuz",
-            "MOTHEREARTH": "Mother Earth",
+            "MOTHEREARTH": "Mother\nEarth",
             "FAVOURITES": "Favourites",
             "LAST_100": "Last 100",
-            "MEDIA_SERVERS": "Media Servers",
+            "MEDIA_SERVERS": "Media\nServers",
             "UPNP": "UPnP",
         }
 
@@ -171,7 +171,7 @@ class MenuManager:
         with self.lock:
             visible_items = self.get_visible_window(self.current_menu_items, self.window_size)
             icon_size = 50
-            spacing = 5
+            spacing = -5
             total_width = self.display_manager.oled.width
             total_height = self.display_manager.oled.height
             total_icons_width = len(visible_items) * icon_size + (len(visible_items) - 1) * spacing
@@ -196,20 +196,28 @@ class MenuManager:
                 y_adjustment = -5 if actual_index == self.current_selection_index else 0
                 base_image.paste(icon, (x, y_position + y_adjustment))
 
-                # Display mapped label or fallback to key
+                # --- Multi-line label logic ---
                 label = self.label_map.get(item, item.title().replace('_', ' '))
                 font = self.display_manager.fonts.get(
                     self.bold_font_key if actual_index == self.current_selection_index else self.font_key,
                     ImageFont.load_default(),
                 )
                 text_color = "white" if actual_index == self.current_selection_index else "black"
-                tw, th = draw_obj.textsize(label, font=font)
-                text_x = x + (icon_size - tw) // 2
-                text_y = y_position + icon_size - 2
-                draw_obj.text((text_x, text_y), label, font=font, fill=text_color)
+
+                lines = label.split('\n')
+                line_height = font.getsize('A')[1]
+                total_height = line_height * len(lines)
+                # Position first line so the block is vertically centred under the icon
+                text_y = y_position + icon_size + 2 - total_height // 2
+
+                for j, line in enumerate(lines):
+                    tw, th = draw_obj.textsize(line, font=font)
+                    text_x = x + (icon_size - tw) // 2
+                    draw_obj.text((text_x, text_y + j * line_height), line, font=font, fill=text_color)
 
             base_image = base_image.convert(self.display_manager.oled.mode)
             self.display_manager.oled.display(base_image)
+
 
     def display_menu(self):
         self.draw_menu(offset_x=0)
