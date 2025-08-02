@@ -212,8 +212,8 @@ class RadioManager(BaseManager):
 
     def draw_categories_horizontal(self):
         visible_items = self.get_visible_window(self.categories)
-        icon_size = 40
-        spacing = 15
+        icon_size = 30
+        spacing = 25
         total_width = self.display_manager.oled.width
         total_height = self.display_manager.oled.height
         total_icons_width = len(visible_items) * icon_size + (len(visible_items) - 1) * spacing
@@ -235,7 +235,7 @@ class RadioManager(BaseManager):
             # Draw the stacked label
             label = RADIO_CATEGORY_LABELS.get(cat["title"], cat["title"])
             font = self.display_manager.fonts.get(
-                self.bold_font_key if actual_index == self.current_selection_index else self.font_key,
+                self.font_key if actual_index == self.current_selection_index else self.font_key,
                 ImageFont.load_default(),
             )
             text_color = "white" if actual_index == self.current_selection_index else "black"
