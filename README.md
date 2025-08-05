@@ -1,5 +1,3 @@
----
-
 # Quadify
 
 Quadify is a comprehensive toolkit and plugin for integrating advanced audio display and control hardware with your Raspberry Pi audio system. Designed for use with Volumio, Quadify brings new life to classic Quad FM4 tuners and other devices, adding modern features such as OLED displays, rotary encoders, buttons, and LEDs.
@@ -38,44 +36,58 @@ Supported features include:
 
 ---
 
-Quick Start
+## Quick Start
 
-To update or install Quadify safely:
+To update or install Quadify safely, follow these steps:
 
-1. Stop the Quadify service
+**1. Stop the Quadify service**
 
+```bash
 sudo systemctl stop quadify
+```
 
-2. (Optional) Backup your current Quadify folder
+**2. (Optional) Back up your current Quadify folder**
 
+```bash
 [ -d Quadify ] && sudo mv Quadify Quadify-old
+```
 
-3. Download and install the new version
+**3. Download and install the new version**
 
+```bash
 git clone https://github.com/theshepherdmatt/Quadify-Beta.git
 mv Quadify-Beta Quadify
 cd Quadify
 sudo bash install.sh
+```
 
 Follow the on-screen prompts. A reboot may be required after installation (you will be notified if so).
-After Installing
 
-    If the new version works:
-    You can safely remove the backup folder:
+---
 
-sudo rm -rf ../Quadify-old
+### After Installing
 
-If you need to restore your backup:
-Stop Quadify (just in case), remove the new folder, and restore the old one:
+* **If the new version works:**
+  You can safely remove the backup folder to free up space:
 
-    sudo systemctl stop quadify
-    cd ..
-    sudo rm -rf Quadify
-    sudo mv Quadify-old Quadify
-    sudo systemctl start quadify
+  ```bash
+  sudo rm -rf ../Quadify-old
+  ```
 
-Tip:
+* **If you need to restore your backup:**
+  Stop Quadify (just in case), remove the new folder, and restore the old one:
+
+  ```bash
+  sudo systemctl stop quadify
+  cd ..
+  sudo rm -rf Quadify
+  sudo mv Quadify-old Quadify
+  sudo systemctl start quadify
+  ```
+
+**Tip:**
 Always stop the Quadify service before making changes, and start it again after you’ve finished.
+
 ---
 
 ## Installation Timeframe
@@ -91,7 +103,7 @@ If Quadify isn’t working as expected, try the following steps to identify and 
 
 ### 1. Restart Quadify Services
 
-Most issues can be fixed by restarting the relevant services. From the terminal:
+Most issues can be fixed by restarting the relevant service. From the terminal:
 
 ```bash
 sudo systemctl restart quadify
@@ -123,7 +135,7 @@ To see the system logs for the Quadify service:
 journalctl -u quadify -f
 ```
 
-This will show live logs. For a broader look, just:
+This will show live logs. For a broader look:
 
 ```bash
 journalctl -u quadify
@@ -139,7 +151,7 @@ journalctl -u volumio -f
 
 ### 5. Check CAVA Visualiser Service (if using VU Meter)
 
-Some display modes (e.g., the VU Meter) require the CAVA visualiser to be running. To check CAVA’s status:
+Some display modes (e.g. the VU Meter) require the CAVA visualiser to be running. To check CAVA’s status:
 
 ```bash
 sudo systemctl status cava
