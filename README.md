@@ -38,56 +38,44 @@ Supported features include:
 
 ---
 
-## Quick Start
+Quick Start
 
-Update your Quadify installation using the following steps:
+To update or install Quadify safely:
 
-**1. (Optional) Backup your current Quadify folder:**
+1. Stop the Quadify service
 
-```bash
 sudo systemctl stop quadify
+
+2. (Optional) Backup your current Quadify folder
+
 [ -d Quadify ] && sudo mv Quadify Quadify-old
-```
 
-**2. Clone and install Quadify Beta:**
+3. Download and install the new version
 
-```bash
 git clone https://github.com/theshepherdmatt/Quadify-Beta.git
 mv Quadify-Beta Quadify
 cd Quadify
 sudo bash install.sh
-```
 
 Follow the on-screen prompts. A reboot may be required after installation (you will be notified if so).
+After Installing
 
----
+    If the new version works:
+    You can safely remove the backup folder:
 
-### After Installing
+sudo rm -rf ../Quadify-old
 
-* **If the new version works:**
-  You can safely remove the backup folder to free up space:
+If you need to restore your backup:
+Stop Quadify (just in case), remove the new folder, and restore the old one:
 
-  ```bash
-  sudo rm -rf ../Quadify-old
-  ```
+    sudo systemctl stop quadify
+    cd ..
+    sudo rm -rf Quadify
+    sudo mv Quadify-old Quadify
+    sudo systemctl start quadify
 
-* **If you need to restore your backup:**
-  First remove the new Quadify folder:
-
-  ```bash
-  cd ..
-  sudo rm -rf Quadify
-  ```
-
-  Then restore your backup:
-
-  ```bash
-  sudo mv Quadify-old Quadify
-  ```
-
-**Tip:**
-If you’re running Quadify as a service, stop it before making these changes and start it again afterwards.
-
+Tip:
+Always stop the Quadify service before making changes, and start it again after you’ve finished.
 ---
 
 ## Installation Timeframe
