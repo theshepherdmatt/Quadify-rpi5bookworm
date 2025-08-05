@@ -1,3 +1,5 @@
+---
+
 # Quadify
 
 Quadify is a comprehensive toolkit and plugin for integrating advanced audio display and control hardware with your Raspberry Pi audio system. Designed for use with Volumio, Quadify brings new life to classic Quad FM4 tuners and other devices, adding modern features such as OLED displays, rotary encoders, buttons, and LEDs.
@@ -34,30 +36,65 @@ Supported features include:
 * An **active internet connection** is required for installation (to fetch dependencies).
 * Standard Volumio settings are preserved, but you may need to use the Volumio Web UI for some system or audio settings.
 
+---
+
 ## Quick Start
 
-optional: Backup your current Quadify
+Update your Quadify installation using the following steps:
 
-```
+**1. (Optional) Backup your current Quadify folder:**
+
+```bash
 [ -d Quadify ] && sudo mv Quadify Quadify-old
 ```
-Clone this repository:
-```
+
+**2. Clone and install Quadify Beta:**
+
+```bash
 git clone https://github.com/theshepherdmatt/Quadify-Beta.git
 mv Quadify-Beta Quadify
 cd Quadify
 sudo bash install.sh
-
 ```
 
 Follow the on-screen prompts. A reboot may be required after installation (you will be notified if so).
 
+---
+
+### After Installing
+
+* **If the new version works:**
+  You can safely remove the backup folder to free up space:
+
+  ```bash
+  sudo rm -rf ../Quadify-old
+  ```
+
+* **If you need to restore your backup:**
+  First remove the new Quadify folder:
+
+  ```bash
+  cd ..
+  sudo rm -rf Quadify
+  ```
+
+  Then restore your backup:
+
+  ```bash
+  sudo mv Quadify-old Quadify
+  ```
+
+**Tip:**
+If you’re running Quadify as a service, stop it before making these changes and start it again afterwards.
+
+---
+
 ## Installation Timeframe
 
-* **Typical install time:** \~5 minutes for OLED on Volumio
-  (longer if compiling certain components from source)
+* **Typical install time:** \~5 minutes for OLED on Volumio (longer if compiling certain components from source)
 * Installation steps may change as the project evolves—check commit notes and documentation for updates.
 
+---
 
 ## Debugging and Service Management
 
@@ -134,3 +171,5 @@ sudo systemctl enable cava
 ---
 
 **If you encounter persistent issues, please open an [Issue](https://github.com/theshepherdmatt/Quadify/issues) with details of your setup and any error messages.**
+
+---
