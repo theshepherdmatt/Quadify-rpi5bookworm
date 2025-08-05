@@ -36,8 +36,12 @@ Supported features include:
 
 ## Quick Start
 
-Clone this repository:
+optional: Backup your current Quadify
 
+```
+[ -d Quadify ] && sudo mv Quadify Quadify-old
+```
+Clone this repository:
 ```
 git clone https://github.com/theshepherdmatt/Quadify-Beta.git
 mv Quadify-Beta Quadify
