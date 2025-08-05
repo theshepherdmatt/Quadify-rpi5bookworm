@@ -44,11 +44,8 @@ Update your Quadify installation using the following steps:
 
 **1. (Optional) Backup your current Quadify folder:**
 
-```
-sudo systemctl stop quadify
-```
-
 ```bash
+sudo systemctl stop quadify
 [ -d Quadify ] && sudo mv Quadify Quadify-old
 ```
 
