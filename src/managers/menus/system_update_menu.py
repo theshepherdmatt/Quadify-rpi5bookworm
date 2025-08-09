@@ -1,19 +1,29 @@
 import logging
 import time
 import subprocess
+from pathlib import Path
 from PIL import ImageFont
 from managers.menus.base_manager import BaseManager
 
+
 class SystemUpdateMenu(BaseManager):
     """
-    A scrollable menu for handling "System Update" interactions:
-      - Main menu:
-         1) "Update from GitHub"
-         2) "Back"
-      - Confirm sub-menu:
-         1) "Yes"
-         2) "No"
+    A scrollable menu for handling Quadify updates:
+
+      Main menu:
+        1) Update from GitHub
+        2) Rollback last update
+        3) View last update log
+        4) Back
+
+      Confirm sub-menu for actions:
+        - Yes
+        - No
     """
+
+    UPDATE_SERVICE = ["sudo", "systemctl", "start", "quadify-update.service"]
+    ROLLBACK_SCRIPT = "/home/volumio/Quadify/scripts/quadify_rollback.sh"
+    UPDATE_LOG = Path("/var/log/quadify_update.log")
 
     def __init__(
         self,
@@ -40,12 +50,23 @@ class SystemUpdateMenu(BaseManager):
         self.font_key = "menu_font"
         self.font = display_manager.fonts.get(self.font_key, ImageFont.load_default())
 
-        self.main_items = ["Update from GitHub", "Back"]
+        self.main_items = [
+            "Update from GitHub",
+            "Rollback last update",
+            "View last update log",
+            "Back",
+        ]
         self.confirm_items = ["Yes", "No"]
 
         self.current_list = self.main_items
         self.current_selection_index = 0
 
+        # Which action are we confirming? ("update" | "rollback" | None)
+        self._pending_action = None
+
+    # ---------------------------
+    # Lifecycle
+    # ---------------------------
     def start_mode(self):
         if self.is_active:
             self.logger.debug("SystemUpdateMenu: Already active.")
@@ -66,6 +87,9 @@ class SystemUpdateMenu(BaseManager):
             self.display_manager.clear_screen()
             self.logger.info("SystemUpdateMenu: Stopped and cleared display.")
 
+    # ---------------------------
+    # Input handling
+    # ---------------------------
     def scroll_selection(self, direction):
         if not self.is_active:
             self.logger.warning("SystemUpdateMenu: Scroll attempted while inactive.")
@@ -86,7 +110,7 @@ class SystemUpdateMenu(BaseManager):
             self.current_selection_index -= 1
 
         if self.current_selection_index != old_index:
-            self.logger.debug(f"SystemUpdateMenu: Scrolled from {old_index} to {self.current_selection_index}")
+            self.logger.debug(f"SystemUpdateMenu: Scrolled {old_index} -> {self.current_selection_index}")
             self._display_current_menu()
 
     def select_item(self):
@@ -105,11 +129,19 @@ class SystemUpdateMenu(BaseManager):
 
         if self.current_menu == "main":
             if selected_item == "Update from GitHub":
-                self.current_menu = "confirm"
-                self.current_list = self.confirm_items
-                self.current_selection_index = 0
-                self.window_start_index = 0
-                self._display_current_menu()
+                self._pending_action = "update"
+                self._move_to_confirm(
+                    "Update Quadify from GitHub?\nThis will stop and restart the app."
+                )
+
+            elif selected_item == "Rollback last update":
+                self._pending_action = "rollback"
+                self._move_to_confirm(
+                    "Rollback to the previous version?\nThis will restart the app."
+                )
+
+            elif selected_item == "View last update log":
+                self._show_update_log()
 
             elif selected_item == "Back":
                 self.stop_mode()
@@ -117,34 +149,154 @@ class SystemUpdateMenu(BaseManager):
 
         elif self.current_menu == "confirm":
             if selected_item == "Yes":
-                self.display_manager.clear_screen()
-
-                def draw(draw_obj):
-                    text = "Updating from GitHub\nPlease wait..."
-                    draw_obj.text((10, 20), text, font=self.font, fill="white")
-
-                self.display_manager.draw_custom(draw)
-                self.logger.info("SystemUpdateMenu: Displayed update message.")
-
-                subprocess.Popen(["bash", "/home/volumio/Quadify/scripts/quadify_autoupdate.sh"])
-                time.sleep(2)
-
-                def draw_success(draw_obj):
-                    text = "Update triggered successfully.\nSystem will restart."
-                    draw_obj.text((10, 20), text, font=self.font, fill="white")
-
-                self.display_manager.draw_custom(draw_success)
-                time.sleep(3)
-
-                self.display_manager.show_logo()
-                self.stop_mode()
+                # Execute the pending action
+                action = self._pending_action
+                self._pending_action = None
+                if action == "update":
+                    self._perform_update()
+                elif action == "rollback":
+                    self._perform_rollback()
+                else:
+                    self._notice("Nothing to do.")
             else:
-                self.current_menu = "main"
-                self.current_list = self.main_items
-                self.current_selection_index = 0
-                self.window_start_index = 0
-                self._display_current_menu()
+                # Cancel -> back to main
+                self._pending_action = None
+                self._return_to_main()
 
+    # ---------------------------
+    # Actions
+    # ---------------------------
+    def _perform_update(self):
+        # Splash “working” message with a simple animated dots loop
+        self._progress_splash("Updating from GitHub\nPlease wait")
+
+        # Fire the systemd service (non-blocking is fine; service handles pacing)
+        try:
+            subprocess.run(self.UPDATE_SERVICE, check=True)
+            self.logger.info("SystemUpdateMenu: quadify-update.service started.")
+        except subprocess.CalledProcessError as e:
+            self.logger.exception("Failed to start update service")
+            self._error("Update failed to start.\nSee the update log.")
+            return
+
+        # Brief progress animation (service runs independently)
+        self._animate_for_seconds(3.0, base_text="Applying update")
+
+        # Show a success note; the service restarts Quadify on its own
+        self._notice("Update triggered.\nQuadify will restart shortly.")
+        time.sleep(2)
+        self.display_manager.show_logo()
+        self.stop_mode()
+
+    def _perform_rollback(self):
+        self._progress_splash("Rolling back to previous version\nPlease wait")
+        try:
+            subprocess.run(["bash", self.ROLLBACK_SCRIPT], check=True)
+        except subprocess.CalledProcessError:
+            self.logger.exception("Rollback script failed")
+            self._error("Rollback failed.\nSee the update log.")
+            return
+
+        self._animate_for_seconds(2.0, base_text="Restoring backup")
+        self._notice("Rollback complete.\nRestarting Quadify…")
+        time.sleep(2)
+        self.display_manager.show_logo()
+        self.stop_mode()
+
+    def _show_update_log(self):
+        # Tail the last few lines of the updater log (if it exists)
+        lines = []
+        if self.UPDATE_LOG.exists():
+            try:
+                out = subprocess.check_output(["tail", "-n", "10", str(self.UPDATE_LOG)], text=True)
+                lines = [ln.rstrip() for ln in out.splitlines() if ln.strip()]
+            except Exception:
+                self.logger.exception("Failed to read update log")
+                lines = ["Could not read update log."]
+        else:
+            lines = ["No update log found yet."]
+
+        # Render neatly on the display
+        self.display_manager.clear_screen()
+
+        def draw(draw_obj):
+            y = 8
+            draw_obj.text((6, y), "Last update log:", font=self.font, fill="white")
+            y += 16
+            for ln in lines[-6:]:
+                draw_obj.text((6, y), ln[:22], font=self.font, fill="gray")  # short lines for small OLEDs
+                y += 13
+            # Hint to user
+            draw_obj.text((6, y + 6), "Press BACK to return", font=self.font, fill="gray")
+
+        self.display_manager.draw_custom(draw)
+
+    # ---------------------------
+    # UI helpers
+    # ---------------------------
+    def _move_to_confirm(self, message):
+        self.current_menu = "confirm"
+        self.current_list = self.confirm_items
+        self.current_selection_index = 0
+        self.window_start_index = 0
+
+        # Show a centred confirm text before listing Yes/No
+        self._message_screen(message)
+        time.sleep(0.6)
+        self._display_current_menu()
+
+    def _return_to_main(self):
+        self.current_menu = "main"
+        self.current_list = self.main_items
+        self.current_selection_index = 0
+        self.window_start_index = 0
+        self._display_current_menu()
+
+    def _message_screen(self, text, fill="white"):
+        self.display_manager.clear_screen()
+
+        def draw(draw_obj):
+            # Simple multi-line text block
+            y = 18
+            for ln in text.split("\n"):
+                draw_obj.text((10, y), ln, font=self.font, fill=fill)
+                y += 16
+
+        self.display_manager.draw_custom(draw)
+
+    def _progress_splash(self, text):
+        self.display_manager.clear_screen()
+
+        def draw(draw_obj):
+            y = 18
+            for ln in text.split("\n"):
+                draw_obj.text((10, y), ln, font=self.font, fill="white")
+                y += 16
+
+        self.display_manager.draw_custom(draw)
+
+    def _animate_for_seconds(self, seconds: float, base_text="Working"):
+        # A tiny animated “...” for visual feedback
+        start = time.time()
+        dots = ["", ".", "..", "..."]
+        idx = 0
+        while time.time() - start < seconds:
+            msg = f"{base_text}{dots[idx % len(dots)]}"
+            self._message_screen(msg)
+            idx += 1
+            time.sleep(0.35)
+
+    def _notice(self, text):
+        self._message_screen(text, fill="white")
+
+    def _error(self, text):
+        self._message_screen(text, fill="white")
+        # Optionally flash or hold a bit longer for errors
+        time.sleep(2)
+
+    # ---------------------------
+    # Rendering the list
+    # ---------------------------
     def _display_current_menu(self):
         if not self.is_active:
             return
@@ -152,19 +304,24 @@ class SystemUpdateMenu(BaseManager):
         visible_items = self._get_visible_window(self.current_list, self.current_selection_index)
 
         def draw(draw_obj):
+            # Title
+            title = "System Update"
+            draw_obj.text((5, 2), title, font=self.font, fill="white")
+
+            # Items
             for i, item_name in enumerate(visible_items):
                 actual_index = self.window_start_index + i
                 is_selected = (actual_index == self.current_selection_index)
 
-                arrow = "-> " if is_selected else "   "
-                fill_color = "white" if is_selected else "gray"
-                y_pos = self.y_offset + i * self.line_spacing
+                arrow = "→ " if is_selected else "  "
+                fill_colour = "white" if is_selected else "gray"
+                y_pos = self.y_offset + 16 + i * self.line_spacing  # a little extra top padding
 
                 draw_obj.text(
                     (5, y_pos),
                     f"{arrow}{item_name}",
                     font=self.font,
-                    fill=fill_color
+                    fill=fill_colour
                 )
 
         self.display_manager.draw_custom(draw)
