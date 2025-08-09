@@ -264,11 +264,17 @@ install_python_dependencies() {
     log_progress "Installing Python dependencies, please wait..."
     # Force-install pycairo first
     run_command "python3.7 -m pip install --upgrade --ignore-installed pycairo"
+    
+    # Install cairosvg and its supporting packages
+    run_command "python3.7 -m pip install --upgrade --ignore-installed cairosvg tinycss2 cssselect2 defusedxml"
+    
     # Then the rest from requirements.txt
     run_command "python3.7 -m pip install --upgrade --ignore-installed -r /home/volumio/Quadify/requirements.txt"
+    
     log_message "success" "Python dependencies installed. (•‿•)"
     show_random_tip
 }
+
 
 enable_i2c_spi() {
     log_progress "Enabling I2C and SPI in config.txt..."
