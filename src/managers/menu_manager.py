@@ -170,8 +170,8 @@ class MenuManager:
     def draw_menu(self, offset_x=0):
         with self.lock:
             visible_items = self.get_visible_window(self.current_menu_items, self.window_size)
-            icon_size = 50
-            spacing = -5
+            icon_size = 45
+            spacing = -2
             total_width = self.display_manager.oled.width
             total_height = self.display_manager.oled.height
             total_icons_width = len(visible_items) * icon_size + (len(visible_items) - 1) * spacing
