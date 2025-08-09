@@ -774,6 +774,10 @@ main() {
     # 8) Setup main Quadify service
     setup_main_service
 
+	configure_onoff_shim_overlays
+ 
+	install_shutdown_assets
+
     # 9) Configure MPD
     configure_mpd
 
