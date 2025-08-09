@@ -331,6 +331,48 @@ install_shutdown_assets() {
 }
 
 # ============================
+#   Updater & Rollback assets
+# ============================
+install_updater_assets() {
+  log_progress "Installing Quadify updater & rollback…"
+
+  # Source paths inside the repo
+  local UPDATER_SH="/home/volumio/Quadify/scripts/quadify_autoupdate.sh"
+  local ROLLBACK_SH="/home/volumio/Quadify/scripts/quadify_rollback.sh"
+  local UPDATE_SVC="/home/volumio/Quadify/service/quadify-update.service"
+  local UPDATE_TMR="/home/volumio/Quadify/service/quadify-update.timer"   # optional
+
+  # Sanity checks so we fail early if something’s missing
+  for f in "$UPDATER_SH" "$ROLLBACK_SH" "$UPDATE_SVC"; do
+    [ -f "$f" ] || { log_message error "Missing $f"; exit 1; }
+  done
+
+  # Ensure scripts are executable in-place (kept in repo path)
+  run_command "chmod 755 \"$UPDATER_SH\" \"$ROLLBACK_SH\""
+
+  # Install service (and optional timer) to systemd
+  run_command "install -m 644 \"$UPDATE_SVC\" /etc/systemd/system/quadify-update.service"
+  if [ -f "$UPDATE_TMR" ]; then
+    run_command "install -m 644 \"$UPDATE_TMR\" /etc/systemd/system/quadify-update.timer"
+  fi
+
+  # Reload units and enable
+  run_command "systemctl daemon-reload"
+  run_command "systemctl enable quadify-update.service"
+  if [ -f /etc/systemd/system/quadify-update.timer ]; then
+    run_command "systemctl enable --now quadify-update.timer"
+    log_message success "quadify-update.timer enabled."
+  fi
+
+  # Make sure log directory exists for the updater (harmless if already there)
+  run_command "mkdir -p /var/log && touch /var/log/quadify_update.log || true"
+
+  log_message success "Updater & rollback installed."
+  show_random_tip
+}
+
+
+# ============================
 #   Samba
 # ============================
 setup_samba() {
@@ -577,6 +619,7 @@ main() {
   update_lirc_options
   set_permissions
   setup_run_update_wrapper
+  install_updater_assets
 
   log_message success "Quadify installation complete! A reboot is required."
 
