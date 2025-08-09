@@ -392,6 +392,43 @@ update_config_i2c_address() {
 }
 
 # ============================
+#   on/off SHIM
+# ============================
+configure_onoff_shim_overlays() {
+  log_progress "Configuring kernel overlays for On/Off SHIM..."
+  CONFIG_FILE="/boot/userconfig.txt"
+  [ -f "$CONFIG_FILE" ] || run_command "touch \"$CONFIG_FILE\""
+  if ! grep -q "dtoverlay=gpio-shutdown" "$CONFIG_FILE"; then
+    cat <<EOF >> "$CONFIG_FILE"
+dtoverlay=gpio-shutdown,gpio_pin=17,active_low=1,gpio_pull=up
+dtoverlay=gpio-poweroff,gpiopin=4,active_low=1
+EOF
+    log_message "success" "Added gpio-shutdown (BCM17) and gpio-poweroff (BCM4)."
+  else
+    log_message "info" "GPIO shutdown/poweroff overlays already present."
+  fi
+}
+
+install_shutdown_assets() {
+  log_progress "Installing LED-off and clean poweroff assets..."
+
+  # Install scripts
+  run_command "install -m 755 /home/volumio/Quadify/scripts/quadify-leds-off.py /usr/local/bin/quadify-leds-off.py"
+  run_command "install -m 755 /home/volumio/Quadify/scripts/clean-poweroff.sh /usr/local/bin/clean-poweroff.sh"
+
+  # Install services (ensure 644 perms, not executable)
+  run_command "install -m 644 /home/volumio/Quadify/service/quadify-leds-off.service /etc/systemd/system/quadify-leds-off.service"
+  run_command "install -m 644 /home/volumio/Quadify/service/volumio-clean-poweroff.service /etc/systemd/system/volumio-clean-poweroff.service"
+
+  run_command "systemctl daemon-reload"
+  run_command "systemctl enable quadify-leds-off.service"
+  run_command "systemctl enable volumio-clean-poweroff.service"
+
+  log_message "success" "Shutdown services installed and enabled."
+}
+
+
+# ============================
 #   Samba Setup
 # ============================
 setup_samba() {
