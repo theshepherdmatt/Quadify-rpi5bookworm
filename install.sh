@@ -10,7 +10,7 @@ RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; MA
 # ============================
 #   Progress + Logging
 # ============================
-TOTAL_STEPS=20
+TOTAL_STEPS=22
 CURRENT_STEP=0
 LOG_FILE="install.log"
 rm -f "$LOG_FILE"
@@ -72,12 +72,26 @@ show_random_tip(){ local i=$((RANDOM % ${#TIPS[@]})); log_message info "Tip: ${T
 #   User Choices
 # ============================
 get_user_preferences() {
+  # Buttons & LEDs (MCP23017)
   BUTTONSLEDS_ENABLED=false
   while true; do
     read -rp "Enable Buttons & LEDs with MCP23017? (y/n): " a
     case "$a" in [Yy]*) BUTTONSLEDS_ENABLED=true; break ;; [Nn]*) BUTTONSLEDS_ENABLED=false; break ;; *) log_message warning "Please answer y or n.";; esac
   done
 
+  # On/Off SHIM question
+  ONOFF_SHIM_ENABLED=false
+  while true; do
+    echo -e "\nDo you have a Pimoroni On/Off SHIM (or equivalent) connected?"
+    read -rp "(y/n): " shim_choice
+    case "$shim_choice" in
+      [Yy]*) ONOFF_SHIM_ENABLED=true; log_message info "On/Off SHIM features will be installed and enabled."; break ;;
+      [Nn]*) ONOFF_SHIM_ENABLED=false; log_message info "Skipping On/Off SHIM configuration."; break ;;
+      *) log_message warning "Please answer y or n." ;;
+    esac
+  done
+
+  # IR Remote
   echo -e "\nWill you be using an IR remote? (y/n)"
   read -rp "Your choice: " ir_choice
   if [[ "$ir_choice" =~ ^[Yy] ]]; then
@@ -152,7 +166,7 @@ install_system_dependencies() {
     i2c-tools python3-smbus \
     libgirepository1.0-dev pkg-config libcairo2-dev \
     libffi-dev build-essential libxml2-dev libxslt1-dev libssl-dev \
-    lirc lsof"
+    lirc lsof git curl rsync gcc make"
   log_message success "System-level dependencies installed."
   show_random_tip
 }
@@ -370,7 +384,6 @@ install_updater_assets() {
   log_message success "Updater & rollback installed."
   show_random_tip
 }
-
 
 # ============================
 #   Samba
@@ -606,8 +619,15 @@ main() {
   fi
 
   setup_main_service
-  configure_onoff_shim_overlays
-  install_shutdown_assets
+
+  # On/Off SHIM (only if user has one)
+  if [ "$ONOFF_SHIM_ENABLED" = true ]; then
+    configure_onoff_shim_overlays
+    install_shutdown_assets
+  else
+    log_message info "On/Off SHIM overlays & shutdown services skipped by user choice."
+  fi
+
   configure_mpd
   install_cava_from_fork
   setup_cava_service
