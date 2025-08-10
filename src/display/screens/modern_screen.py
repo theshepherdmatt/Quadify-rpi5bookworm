@@ -35,6 +35,11 @@ class ModernScreen(BaseManager):
         self.spectrum_mode = "bars"  # or "dots", "scope"
         self.spectrum_mode = self.mode_manager.config.get("modern_spectrum_mode", "bars")
 
+        # Dots spectrum state
+        self._dot_prev_heights = []
+        self._dot_peak_heights = []
+        self._dot_last_ts = time.time()
+
         # Font references
         self.font_title    = display_manager.fonts.get('song_font', ImageFont.load_default())
         self.font_artist   = display_manager.fonts.get('artist_font', ImageFont.load_default())
@@ -105,10 +110,17 @@ class ModernScreen(BaseManager):
                     self.latest_state  = None
                     self.update_event.clear()
                     last_update_time = time.time()
-                elif self.current_state and "seek" in self.current_state and "duration" in self.current_state:
-                    # If we have a playing track, let's simulate progress
-                    elapsed = time.time() - last_update_time
-                    self.current_state["seek"] = self.current_state.get("seek", 0) + int(elapsed * 1000)
+                elif self.current_state:
+                    status = (self.current_state.get("status") or "").lower()
+                    duration_val = self.current_state.get("duration")
+                    try:
+                        duration_ok = int(duration_val) > 0
+                    except Exception:
+                        duration_ok = False
+
+                    if status == "play" and duration_ok:
+                        elapsed = time.time() - last_update_time
+                        self.current_state["seek"] = int(self.current_state.get("seek") or 0) + int(elapsed * 1000)
                     last_update_time = time.time()
 
             # If active & mode == 'modern' and we have a current state, let's draw
@@ -446,9 +458,12 @@ class ModernScreen(BaseManager):
 
     def _draw_spectrum(self, draw):
         width, height = self.display_manager.oled.size
-        bar_region_height = height // 2
-        vertical_offset   = -8
 
+        # Vertical allocation for the spectrum area (top half-ish)
+        bar_region_height = height // 2
+        vertical_offset   = -8  # shift entire spectrum block up a tad
+
+        # If spectrum disabled, just clear the region used for it
         if (not self.running_spectrum) or (not self.mode_manager.config.get("cava_enabled", False)):
             y_top = max(0, vertical_offset)
             y_bottom = min(height, bar_region_height + vertical_offset)
@@ -460,40 +475,90 @@ class ModernScreen(BaseManager):
         if n == 0:
             return
 
-        bar_width  = 2
+        # Layout
+        bar_width  = 2          # logical column width (used for centring)
         gap_width  = 3
         max_height = bar_region_height
         start_x    = (width - (n * (bar_width + gap_width))) // 2
+        y_base     = height + vertical_offset  # bottom of spectrum area
 
-        # ---- Bars ----
+        # Clear spectrum area before drawing (prevents ghosting)
+        draw.rectangle([0, y_base - max_height, width, y_base], fill="black")
+
+        # --- Smoothing and peaks setup ---
+        # Ensure state vectors match bar count
+        if len(self._dot_prev_heights) != n:
+            self._dot_prev_heights = [0] * n
+            self._dot_peak_heights = [0] * n
+
+        # Time-based decay for peaks
+        now = time.time()
+        dt = max(0.0, min(0.2, now - self._dot_last_ts))  # clamp dt to be safe
+        self._dot_last_ts = now
+
+        # Map raw 0..255 to pixel height 0..max_height
+        target_heights = [int(max(0, min(b, 255)) * (max_height / 255.0)) for b in bars]
+
+        # Easing factor for vertical motion – higher = snappier
+        alpha = 0.35
+
+        # Dot geometry
+        dot_size   = 3                    # diameter in px
+        dot_pitch  = dot_size + 1         # vertical spacing
+        col_x_pad  = max(0, (bar_width - dot_size) // 2)  # centre dot in column
+
+        # Peak behaviour
+        peak_decay_px_per_sec = 60.0                   # how fast peaks fall (px/s)
+        peak_decay = int(peak_decay_px_per_sec * dt)   # convert to pixels per frame
+
+        # ---- Bars (rects) ----
         if self.spectrum_mode == "bars":
-            for i, bar in enumerate(bars):
-                bar_val = max(0, min(bar, 255))
-                bar_h   = int((bar_val / 255.0) * max_height)
+            for i, h_t in enumerate(target_heights):
+                h = int(self._dot_prev_heights[i] + alpha * (h_t - self._dot_prev_heights[i]))
+                self._dot_prev_heights[i] = h
+
                 x1 = start_x + i * (bar_width + gap_width)
                 x2 = x1 + bar_width
-                y1 = height - bar_h + vertical_offset
-                y2 = height + vertical_offset
+                y1 = y_base - h
+                y2 = y_base
                 draw.rectangle([x1, y1, x2, y2], fill=(60, 60, 60))
 
-        # ---- Dots ----
+        # ---- Dots (discrete LED-like columns) ----
         elif self.spectrum_mode == "dots":
-            dot_size = 3
-            dot_vertical_offset = 10  # Move all dots up by this amount
-            for i, bar in enumerate(bars):
-                bar_val = max(0, min(bar, 255))
-                bar_h = int((bar_val / 255.0) * max_height)
-                num_dots = bar_h // (dot_size - 1) if (dot_size - 1) else 1
-                x = start_x + i * (bar_width + gap_width)
-                for j in range(num_dots):
-                    y = (height - dot_vertical_offset) - (j * (dot_size + 1))
-                    draw.ellipse([x, y, x + dot_size, y + dot_size], fill=(60, 60, 60))
+            # Dimmed greys so it sits behind song data
+            dot_colour      = (35, 35, 35)   # main column dots (darker grey)
+            peak_colour     = (90, 90, 90)   # peak cap dots (slightly brighter)
+            
+            for i, h_t in enumerate(target_heights):
+                # Smooth height
+                h = int(self._dot_prev_heights[i] + alpha * (h_t - self._dot_prev_heights[i]))
+                self._dot_prev_heights[i] = h
+
+                # Update peak
+                self._dot_peak_heights[i] = max(self._dot_peak_heights[i] - peak_decay, h)
+                peak_h = self._dot_peak_heights[i]
+
+                # Number of dots
+                num_dots = max(0, h // dot_pitch)
+
+                # X position
+                x = start_x + i * (bar_width + gap_width) + col_x_pad
+
+                # Draw main column dots
+                for d in range(num_dots):
+                    y = y_base - (d * dot_pitch) - dot_size
+                    draw.ellipse([x, y, x + dot_size, y + dot_size], fill=dot_colour)
+
+                # Draw peak dot
+                if peak_h > 0:
+                    peak_row = max(0, (peak_h // dot_pitch) - 1)
+                    y_peak = y_base - (peak_row * dot_pitch) - dot_size
+                    draw.ellipse([x, y_peak, x + dot_size, y_peak + dot_size], fill=peak_colour)
 
 
         # ---- Oscilloscope ----
         elif self.spectrum_mode == "scope":
-            scope_data = [int((bar / 255.0) * max_height) for bar in bars]
-            y_base = height + vertical_offset
+            scope_data = [int(h) for h in target_heights]
             prev_x = start_x
             prev_y = y_base - scope_data[0]
             for i, val in enumerate(scope_data[1:], 1):
