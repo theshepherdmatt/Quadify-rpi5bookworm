@@ -313,9 +313,9 @@ class SystemUpdateMenu(BaseManager):
                 actual_index = self.window_start_index + i
                 is_selected = (actual_index == self.current_selection_index)
 
-                arrow = "→ " if is_selected else "  "
+                arrow = "-> " if is_selected else "  "
                 fill_colour = "white" if is_selected else "gray"
-                y_pos = self.y_offset + 16 + i * self.line_spacing  # a little extra top padding
+                y_pos = self.y_offset + 10 + i * self.line_spacing  # a little extra top padding
 
                 draw_obj.text(
                     (5, y_pos),

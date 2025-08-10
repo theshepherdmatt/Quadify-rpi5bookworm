@@ -34,32 +34,32 @@ class ManagerFactory:
         # ----- Create each object -----
 
         # Quadify "menu" managers
-        menu_manager         = self.create_menu_manager()
-        library_manager      = self.create_library_manager()
-        streaming_manager    = self.create_streaming_manager(service_name="tidal", root_uri="tidal://")
-        radio_manager        = self.create_radio_manager()
+        self.menu_manager     = self.create_menu_manager()  # store as self.menu_manager
+        library_manager       = self.create_library_manager()
+        streaming_manager     = self.create_streaming_manager(service_name="tidal", root_uri="tidal://")
+        radio_manager         = self.create_radio_manager()
 
         # Quoode/Quadify common screens
-        webradio_screen      = self.create_webradio_screen()
-        modern_screen        = self.create_modern_screen()
-        minimal_screen       = self.create_minimal_screen()
-        original_screen      = self.create_original_screen()
-        airplay_screen       = self.create_airplay_screen()
-        vu_screen            = self.create_vu_screen()
-        digitalvu_screen     = self.create_digitalvu_screen()
+        webradio_screen       = self.create_webradio_screen()
+        modern_screen         = self.create_modern_screen()
+        minimal_screen        = self.create_minimal_screen()
+        original_screen       = self.create_original_screen()
+        airplay_screen        = self.create_airplay_screen()
+        vu_screen             = self.create_vu_screen()
+        digitalvu_screen      = self.create_digitalvu_screen()
 
         # Additional items referenced by new ModeManager states
-        config_menu          = self.create_config_menu()
-        clock_menu           = self.create_clock_menu()
+        config_menu           = self.create_config_menu()
+        clock_menu            = self.create_clock_menu()
         remote_menu           = self.create_remote_menu()
-        display_menu         = self.create_display_menu()
-        screensaver_menu     = self.create_screensaver_menu()
-        screensaver          = self.create_screensaver()
-        system_info_screen   = self.create_system_info_screen()
-        system_update_menu   = self.create_system_update_menu()
+        display_menu          = self.create_display_menu()
+        screensaver_menu      = self.create_screensaver_menu()
+        screensaver           = self.create_screensaver()
+        system_info_screen    = self.create_system_info_screen()
+        system_update_menu    = self.create_system_update_menu()
 
-        # ----- Assign them to ModeManager via the set_* methods -----
-        self.mode_manager.set_menu_manager(menu_manager)
+        # ----- Assign them to ModeManager -----
+        self.mode_manager.set_menu_manager(self.menu_manager)
         self.mode_manager.set_config_menu(config_menu)
         self.mode_manager.set_library_manager(library_manager)
         self.mode_manager.set_streaming_manager(streaming_manager)
@@ -117,10 +117,12 @@ class ManagerFactory:
             volumio_config    = self.config.get('volumio', {}),
             volumio_listener  = self.volumio_listener,
             mode_manager      = self.mode_manager,
-            service_type    = "library",
-            root_uri        = "music-library"
+            menu_controller   = self.menu_manager,  # now it exists
+            service_type      = "library",
+            root_uri          = "music-library"
         )
-      
+
+     
     def create_streaming_manager(self, service_name, root_uri):
         from .menus.streaming_manager import StreamingManager
         return StreamingManager(

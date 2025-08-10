@@ -14,6 +14,7 @@ class MenuManager:
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(logging.INFO)
 
+        # --- existing icon-row state ---
         self.menu_stack = []
         self.current_menu_items = []
         self.current_selection_index = 0
@@ -24,6 +25,16 @@ class MenuManager:
         self.font_key = 'menu_font'
         self.bold_font_key = 'menu_font_bold'
         self.lock = threading.Lock()
+
+        # --- NEW: centralised list view state ---
+        self.active_view = "icon"  # "icon" | "list"
+        self.list_title = ""
+        self.list_items = []        # list of dicts: {"label","type","uri", ...}
+        self.list_index = 0         # absolute selection
+        self.list_offset = 0        # first visible row
+        self.list_page_size = 3     # tuned for small OLEDs
+        self.on_list_select = None  # callbacks set by feature managers
+        self.on_list_back = None
 
         # Menu label mapping for display
         self.label_map = {
@@ -65,7 +76,7 @@ class MenuManager:
             "CONFIG": self.display_manager.icons.get("config"),
             "ORIGINAL": self.display_manager.icons.get("display"),
             "MODERN": self.display_manager.icons.get("display"),
-            #"FAVOURITES": self.display_manager.icons.get("star"),
+            # "FAVOURITES": self.display_manager.icons.get("star"),
             "LAST_100": self.display_manager.icons.get("history"),
             "MEDIA_SERVERS": self.display_manager.icons.get("mediaservers"),
         }
@@ -93,6 +104,8 @@ class MenuManager:
         if hasattr(self.mode_manager, "add_on_mode_change_callback"):
             self.mode_manager.add_on_mode_change_callback(self.handle_mode_change)
 
+    # ---------------- mode lifecycle ----------------
+
     def handle_mode_change(self, current_mode):
         self.logger.info(f"MenuManager handling mode change to: {current_mode}")
         if current_mode == "menu":
@@ -102,6 +115,7 @@ class MenuManager:
 
     def start_mode(self, skip_initial_draw=False):
         self.is_active = True
+        self.active_view = "icon"  # ensure we start on the icon-row home
         self.refresh_main_menu()
         if not skip_initial_draw:
             threading.Thread(target=self.display_menu, daemon=True).start()
@@ -114,8 +128,9 @@ class MenuManager:
             self.display_manager.clear_screen()
         self.logger.info("MenuManager: Stopped menu mode and cleared display.")
 
+    # ---------------- main icon-row menu ----------------
+
     def refresh_main_menu(self):
-        """Fetches available services and updates the menu, always including FAVOURITES, LAST_100."""
         services = []
         try:
             raw_services = get_available_services()
@@ -127,11 +142,9 @@ class MenuManager:
             self.logger.error(f"Error getting available services: {e}")
             services = ["WEB_RADIO", "PLAYLISTS"]
 
-        # Add Media Servers/UPNP if discovered by Volumio
         if any(label in ("MEDIA_SERVERS", "UPNP") for label in services):
             if "MEDIA_SERVERS" not in services:
                 services.append("MEDIA_SERVERS")
-
         if "CONFIG" not in services:
             services.append("CONFIG")
 
@@ -196,7 +209,6 @@ class MenuManager:
                 y_adjustment = -5 if actual_index == self.current_selection_index else 0
                 base_image.paste(icon, (x, y_position + y_adjustment))
 
-                # --- Multi-line label logic ---
                 label = self.label_map.get(item, item.title().replace('_', ' '))
                 font = self.display_manager.fonts.get(
                     self.bold_font_key if actual_index == self.current_selection_index else self.font_key,
@@ -206,9 +218,8 @@ class MenuManager:
 
                 lines = label.split('\n')
                 line_height = font.getsize('A')[1]
-                total_height = line_height * len(lines)
-                # Position first line so the block is vertically centred under the icon
-                text_y = y_position + icon_size + 2 - total_height // 2
+                total_h = line_height * len(lines)
+                text_y = y_position + icon_size + 2 - total_h // 2
 
                 for j, line in enumerate(lines):
                     tw, th = draw_obj.textsize(line, font=font)
@@ -217,7 +228,6 @@ class MenuManager:
 
             base_image = base_image.convert(self.display_manager.oled.mode)
             self.display_manager.oled.display(base_image)
-
 
     def display_menu(self):
         self.draw_menu(offset_x=0)
@@ -231,8 +241,166 @@ class MenuManager:
             self.window_start_index = max(len(items) - window_size, 0)
         return items[self.window_start_index: self.window_start_index + window_size]
 
+    # ---------------- NEW: centralised list view ----------------
+
+    def show_list(self, title, items, on_select=None, on_back=None):
+        self.active_view = "list"
+        self.list_title = title or ""
+        self.list_items = [{
+            "label": it.get("title") or it.get("label") or "Untitled",
+            "type": (it.get("type") or "").lower(),
+            "uri": it.get("uri"),
+            **it
+        } for it in (items or [])]
+        self.list_index = 0
+        self.list_offset = 0
+        self.on_list_select = on_select
+        self.on_list_back = on_back
+        self._render_list()
+
+    def _list_set_bounds(self):
+        total = len(self.list_items)
+        if total <= 0:
+            self.list_index = 0
+            self.list_offset = 0
+            return
+        self.list_index = max(0, min(self.list_index, total - 1))
+        if total <= self.list_page_size:
+            self.list_offset = 0
+            return
+        if self.list_index <= 1:
+            self.list_offset = 0
+        elif self.list_index >= total - 2:
+            self.list_offset = total - self.list_page_size
+        else:
+            self.list_offset = self.list_index - 1
+
+    def _render_list(self):
+        w, h = self.display_manager.oled.size
+        img = Image.new("RGB", (w, h), "black")
+        draw = ImageDraw.Draw(img)
+        font = self.display_manager.fonts.get(self.font_key, ImageFont.load_default())
+        font_bold = self.display_manager.fonts.get(self.bold_font_key, font)
+        th = self._list_theme()
+
+        margin = th["margin"]
+        y_offset = th.get("y_offset", 0)
+
+        # --- Title position (explicit) ---
+        title_y = max(0, margin + th.get("title_offset", 0) + y_offset)
+
+        # Draw title and compute a reliable height (ascent + descent)
+        title_h = 0
+        if self.list_title:
+            draw.text((margin, title_y), self.list_title, font=font_bold, fill=th["text"])
+            try:
+                ascent, descent = font_bold.getmetrics()
+                title_h = ascent + descent
+            except Exception:
+                # Fallback for fonts without getmetrics
+                _, title_h = self._text_wh(draw, self.list_title, font_bold)
+
+            # Divider directly under the title
+            div_y = title_y + title_h
+            draw.line((margin, div_y, w - margin, div_y), fill=th["divider_colour"], width=1)
+
+            # Rows start AFTER title + divider + header_gap
+            rows_y = div_y + th.get("header_gap", 0)
+        else:
+            rows_y = title_y  # no title, rows start at top area
+
+        # --- the rest of your row rendering (unchanged) ---
+        total = len(self.list_items)
+        self._list_set_bounds()
+        start = self.list_offset
+        end = min(start + self.list_page_size, total)
+        visible = self.list_items[start:end]
+
+        if total <= self.list_page_size:
+            focus_row = self.list_index
+        elif self.list_offset == 0:
+            focus_row = min(self.list_index, 1)
+        elif self.list_offset == total - self.list_page_size:
+            focus_row = self.list_index - self.list_offset
+        else:
+            focus_row = 1
+
+        base_line_h = self._text_wh(draw, "A", font)[1]
+        line_h = base_line_h + th["row_gap"]
+        text_x = margin + 12
+
+        for i, row in enumerate(visible):
+            row_y = rows_y + i * line_h
+            is_focus = (i == focus_row)
+            if is_focus:
+                draw.rectangle((margin - 2, row_y - 1, w - margin + 2, row_y + line_h - 2),
+                            fill=th["focus_bg"])
+
+            chev = th["chevron_focus"] if is_focus else th["chevron_dim"]
+            draw.text((margin, row_y), chev,
+                    font=font_bold if is_focus else font,
+                    fill=th["text"] if is_focus else th["text_dim"])
+
+            label = row.get("label") or row.get("title") or "Untitled"
+            max_w = (w - margin) - text_x
+            label_draw = self._truncate_to_width(draw, label,
+                                                font_bold if is_focus else font, max_w)
+            draw.text((text_x, row_y), label_draw,
+                    font=font_bold if is_focus else font,
+                    fill=th["text"] if is_focus else th["text_dim"])
+
+            if i < len(visible) - 1:
+                dy = row_y + line_h - 1
+                draw.line((margin, dy, w - margin, dy), fill=th["divider_colour"])
+
+        if self.list_offset > 0:
+            draw.text((w - margin - 8, rows_y - 12), "^", font=font, fill=th["text_dim"])
+        if self.list_offset + self.list_page_size < total:
+            draw.text((w - margin - 8, h - margin - 12), "v", font=font, fill=th["text_dim"])
+
+        self.display_manager.oled.display(img)
+
+
+    def _scroll_list(self, delta):
+        if not self.list_items:
+            return
+        self.list_index = max(0, min(self.list_index + delta, len(self.list_items) - 1))
+        self._render_list()
+
+    def _select_list_item(self):
+        if not self.list_items:
+            return
+        item = self.list_items[self.list_index]
+
+        if (item.get("type") == "back") or (str(item.get("label", "")).strip().lower() == "back"):
+            if callable(self.on_list_back):
+                try:
+                    self.on_list_back()
+                except Exception as e:
+                    self.logger.exception("on_list_back failed: %s", e)
+            return
+
+        if callable(self.on_list_select):
+            try:
+                self.on_list_select(item)
+            except Exception as e:
+                self.logger.exception("on_list_select failed: %s", e)
+
+    def scroll_list(self, delta: int):
+        self._scroll_list(delta)
+
+    def select_current_in_list(self):
+        self._select_list_item()
+
+    # ---------------- input routing (legacy-safe) ----------------
+
     def scroll_selection(self, direction):
-        if not self.is_active or not self.current_menu_items:
+        if not self.is_active:
+            return
+        if self.active_view == "list":
+            self._scroll_list(direction)
+            return
+        if not self.current_menu_items:
             return
         next_index = self.current_selection_index + direction
         next_index = max(0, min(next_index, len(self.current_menu_items) - 1))
@@ -241,7 +409,12 @@ class MenuManager:
         self.display_menu()
 
     def select_item(self):
-        if not self.is_active or not self.current_menu_items:
+        if not self.is_active:
+            return
+        if self.active_view == "list":
+            self._select_list_item()
+            return
+        if not self.current_menu_items:
             return
         selected = self.current_menu_items[self.current_selection_index]
         self.logger.info(f"MenuManager: Selected menu item: {selected}")
@@ -258,14 +431,12 @@ class MenuManager:
             self.mode_manager.to_playlists()
         elif key == "CONFIG":
             self.mode_manager.to_configmenu()
-            
         elif key == "TIDAL":
             self.mode_manager.trigger("to_streaming", service_name="tidal", start_uri="tidal://")
         elif key == "QOBUZ":
             self.mode_manager.trigger("to_streaming", service_name="qobuz", start_uri="qobuz://")
         elif key == "SPOTIFY":
             self.mode_manager.trigger("to_streaming", service_name="spotify", start_uri="spotify://")
-
         elif key in ["RADIO_PARADISE", "RADIO-P"]:
             self.mode_manager.to_radioparadise()
         elif key in ["MOTHEREARTH", "MOTHER-E"]:
@@ -276,7 +447,7 @@ class MenuManager:
             self.mode_manager.to_artists()
         elif key == "GENRES":
             self.mode_manager.to_genres()
-        elif key in "FAVORITES":
+        elif key in ["FAVOURITES", "FAVORITES"]:
             self.mode_manager.to_favourites()
         elif key == "LAST_100":
             self.mode_manager.to_last100()
@@ -285,3 +456,41 @@ class MenuManager:
         else:
             self.logger.warning(f"MenuManager: Unhandled menu selection key '{key}'")
 
+    # ---- list theme ----
+    def _list_theme(self):
+        return {
+            "y_offset": -12,  # shift everything up by 5px
+            "margin": 2,
+            "title_offset": 5,
+            "header_gap": 5,
+            "row_gap": 8,
+            "divider_colour": (40, 40, 40),
+            "focus_bg": (50, 50, 50),
+            "text": (255, 255, 255),
+            "text_dim": (170, 170, 170),
+            "chevron_focus": "›",
+            "chevron_dim": "›",
+        }
+
+
+    def _text_wh(self, draw, text, font):
+        left, top, right, bottom = draw.textbbox((0, 0), text, font=font)
+        return right - left, bottom - top
+
+    def _truncate_to_width(self, draw, text, font, max_w):
+        w, _ = self._text_wh(draw, text, font)
+        if w <= max_w:
+            return text
+        ell = "…"
+        s = text
+        low, high = 0, len(s)
+        while low < high:
+            mid = (low + high) // 2
+            cand = s[:mid] + ell
+            cw, _ = self._text_wh(draw, cand, font)
+            if cw <= max_w:
+                low = mid + 1
+            else:
+                high = mid
+        mid = max(1, low - 1)
+        return s[:mid] + ell

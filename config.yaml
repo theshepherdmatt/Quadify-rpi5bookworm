@@ -50,10 +50,10 @@ display:
       size: 10
     menu_font:
       path: "/home/volumio/Quadify/src/assets/fonts/OpenSans-Regular.ttf"
-      size: 12
+      size: 10
     menu_font_bold:
       path: "/home/volumio/Quadify/src/assets/fonts/OpenSans-Bold.ttf"
-      size: 12
+      size: 10
     clock_large:
       path: "/home/volumio/Quadify/src/assets/fonts/DSEG7Classic-LightItalic.ttf"
       size: 35
