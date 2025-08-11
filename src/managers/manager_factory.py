@@ -136,9 +136,11 @@ class ManagerFactory:
     def create_radio_manager(self):
         from .menus.radio_manager import RadioManager
         return RadioManager(
-            display_manager   = self.display_manager,
-            volumio_listener  = self.volumio_listener,
-            mode_manager      = self.mode_manager
+            display_manager  = self.display_manager,
+            volumio_listener = self.volumio_listener,
+            mode_manager     = self.mode_manager,
+            menu_controller  = self.menu_manager,   # <<< IMPORTANT
+            loading_timeout_s= 6.0
         )
     
     def create_webradio_screen(self):

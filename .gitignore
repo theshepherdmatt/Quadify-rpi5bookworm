@@ -64,3 +64,4 @@ install.log
 # Quadify updater backups & logs
 Quadify_backup_*/
 /var/log/quadify_update.log
+install.log
