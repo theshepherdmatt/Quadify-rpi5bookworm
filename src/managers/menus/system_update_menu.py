@@ -3,7 +3,6 @@
 import logging
 import time
 import subprocess
-from pathlib import Path
 from typing import List, Dict
 
 from PIL import ImageFont
@@ -18,15 +17,12 @@ class SystemUpdateMenu(BaseManager):
       - main
           • Update from GitHub
           • Rollback last update
-          • View last update log
           • Back
       - confirm   (dynamic Yes/No for update or rollback)
-      - view_log  (read-only lines + Back)
     """
 
     UPDATE_SERVICE = ["sudo", "systemctl", "start", "quadify-update.service"]
     ROLLBACK_SCRIPT = "/home/volumio/Quadify/scripts/quadify_rollback.sh"
-    UPDATE_LOG = Path("/var/log/quadify_update.log")
 
     def __init__(self, display_manager, mode_manager, menu_controller=None):
         super().__init__(display_manager, None, mode_manager)
@@ -49,7 +45,7 @@ class SystemUpdateMenu(BaseManager):
         self._last_action = 0.0
         self._debounce = 0.25
 
-        # UI (for splash screens / logs)
+        # UI (for splash screens)
         self.font_key = "menu_font"
         self.font: ImageFont.FreeTypeFont = display_manager.fonts.get(
             self.font_key, ImageFont.load_default()
@@ -94,7 +90,6 @@ class SystemUpdateMenu(BaseManager):
         return {
             "main": "System Update",
             "confirm": "Confirm",
-            "view_log": "Last Update Log",
         }.get(menu_name, "System Update")
 
     def _items_for_menu(self, menu_name: str) -> List[Dict]:
@@ -102,7 +97,6 @@ class SystemUpdateMenu(BaseManager):
             return [
                 {"title": "Update from GitHub",   "type": "action",  "action": "confirm_update"},
                 {"title": "Rollback last update", "type": "action",  "action": "confirm_rollback"},
-                {"title": "View last update log", "type": "action",  "action": "view_log"},
                 {"title": "Back",                 "type": "back"},
             ]
 
@@ -114,12 +108,6 @@ class SystemUpdateMenu(BaseManager):
                 {"title": "No",  "type": "action", "action": "do_confirm_no"},
                 {"title": "Back","type": "back"},
             ]
-
-        if menu_name == "view_log":
-            lines = self._tail_update_log(10)
-            rows = [{"title": ln, "type": "info"} for ln in lines] or [{"title": "No update log found.", "type": "info"}]
-            rows.append({"title": "Back", "type": "back"})
-            return rows
 
         return [{"title": "Back", "type": "back"}]
 
@@ -156,7 +144,6 @@ class SystemUpdateMenu(BaseManager):
         typ = (item.get("type") or "").lower()
         title = item.get("title", "")
         action = item.get("action")
-        # value = item.get("value")  # not used here
 
         if typ in ("info", "message"):
             return
@@ -198,12 +185,6 @@ class SystemUpdateMenu(BaseManager):
                 self._go_to_main()
                 return
 
-            if action == "view_log":
-                self.menu_stack.append({"menu": self.current_menu})
-                self.current_menu = "view_log"
-                self._show_current_menu()
-                return
-
             self.logger.warning("SystemUpdateMenu: Unknown action %r", action)
             return
 
@@ -236,7 +217,7 @@ class SystemUpdateMenu(BaseManager):
             self.logger.info("SystemUpdateMenu: quadify-update.service started.")
         except subprocess.CalledProcessError:
             self.logger.exception("Failed to start update service")
-            self._error("Update failed to start.\nSee the update log.")
+            self._error("Update failed to start.")
             return
 
         self._animate_for_seconds(3.0, base_text="Applying update")
@@ -251,7 +232,7 @@ class SystemUpdateMenu(BaseManager):
             subprocess.run(["bash", self.ROLLBACK_SCRIPT], check=True)
         except subprocess.CalledProcessError:
             self.logger.exception("Rollback script failed")
-            self._error("Rollback failed.\nSee the update log.")
+            self._error("Rollback failed.")
             return
 
         self._animate_for_seconds(2.0, base_text="Restoring backup")
@@ -261,19 +242,8 @@ class SystemUpdateMenu(BaseManager):
         self.stop_mode()
 
     # ------------------------------------------------------------------
-    # Helpers
+    # Splash / notices
     # ------------------------------------------------------------------
-
-    def _tail_update_log(self, n: int) -> List[str]:
-        if self.UPDATE_LOG.exists():
-            try:
-                out = subprocess.check_output(["tail", "-n", str(n), str(self.UPDATE_LOG)], text=True)
-                lines = [ln.rstrip() for ln in out.splitlines()]
-                return lines or ["(log is empty)"]
-            except Exception:
-                self.logger.exception("Failed to read update log")
-                return ["Could not read update log."]
-        return ["No update log found yet."]
 
     def _message_screen(self, text, fill="white"):
         self.display_manager.clear_screen()
