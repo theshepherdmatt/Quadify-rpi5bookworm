@@ -213,8 +213,9 @@ class ManagerFactory:
     def create_display_menu(self):
         from .menus.display_menu import DisplayMenu
         return DisplayMenu(
-            display_manager   = self.display_manager,
-            mode_manager      = self.mode_manager
+            display_manager = self.display_manager,
+            mode_manager    = self.mode_manager,
+            menu_controller = self.menu_manager   # <-- pass the concrete instance
         )
 
     def create_screensaver_menu(self):
