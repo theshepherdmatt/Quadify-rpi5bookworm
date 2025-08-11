@@ -51,7 +51,6 @@ class ManagerFactory:
         # Additional items referenced by new ModeManager states
         config_menu           = self.create_config_menu()
         clock_menu            = self.create_clock_menu()
-        display_menu          = self.create_display_menu()
         screensaver_menu      = self.create_screensaver_menu()
         screensaver           = self.create_screensaver()
         system_info_screen    = self.create_system_info_screen()
@@ -73,7 +72,6 @@ class ManagerFactory:
         self.mode_manager.set_digitalvu_screen(digitalvu_screen)
 
         self.mode_manager.set_clock_menu(clock_menu)
-        self.mode_manager.set_display_menu(display_menu)
         self.mode_manager.set_screensaver_menu(screensaver_menu)
         self.mode_manager.set_screensaver(screensaver)
         self.mode_manager.set_system_info_screen(system_info_screen)
@@ -97,7 +95,8 @@ class ManagerFactory:
         from .menus.config_menu import ConfigMenu
         return ConfigMenu(
             display_manager   = self.display_manager,
-            mode_manager      = self.mode_manager
+            mode_manager      = self.mode_manager,
+            menu_controller   = self.menu_manager 
         )
 
 
@@ -200,14 +199,6 @@ class ManagerFactory:
             display_manager   = self.display_manager,
             mode_manager      = self.mode_manager,
             menu_controller = self.menu_manager
-        )
-
-    def create_display_menu(self):
-        from .menus.display_menu import DisplayMenu
-        return DisplayMenu(
-            display_manager = self.display_manager,
-            mode_manager    = self.mode_manager,
-            menu_controller = self.menu_manager   # <-- pass the concrete instance
         )
 
     def create_screensaver_menu(self):

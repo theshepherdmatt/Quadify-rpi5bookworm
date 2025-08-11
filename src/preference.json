@@ -6,7 +6,7 @@
   "screensaver_enabled": true,
   "screensaver_type": "geo",
   "screensaver_timeout": 3600,
-  "oled_brightness": 150,
+  "oled_brightness": 255,
   "cava_enabled": true,
-  "modern_spectrum_mode": "scope"
+  "modern_spectrum_mode": "bars"
 }

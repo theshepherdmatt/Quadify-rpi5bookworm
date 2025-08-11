@@ -227,31 +227,43 @@ class DisplayMenu(BaseManager):
         if typ == "action":
             if action == "open_clock":
                 self._open_clock_menu()
-            return
-            if action == "toggle_spectrum":
+                return
+
+            elif action == "toggle_spectrum":
                 self._toggle_spectrum()
+                # stay in place to show updated label
+                self._show_current_menu()
+                return
+
             elif action == "set_display_mode":
                 self._handle_display_mode(str(value))
+                self._go_to_main()
+                return
+
             elif action == "set_modern_vu_style":
                 self._handle_modern_vu_style(str(value))
+                self._go_to_main()
+                return
+
             elif action == "set_brightness":
                 self._handle_brightness(str(value))
+                self._go_to_main()
+                return
+
             elif action == "set_screensaver":
                 self._handle_screensaver(str(value))
+                self._go_to_main()
+                return
+
             elif action == "set_screensaver_timer":
                 self._handle_screensaver_timer_value(int(value))
+                self._go_to_main()
+                return
+
             else:
                 self.logger.warning("DisplayMenu: Unknown action %r", action)
-            # After actions, usually bounce back to main
-            if action in {"set_display_mode", "set_modern_vu_style", "set_brightness", "set_screensaver", "set_screensaver_timer"}:
-                self._go_to_main()
-            else:
-                # For toggle_spectrum, stay in place to show updated label
-                self._show_current_menu()
-            return
+                return
 
-        # Unknown item
-        self.logger.warning("DisplayMenu: Unknown item type %r for %r", typ, title)
 
     def back(self):
         if not self.is_active:

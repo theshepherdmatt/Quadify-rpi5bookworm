@@ -118,7 +118,7 @@ class MenuManager:
         self.active_view = "icon"  # ensure we start on the icon-row home
         self.refresh_main_menu()
         if not skip_initial_draw:
-            threading.Thread(target=self.display_menu, daemon=True).start()
+            threading.Thread(target=self.config_menu, daemon=True).start()
 
     def stop_mode(self):
         if not self.is_active:
@@ -229,7 +229,7 @@ class MenuManager:
             base_image = base_image.convert(self.display_manager.oled.mode)
             self.display_manager.oled.display(base_image)
 
-    def display_menu(self):
+    def config_menu(self):
         self.draw_menu(offset_x=0)
 
     def get_visible_window(self, items, window_size):
@@ -406,7 +406,7 @@ class MenuManager:
         next_index = max(0, min(next_index, len(self.current_menu_items) - 1))
         if self.current_menu_items[next_index] != "":
             self.current_selection_index = next_index
-        self.display_menu()
+        self.config_menu()
 
     def select_item(self):
         if not self.is_active:

@@ -153,9 +153,8 @@ class ButtonsLEDController:
     def restart_cava_only(self):
         subprocess.run(["sudo", "systemctl", "restart", "cava"], check=False)
 
-    def restart_quadify_and_cava(self):
+    def restart_quadify_only(self):
         subprocess.run(["sudo", "systemctl", "restart", "quadify"], check=False)
-        subprocess.run(["sudo", "systemctl", "restart", "cava"], check=False)
 
 
     # -----------------------------------------------------------------
@@ -185,8 +184,8 @@ class ButtonsLEDController:
                                 self.logger.info("Button 8 long press (restart CAVA only)")
                                 self.restart_cava_only()
                             else:
-                                self.logger.info("Button 8 short press (restart Quadify and CAVA)")
-                                self.restart_quadify_and_cava()
+                                self.logger.info("Button 8 short press (restart Quadify)")
+                                self.restart_quadify_only()
                             self.light_button_led_for(LED.RELOAD, 0.5)
                             self.button8_pending = False
 

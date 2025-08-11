@@ -104,7 +104,6 @@ class ModeManager:
         self.digitalvu_screen = None
         self.screensaver = None
         self.screensaver_menu = None
-        self.display_menu = None
         self.clock_menu = None
         self.remote_menu = None
         self.system_info_screen = None
@@ -276,9 +275,6 @@ class ModeManager:
     def set_remote_menu(self, remote_menu):
         self.remote_menu = remote_menu
 
-    def set_display_menu(self, display_menu):
-        self.display_menu = display_menu
-
     def set_screensaver(self, screensaver):
         self.screensaver = screensaver
 
@@ -406,8 +402,6 @@ class ModeManager:
             self.clock_menu.stop_mode()
         if self.remote_menu and self.remote_menu.is_active:
             self.remote_menu.stop_mode()
-        if self.display_menu and self.display_menu.is_active:
-            self.display_menu.stop_mode()
         if self.library_manager and self.library_manager.is_active:
             self.library_manager.stop_mode()
         if self.streaming_manager and self.streaming_manager.is_active:
@@ -567,13 +561,13 @@ class ModeManager:
     # --- Menu Managers ---
 
     def enter_configmenu(self, event):
-        self.logger.info("ModeManager: Entering 'configmenu'.")
+        self.logger.info("ModeManager: Entering 'displaymenu'.")
         self.stop_all_screens()
         if self.config_menu:
             self.config_menu.start_mode()
-            self.logger.info("ModeManager: Config menu started.")
+            self.logger.info("ModeManager: display menu started.")
         else:
-            self.logger.warning("ModeManager: No config_menu set.")
+            self.logger.warning("ModeManager: No displaymenu set.")
         self.reset_idle_timer()
         #self.start_menu_inactivity_timer()
         self.update_current_mode()
@@ -607,17 +601,6 @@ class ModeManager:
         self.start_menu_inactivity_timer()
         self.update_current_mode()
 
-    def enter_displaymenu(self, event):
-        self.logger.info("ModeManager: Entering 'displaymenu' state.")
-        self.stop_all_screens()
-        if self.display_menu:
-            self.display_menu.start_mode()
-            self.logger.info("ModeManager: Display menu started.")
-        else:
-            self.logger.warning("ModeManager: No display_menu set.")
-        self.reset_idle_timer()
-        #self.start_menu_inactivity_timer()
-        self.update_current_mode()
 
     def enter_clockmenu(self, event):
         self.logger.info("ModeManager: Entering 'clockmenu' state.")
