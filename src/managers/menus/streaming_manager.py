@@ -24,6 +24,8 @@ class StreamingManager(BaseManager):
         self.service_name = str(service_name or "stream").lower()
         self.root_uri = root_uri
 
+        self.accept_modes = {self.service_name, "streaming"}
+
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(logging.INFO)
         self.logger.info(f"{self.service_name.title()} StreamingManager initialised.")
@@ -77,7 +79,7 @@ class StreamingManager(BaseManager):
         self._cancel_timeout()
 
     def handle_mode_change(self, current_mode: str):
-        if current_mode == self.service_name:
+        if current_mode in self.accept_modes:
             self.start_mode()
         elif self.is_active:
             self.stop_mode()
@@ -261,43 +263,41 @@ class StreamingManager(BaseManager):
 
     # --- Legacy input adapters (keep main.py happy) ---
 
+    def _ensure_active(self):
+        if not self.is_active and getattr(self.mode_manager, "get_mode", None):
+            if self.mode_manager.get_mode() in self.accept_modes:
+                self.start_mode()
+
     def scroll_selection(self, direction: int):
-        if not self.is_active:
+        self._ensure_active()
+        if not self.is_active or not self.menu_controller:
             return
-        mc = self.menu_controller
-        if not mc:
-            return
-        if hasattr(mc, "scroll_list"):
+        if hasattr(self.menu_controller, "scroll_list"):
             try:
-                mc.scroll_list(direction)            # <-- uses list method (no is_active gate)
-                return
+                self.menu_controller.scroll_list(direction); return
             except Exception:
                 self.logger.exception("scroll_list failed")
-        # fallback, if needed
-        if hasattr(mc, "scroll_selection"):
+        if hasattr(self.menu_controller, "scroll_selection"):
             try:
-                mc.scroll_selection(direction)
+                self.menu_controller.scroll_selection(direction)
             except Exception:
                 self.logger.exception("scroll_selection failed")
 
     def select_item(self):
-        if not self.is_active:
+        self._ensure_active()
+        if not self.is_active or not self.menu_controller:
             return
-        mc = self.menu_controller
-        if not mc:
-            return
-        if hasattr(mc, "select_current_in_list"):
+        if hasattr(self.menu_controller, "select_current_in_list"):
             try:
-                mc.select_current_in_list()          # <-- uses list method (no is_active gate)
-                return
+                self.menu_controller.select_current_in_list(); return
             except Exception:
                 self.logger.exception("select_current_in_list failed")
-        # fallback, if needed
-        if hasattr(mc, "select_item"):
+        if hasattr(self.menu_controller, "select_item"):
             try:
-                mc.select_item()
+                self.menu_controller.select_item()
             except Exception:
                 self.logger.exception("select_item failed")
+
 
 
     def display_menu(self):

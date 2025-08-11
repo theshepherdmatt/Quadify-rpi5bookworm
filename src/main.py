@@ -3,6 +3,7 @@
 
 import RPi.GPIO as GPIO
 GPIO.setwarnings(False)
+
 import time
 import threading
 import logging
@@ -11,7 +12,6 @@ import socket
 import subprocess
 import lirc
 import os
-import glob
 import sys
 from PIL import Image, ImageSequence
 
@@ -24,7 +24,6 @@ from display.screens.modern_screen import ModernScreen
 from display.screens.minimal_screen import MinimalScreen
 from display.screens.vu_screen import VUScreen
 from display.screens.digitalvu_screen import DigitalVUScreen
-from display.screens.system_info_screen import SystemInfoScreen
 from display.screensavers.snake_screensaver import SnakeScreensaver
 from display.screensavers.geo_screensaver import GeoScreensaver
 from display.screensavers.bouncing_text_screensaver import BouncingTextScreensaver
@@ -35,6 +34,9 @@ from managers.manager_factory import ManagerFactory
 from controls.rotary_control import RotaryControl
 from network.volumio_listener import VolumioListener
 from assets.images.convert2 import main as convert_icons_main
+
+
+# --------------------------- config / util ---------------------------
 
 def load_config(config_path='/config.yaml'):
     abs_path = os.path.abspath(config_path)
@@ -51,7 +53,7 @@ def load_config(config_path='/config.yaml'):
     else:
         logging.warning(f"Config file {config_path} not found. Using default configuration.")
     return config
-    
+
 
 def show_gif_loop(gif_path, stop_condition, display_manager, logger):
     """Displays an animated GIF in a loop until stop_condition() returns True."""
@@ -71,10 +73,13 @@ def show_gif_loop(gif_path, stop_condition, display_manager, logger):
                 return
             background = Image.new(display_manager.oled.mode, required_size)
             frame_converted = frame.convert(display_manager.oled.mode)
-            background.paste(frame_converted, (0,0))
+            background.paste(frame_converted, (0, 0))
             display_manager.oled.display(background)
             frame_duration = frame.info.get('duration', 100) / 1000.0
             time.sleep(frame_duration)
+
+
+# --------------------------- main ---------------------------
 
 def main():
     # --- Logging ---
@@ -92,18 +97,20 @@ def main():
     display_config = config.get('display', {})
 
     # --- DisplayManager ---
-    display_manager = DisplayManager(display_config)   
+    display_manager = DisplayManager(display_config)
 
+    # --- LEDs controller ---
     buttons_leds = ButtonsLEDController()
     buttons_leds.start()
 
+    # Convert / ensure menu icons exist
     convert_icons_main()
- 
-    import smbus2
 
-    MCP23017_ADDRESS = 0x20
-    MCP23017_GPIOA   = 0x12
+    # Turn off LED8 (if present on MCP23017)
     try:
+        import smbus2
+        MCP23017_ADDRESS = 0x20
+        MCP23017_GPIOA = 0x12
         bus = smbus2.SMBus(1)
         current = bus.read_byte_data(MCP23017_ADDRESS, MCP23017_GPIOA)
         bus.write_byte_data(MCP23017_ADDRESS, MCP23017_GPIOA, current & 0b11111110)
@@ -118,180 +125,240 @@ def main():
     display_manager.clear_screen()
     logger.info("Screen cleared after logo display.")
 
-    # --- Readiness GIF Threads/Events ---
+    # --- Ready/loading orchestration ---
     volumio_ready_event = threading.Event()
     min_loading_event = threading.Event()
     ready_stop_event = threading.Event()
     MIN_LOADING_DURATION = 6  # seconds
 
-    # --- VolumioListener, Button, Rotary, etc ---
+    # --- VolumioListener (early) ---
     volumio_cfg = config.get('volumio', {})
     volumio_host = volumio_cfg.get('host', 'localhost')
     volumio_port = volumio_cfg.get('port', 3000)
 
-    # --- START VolumioListener EARLY with DummyModeManager for ready loop exit --- #
     class DummyModeManager:
         def __init__(self):
             self.last_state = None
-        def get_mode(self): return None
-        def trigger(self, event): pass
+
+        def get_mode(self):
+            return None
+
+        def trigger(self, event):
+            pass
+
         def process_state_change(self, sender, state, **kwargs):
-            # Just buffer the last state seen
             self.last_state = state
 
     dummy_mode_manager = DummyModeManager()
     volumio_listener = VolumioListener(host=volumio_host, port=volumio_port)
     volumio_listener.mode_manager = dummy_mode_manager
 
-    # --- Setup RotaryControl for early ready exit --- #
+    # --- Rotary (early) to exit ready loop ---
     def on_button_press_inner():
         if not ready_stop_event.is_set():
             ready_stop_event.set()
-    def on_long_press():
-        pass
-    def on_rotate(direction):
-        pass
 
     rotary_control = RotaryControl(
-        rotation_callback=on_rotate,
+        rotation_callback=lambda d: None,
         button_callback=on_button_press_inner,
-        long_press_callback=on_long_press,
+        long_press_callback=lambda: None,
         long_press_threshold=2.5
     )
     threading.Thread(target=rotary_control.start, daemon=True).start()
 
-    # --- Command socket server for remote control: START EARLY ---
-    def quadify_command_server(mode_manager, volumio_listener, display_manager, buttons_leds):
-        sock_path = "/tmp/quadify.sock"
-        try:
-            os.remove(sock_path)
-        except OSError:
-            pass
+    def is_streaming_mode(mode: str) -> bool:
+        result = mode in ("streaming", "tidal", "qobuz", "spotify")
+        logger.debug(f"is_streaming_mode({mode}) -> {result}")
+        return result
 
-        server_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        server_socket.bind(sock_path)
-        server_socket.listen(1)
-        print(f"Quadify command server listening on {sock_path}")
+    def handle_scroll(direction: int, mode_manager: ModeManager):
+        current_mode = mode_manager.get_mode()
+        logger.debug(f"[IR] handle_scroll(direction={direction}) in mode '{current_mode}'")
+        # Playback screens adjust volume by rotary only (IR arrows map to list scrolling)
+        if current_mode == 'menu':
+            logger.debug("[IR] Scroll -> menu manager")
+            mode_manager.menu_manager.scroll_selection(direction)
+        elif current_mode == 'configmenu':
+            logger.debug("[IR] Scroll -> config menu")
+            mode_manager.config_menu.scroll_selection(direction)
+        elif current_mode == 'systemupdate':
+            logger.debug("[IR] Scroll -> system update menu")
+            mode_manager.system_update_menu.scroll_selection(direction)
+        elif current_mode == 'clockmenu':
+            logger.debug("[IR] Scroll -> clock menu")
+            mode_manager.clock_menu.scroll_selection(direction)
+        elif current_mode == 'screensavermenu':
+            logger.debug("[IR] Scroll -> screensaver menu")
+            mode_manager.screensaver_menu.scroll_selection(direction)
+        elif current_mode == 'radio':
+            logger.debug("[IR] Scroll -> radio manager")
+            mode_manager.radio_manager.scroll_selection(direction)
+        elif current_mode in (
+            'library', 'albums', 'artists', 'genres',
+            'last100', 'mediaservers', 'favourites', 'playlists',
+            'motherearthradio', 'radioparadise'
+        ):
+            logger.debug("[IR] Scroll -> library manager")
+            mode_manager.library_manager.scroll_selection(direction)
+        elif is_streaming_mode(current_mode):
+            logger.debug(f"[IR] Scroll -> streaming manager ({current_mode})")
+            mode_manager.streaming_manager.scroll_selection(direction)
+        elif current_mode == 'screensaver':
+            logger.debug("[IR] Scroll -> exit screensaver")
+            mode_manager.exit_screensaver()
+        else:
+            logger.debug("[IR] Scroll -> no action for this mode")
 
-        select_mapping = {
-            "menu": lambda: mode_manager.menu_manager.select_item(),
-            "library": lambda: mode_manager.library_manager.select_item(),
-            "streaming": lambda: mode_manager.streaming_manager.select_item(),
-            "radio": lambda: mode_manager.radio_manager.select_item(),
+    def handle_select(mode_manager: ModeManager):
+        current_mode = mode_manager.get_mode()
+        logger.debug(f"[IR] handle_select() in mode '{current_mode}'")
 
-            "playlists": lambda: mode_manager.playlist_manager.select_item(),
-            "configmenu": lambda: mode_manager.config_menu.select_item(),
-            "clockmenu": lambda: mode_manager.clock_menu.select_item(),
-            "systemupdate": lambda: mode_manager.system_update_menu.select_item(),
-            "screensavermenu": lambda: mode_manager.screensaver_menu.select_item(),
-            "systeminfo": lambda: mode_manager.system_info_screen.select_item(),
+        if current_mode == 'menu':
+            logger.debug("[IR] Select -> menu manager")
+            mode_manager.menu_manager.select_item()
+            return
+        if current_mode == 'configmenu':
+            logger.debug("[IR] Select -> config menu")
+            mode_manager.config_menu.select_item()
+            return
+        if current_mode == 'systemupdate':
+            logger.debug("[IR] Select -> system update menu")
+            mode_manager.system_update_menu.select_item()
+            return
+        if current_mode == 'screensavermenu':
+            logger.debug("[IR] Select -> screensaver menu")
+            mode_manager.screensaver_menu.select_item()
+            return
+        if current_mode == 'clockmenu':
+            logger.debug("[IR] Select -> clock menu")
+            mode_manager.clock_menu.select_item()
+            return
+        if current_mode in (
+            'library', 'albums', 'artists', 'genres',
+            'last100', 'mediaservers', 'favourites', 'playlists',
+            'motherearthradio', 'radioparadise'
+        ):
+            logger.debug("[IR] Select -> library manager")
+            mode_manager.library_manager.select_item()
+            return
+        if is_streaming_mode(current_mode):
+            logger.debug(f"[IR] Select -> streaming manager ({current_mode})")
+            mode_manager.streaming_manager.select_item()
+            return
+        if current_mode == 'radio':
+            logger.debug("[IR] Select -> radio manager")
+            mode_manager.radio_manager.select_item()
+            return
+
+        playback_screen_mapping = {
+            'original': 'original_screen',
+            'modern': 'modern_screen',
+            'minimal': 'minimal_screen',
+            'vuscreen': 'vu_screen',
+            'digitalvuscreen': 'digitalvu_screen',
         }
+        if current_mode in playback_screen_mapping:
+            screen = getattr(mode_manager, playback_screen_mapping[current_mode], None)
+            if screen:
+                logger.debug(f"[IR] Select -> toggle playback ({current_mode})")
+                screen.toggle_play_pause()
+            return
+        if current_mode == 'clock':
+            logger.debug("[IR] Select -> to menu")
+            mode_manager.trigger("to_menu")
+            return
+        if current_mode == 'screensaver':
+            logger.debug("[IR] Select -> exit screensaver")
+            mode_manager.exit_screensaver()
+            return
 
-        scroll_mapping = {
-            "scroll_up": {
-                "library": lambda: mode_manager.library_manager.scroll_selection(-1),
-                "radio": lambda: mode_manager.radio_manager.scroll_selection(-1),
-                "streaming": lambda: mode_manager.streaming_manager.scroll_selection(-1),
-                "configmenu": lambda: mode_manager.config_menu.scroll_selection(-1),
-                "clockmenu": lambda: mode_manager.clock_menu.scroll_selection(-1),
-                "systemupdate": lambda: mode_manager.system_update_menu.scroll_selection(-1),
-                "screensavermenu": lambda: mode_manager.screensaver_menu.scroll_selection(-1),
-                "systeminfo": lambda: mode_manager.system_info_screen.scroll_selection(-1),
-            },
-            "scroll_down": {
-                "library": lambda: mode_manager.library_manager.scroll_selection(1),
-                "radio": lambda: mode_manager.radio_manager.scroll_selection(1),
-                "streaming": lambda: mode_manager.streaming_manager.scroll_selection(1),
-                "configmenu": lambda: mode_manager.config_menu.scroll_selection(1),
-                "clockmenu": lambda: mode_manager.clock_menu.scroll_selection(1),
-                "systemupdate": lambda: mode_manager.system_update_menu.scroll_selection(1),
-                "screensavermenu": lambda: mode_manager.screensaver_menu.scroll_selection(1),
-                "systeminfo": lambda: mode_manager.system_info_screen.scroll_selection(1),
-            }
-        }
+    # --------------------- IR command socket server ---------------------
 
-        while True:
+    def make_command_server(mode_manager: ModeManager):
+        """
+        Build a command server bound to /tmp/quadify.sock that uses the unified
+        handlers so streaming lists behave like library lists for IR.
+        """
+
+        def server():
+            sock_path = "/tmp/quadify.sock"
             try:
-                conn, _ = server_socket.accept()
-                with conn:
-                    data = conn.recv(1024)
-                    if not data:
-                        continue
-                    command = data.decode("utf-8").strip()
-                    print(f"Command received: {command}")
-                    current_mode = mode_manager.get_mode()
+                os.remove(sock_path)
+            except OSError:
+                pass
 
-                    # --- Early ready loop exit from any "menu", "select", "ok", "toggle" etc ---
-                    if not ready_stop_event.is_set() and command in ["menu", "select", "ok", "toggle"]:
-                        print("Exiting ready GIF due to remote control command.")
-                        ready_stop_event.set()
-                        continue
+            server_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            server_socket.bind(sock_path)
+            server_socket.listen(1)
+            print(f"Quadify command server listening on {sock_path}")
 
-                    if command == "home":
-                        mode_manager.trigger("to_clock")
-                    elif command == "shutdown":
-                        shutdown_system(display_manager, None, mode_manager)
-                    elif command == "menu":
-                        if current_mode == "clock":
-                            mode_manager.trigger("to_menu")
-                    elif command == "toggle":
-                        mode_manager.toggle_play_pause()
-                    elif command == "repeat":
-                        print("Repeat command received. (Implement as needed)")
-                    elif command == "select":
-                        if current_mode in select_mapping:
-                            select_mapping[current_mode]()
-                        else:
-                            print(f"No select mapping for mode: {current_mode}")
-                    elif command in ["scroll_up", "scroll_down"]:
-                        if current_mode in scroll_mapping[command]:
-                            scroll_mapping[command][current_mode]()
-                        else:
-                            print(f"No scroll mapping for command: {command} in mode: {current_mode}")
-                    elif command == "scroll_left":
-                        if current_mode in ["menu", "configmenu"]:
-                            active_menu = mode_manager.menu_manager if current_mode == "menu" else mode_manager.config_menu
-                            active_menu.scroll_selection(-1)
-                        else:
-                            print(f"No mapping for scroll_left in mode: {current_mode}")
-                    elif command == "scroll_right":
-                        if current_mode in ["menu", "configmenu"]:
-                            active_menu = mode_manager.menu_manager if current_mode == "menu" else mode_manager.config_menu
-                            active_menu.scroll_selection(1)
-                        else:
-                            print(f"No mapping for scroll_right in mode: {current_mode}")
-                    elif command == "seek_plus":
-                        print("Seeking forward 10 seconds.")
-                        subprocess.run(["volumio", "seek", "plus"], check=False)
-                    elif command == "seek_minus":
-                        print("Seeking backward 10 seconds.")
-                        subprocess.run(["volumio", "seek", "minus"], check=False)
-                    elif command == "skip_next":
-                        print("Skipping to next track.")
-                        subprocess.run(["volumio", "next"], check=False)
-                    elif command == "skip_previous":
-                        print("Skipping to previous track.")
-                        subprocess.run(["volumio", "previous"], check=False)
-                    elif command == "volume_plus":
-                        volumio_listener.increase_volume()
-                    elif command == "volume_minus":
-                        volumio_listener.decrease_volume()
-                    elif command == "back":
-                        mode_manager.trigger("back")
-                    else:
-                        print(f"No mapping for command: {command}")
-            except Exception as e:
-                print(f"Error in command server: {e}")
+            while True:
+                try:
+                    conn, _ = server_socket.accept()
+                    with conn:
+                        data = conn.recv(1024)
+                        if not data:
+                            continue
+                        command = data.decode("utf-8").strip()
+                        print(f"Command received: {command}")
+                        current_mode = mode_manager.get_mode()
 
-    # --- Start early for ready loop UX ---
-    threading.Thread(
-        target=quadify_command_server,
-        args=(dummy_mode_manager, volumio_listener, display_manager, buttons_leds),
-        daemon=True
-    ).start()
+                        # Exit ready loop early on user commands
+                        if not ready_stop_event.is_set() and command in ("menu", "select", "ok", "toggle"):
+                            print("Exiting ready GIF due to remote control command.")
+                            ready_stop_event.set()
+                            continue
+
+                        if command == "home":
+                            mode_manager.trigger("to_clock")
+                        elif command == "shutdown":
+                            shutdown_system(display_manager, None, mode_manager)
+                        elif command == "menu":
+                            if current_mode == "clock":
+                                mode_manager.trigger("to_menu")
+                        elif command == "toggle":
+                            # Toggle only makes sense on playback screens
+                            mode_manager.toggle_play_pause()
+                        elif command == "repeat":
+                            print("Repeat command received. (Implement as needed)")
+
+                        elif command == "select":
+                            handle_select(mode_manager)
+
+                        elif command in ("scroll_up", "scroll_left"):
+                            handle_scroll(-1, mode_manager)
+                        elif command in ("scroll_down", "scroll_right"):
+                            handle_scroll(+1, mode_manager)
+
+                        elif command == "seek_plus":
+                            subprocess.run(["volumio", "seek", "plus"], check=False)
+                        elif command == "seek_minus":
+                            subprocess.run(["volumio", "seek", "minus"], check=False)
+                        elif command == "skip_next":
+                            subprocess.run(["volumio", "next"], check=False)
+                        elif command == "skip_previous":
+                            subprocess.run(["volumio", "previous"], check=False)
+                        elif command == "volume_plus":
+                            volumio_listener.increase_volume()
+                        elif command == "volume_minus":
+                            volumio_listener.decrease_volume()
+                        elif command == "back":
+                            mode_manager.trigger("back")
+                        else:
+                            print(f"No mapping for command: {command}")
+
+                except Exception as e:
+                    print(f"Error in command server: {e}")
+
+        t = threading.Thread(target=server, daemon=True)
+        t.start()
+        return t
+
+    # Start early command server with dummy manager (for ready exit + basic commands)
+    make_command_server(dummy_mode_manager)
     print("Quadify command server thread (early) started.")
 
-    # --- Loading GIF thread ---
+    # --- Loading GIF during boot ---
     def show_loading():
         loading_gif_path = display_config.get('loading_gif_path', 'loading.gif')
         try:
@@ -317,7 +384,7 @@ def main():
 
     threading.Thread(target=show_loading, daemon=True).start()
 
-    # Minimum loading duration
+    # Minimum loading duration timer
     def set_min_loading_event():
         time.sleep(MIN_LOADING_DURATION)
         min_loading_event.set()
@@ -329,7 +396,6 @@ def main():
         logger.info(f"[on_state_changed] State: {state!r}")
         status = str(state.get('status', '???')).lower()
         logger.info(f"[on_state_changed] Detected status: {status}")
-        # Buffer state in dummy mode manager for handoff after ready loop
         if hasattr(volumio_listener.mode_manager, "process_state_change"):
             volumio_listener.mode_manager.process_state_change(sender, state)
         if not ready_stop_event.is_set() and status == 'play':
@@ -341,13 +407,12 @@ def main():
     volumio_listener.state_changed.connect(on_state_changed)
     logger.info("Bound on_state_changed to volumio_listener.state_changed")
 
-    # --- Wait for both loading events then run Ready GIF ---
+    # Wait for readiness then show ready loop
     logger.info("Waiting for Volumio readiness & min load time.")
     volumio_ready_event.wait()
     min_loading_event.wait()
     logger.info("Volumio is ready & min loading time passed, proceeding to ready GIF.")
 
-    # --- Ready loop that waits for button/remote/playback to set ready_stop_event ---
     def show_ready_gif_until_event(stop_event, gif_path):
         try:
             image = Image.open(gif_path)
@@ -373,7 +438,7 @@ def main():
     ready_stop_event.wait()
     logger.info("Ready GIF exited, continuing to UI startup.")
 
-    # --- Now the main UI, ModeManager, screens, etc ---
+    # --- Build full UI stack ---
     clock_config = config.get('clock', {})
     clock = Clock(display_manager, clock_config, volumio_listener)
     clock.logger = logging.getLogger("Clock")
@@ -397,12 +462,12 @@ def main():
     volumio_listener.mode_manager = mode_manager
     volumio_listener.menu_manager = mode_manager.menu_manager
 
-    # --- Handoff buffered state from DummyModeManager if available ---
-    if hasattr(dummy_mode_manager, 'last_state') and dummy_mode_manager.last_state:
+    # Handoff last early state if any
+    if getattr(dummy_mode_manager, 'last_state', None):
         logger.info("Handing off last Volumio state from DummyModeManager to real ModeManager")
         mode_manager.process_state_change(volumio_listener, dummy_mode_manager.last_state)
-        status = dummy_mode_manager.last_state.get("status", "").lower()
-        service = dummy_mode_manager.last_state.get("service", "").lower()
+        status = (dummy_mode_manager.last_state.get("status") or "").lower()
+        service = (dummy_mode_manager.last_state.get("service") or "").lower()
         display_mode = mode_manager.config.get("display_mode", "original")
 
         if status == "play":
@@ -423,139 +488,45 @@ def main():
         else:
             mode_manager.trigger("to_menu")
 
-
-    # --- Restart command server with full manager for runtime control ---
-    threading.Thread(
-        target=quadify_command_server,
-        args=(mode_manager, volumio_listener, display_manager, buttons_leds),
-        daemon=True
-    ).start()
+    # Start the real command server bound to the real mode_manager
+    make_command_server(mode_manager)
     print("Quadify command server thread (UI) started.")
 
-    # --- UI input handlers ---
+    # --- Rotary handlers (use same unified handlers) ---
     def on_rotate_ui(direction):
         current_mode = mode_manager.get_mode()
+
+        # Playback screens use rotary for volume
         if current_mode == 'original':
             volume_change = 40 if direction == 1 else -40
             mode_manager.original_screen.adjust_volume(volume_change)
-        elif current_mode == 'modern':
+            return
+        if current_mode == 'modern':
             volume_change = 10 if direction == 1 else -20
             mode_manager.modern_screen.adjust_volume(volume_change)
-            logger.debug(f"ModernScreen: Adjusted volume by {volume_change}")
-        elif current_mode == 'minimal':
+            return
+        if current_mode == 'minimal':
             volume_change = 10 if direction == 1 else -20
             mode_manager.minimal_screen.adjust_volume(volume_change)
-        elif current_mode == 'vuscreen':
+            return
+        if current_mode == 'vuscreen':
             volume_change = 10 if direction == 1 else -20
             mode_manager.vu_screen.adjust_volume(volume_change)
-            logger.debug(f"VUScreen: Adjusted volume by {volume_change}")
-        elif current_mode == 'digitalvuscreen':
+            return
+        if current_mode == 'digitalvuscreen':
             volume_change = 10 if direction == 1 else -20
             mode_manager.digitalvu_screen.adjust_volume(volume_change)
-            logger.debug(f"DigitalVUScreen: Adjusted volume by {volume_change}")
-        elif current_mode == 'webradio':
+            return
+        if current_mode == 'webradio':
             volume_change = 10 if direction == 1 else -20
             mode_manager.webradio_screen.adjust_volume(volume_change)
-            logger.debug(f"WebRadioScreen: Adjusted volume by {volume_change}")
-        elif current_mode == 'menu':
-            mode_manager.menu_manager.scroll_selection(direction)
-            logger.debug(f"Scrolled menu with direction: {direction}")
-        elif current_mode == 'configmenu':
-            mode_manager.config_menu.scroll_selection(direction)
-        elif current_mode == 'systemupdate':
-            mode_manager.system_update_menu.scroll_selection(direction)
-        elif current_mode == 'screensaver':
-            mode_manager.exit_screensaver()
-        elif current_mode == 'clockmenu':
-            mode_manager.clock_menu.scroll_selection(direction)
-        elif current_mode == 'screensavermenu':
-            mode_manager.screensaver_menu.scroll_selection(direction)
-        elif current_mode == 'streaming':
-            mode_manager.streaming_manager.scroll_selection(direction)
-        elif current_mode == 'playlists':
-            mode_manager.library_manager.scroll_selection(direction)
-        elif current_mode == 'radio':
-            mode_manager.radio_manager.scroll_selection(direction)
-        elif current_mode == 'motherearthradio':
-            mode_manager.library_manager.scroll_selection(direction)
-        elif current_mode == 'radioparadise':
-            mode_manager.library_manager.scroll_selection(direction)
-        elif current_mode == 'library':
-            mode_manager.library_manager.scroll_selection(direction)
-        elif current_mode == 'internal':
-            mode_manager.library_manager.scroll_selection(direction)
-        elif current_mode == 'usblibrary':
-            mode_manager.library_manager.scroll_selection(direction)
-        elif current_mode == 'albums':
-            mode_manager.library_manager.scroll_selection(direction)
-        elif current_mode == 'artists':
-            mode_manager.library_manager.scroll_selection(direction)
-        elif current_mode == 'genres':
-            mode_manager.library_manager.scroll_selection(direction)
-        elif current_mode == 'last100':
-            mode_manager.library_manager.scroll_selection(direction)
-        elif current_mode == 'mediaservers':
-            mode_manager.library_manager.scroll_selection(direction)
-        elif current_mode == 'favourites':
-            mode_manager.library_manager.scroll_selection(direction)
-        else:
-            logger.warning(f"Unhandled mode: {current_mode}; no rotary action performed.")
+            return
+
+        # All list-type modes (menu, library, streaming, etc.)
+        handle_scroll(direction, mode_manager)
 
     def on_button_press_ui():
-        current_mode = mode_manager.get_mode()
-
-        # Map menu modes to their select_item functions
-        menu_select_mapping = {
-            'menu': mode_manager.menu_manager.select_item,
-            'configmenu': mode_manager.config_menu.select_item,
-            'systemupdate': mode_manager.system_update_menu.select_item,
-            'screensavermenu': mode_manager.screensaver_menu.select_item,
-            'clockmenu': mode_manager.clock_menu.select_item,
-
-            'streaming': mode_manager.streaming_manager.select_item,
-            'radio': mode_manager.radio_manager.select_item,
- 
-            'library': mode_manager.library_manager.select_item,
-            'internal': mode_manager.library_manager.select_item,
-            'radiomanager': mode_manager.library_manager.select_item,
-            'motherearthradio': mode_manager.library_manager.select_item,
-            'radioparadise': mode_manager.library_manager.select_item,
-            'playlists': mode_manager.library_manager.select_item,
-            'albums': mode_manager.library_manager.select_item,
-            'genres': mode_manager.library_manager.select_item,
-            'artists': mode_manager.library_manager.select_item,
-            'favourites': mode_manager.library_manager.select_item,
-            'mediaservers': mode_manager.library_manager.select_item,
-            'last100': mode_manager.library_manager.select_item,
-
-            # Add any other menu/submenu modes here as needed
-        }
-
-        # Map playback modes to their corresponding screen attribute names
-        playback_screen_mapping = {
-            'original': 'original_screen',
-            'modern': 'modern_screen',
-            'minimal': 'minimal_screen',
-            'vuscreen': 'vu_screen',
-            'digitalvuscreen': 'digitalvu_screen',
-        }
-
-        if current_mode in menu_select_mapping:
-            menu_select_mapping[current_mode]()
-        elif current_mode == 'clock':
-            mode_manager.trigger("to_menu")
-        elif current_mode in playback_screen_mapping:
-            screen = getattr(mode_manager, playback_screen_mapping[current_mode], None)
-            if screen:
-                logger.info(f"Button pressed in {current_mode} mode; toggling playback.")
-                screen.toggle_play_pause()
-            else:
-                logger.warning(f"No screen instance found for mode: {current_mode}")
-        elif current_mode == 'screensaver':
-            mode_manager.exit_screensaver()
-        else:
-            logger.warning(f"Unhandled mode: {current_mode}; no button action performed.")
-
+        handle_select(mode_manager)
 
     def on_long_press_ui():
         current_mode = mode_manager.get_mode()
@@ -584,6 +555,7 @@ def main():
         clock.stop()
         display_manager.clear_screen()
         logger.info("Quadify shut down gracefully.")
+
 
 if __name__ == "__main__":
     main()

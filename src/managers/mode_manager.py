@@ -29,7 +29,6 @@ class ModeManager:
         {'name': 'minimal',         'on_enter': 'enter_minimal'},
         {'name': 'vuscreen',        'on_enter': 'enter_vuscreen'},
         {'name': 'digitalvuscreen', 'on_enter': 'enter_digitalvuscreen'},
-        {'name': 'systeminfo',      'on_enter': 'enter_systeminfo'},
         {'name': 'configmenu',      'on_enter': 'enter_configmenu'},
         {'name': 'systemupdate',    'on_enter': 'enter_systemupdate'},
         {'name': 'menu',            'on_enter': 'enter_menu'},
@@ -45,8 +44,6 @@ class ModeManager:
         {'name': 'radio',           'on_enter': 'enter_radio'},
 
         {'name': 'library',         'on_enter': 'enter_library'},
-        {'name': 'internal',         'on_enter': 'enter_internal'},
-        {'name': 'usblibrary',      'on_enter': 'enter_usb_library'},
         {'name': 'artists',          'on_enter': 'enter_artists'},
         {'name': 'albums',          'on_enter': 'enter_albums'},
         {'name': 'genres',          'on_enter': 'enter_genres'},
@@ -105,8 +102,6 @@ class ModeManager:
         self.screensaver = None
         self.screensaver_menu = None
         self.clock_menu = None
-        self.remote_menu = None
-        self.system_info_screen = None
         self.system_update_menu = None
         self.radio_manager = None
 
@@ -146,10 +141,9 @@ class ModeManager:
         self.menu_inactivity_timer = None
         self.menu_inactivity_timeout = 15  # seconds; change as needed
         self.menu_modes = {
-            "menu", "playlists", "tidal", "qobuz", "library", "internal", "usblibrary",
-            "configmenu", "displaymenu", "clockmenu", "remotemenu",
+            "menu", "playlists", "tidal", "qobuz", "library", "configmenu", "clockmenu", 
             "radio", "motherearthradio", "radioparadise",
-            "systeminfo", "systemupdate", "spotify", "webradio", "airplay"
+            "systemupdate", "spotify", "webradio", "airplay"
         }
 
 
@@ -272,17 +266,11 @@ class ModeManager:
     def set_clock_menu(self, clock_menu):
         self.clock_menu = clock_menu
 
-    def set_remote_menu(self, remote_menu):
-        self.remote_menu = remote_menu
-
     def set_screensaver(self, screensaver):
         self.screensaver = screensaver
 
     def set_screensaver_menu(self, screensaver_menu):
         self.screensaver_menu = screensaver_menu
-
-    def set_system_info_screen(self, system_info_screen):
-        self.system_info_screen = system_info_screen
 
     def set_system_update_menu(self, system_update_menu):
         self.system_update_menu = system_update_menu
@@ -347,7 +335,6 @@ class ModeManager:
         self.machine.add_transition('to_modern',       source='*', dest='modern', before='push_current_state')
         self.machine.add_transition('to_minimal',      source='*', dest='minimal', before='push_current_state')
         self.machine.add_transition('to_vuscreen',     source='*', dest='vuscreen', before='push_current_state')
-        self.machine.add_transition('to_systeminfo',   source='*', dest='systeminfo', before='push_current_state')
         self.machine.add_transition('to_systemupdate', source='*', dest='systemupdate', before='push_current_state')
         self.machine.add_transition('to_radio',        source='*', dest='radio', before='push_current_state')
         self.machine.add_transition('to_menu',         source='*', dest='menu', before='push_current_state')
@@ -359,8 +346,6 @@ class ModeManager:
         self.machine.add_transition('to_radioparadise', source='*', dest='radioparadise', before='push_current_state')  
 
         self.machine.add_transition('to_library',      source='*', dest='library', before='push_current_state')
-        self.machine.add_transition('to_internal',     source='*', dest='internal', before='push_current_state')
-        self.machine.add_transition('to_usb_library',  source='*', dest='usblibrary', before='push_current_state')
         self.machine.add_transition('to_albums',        source='*', dest='albums', before='push_current_state')
         self.machine.add_transition('to_artists',       source='*', dest='artists', before='push_current_state')
         self.machine.add_transition('to_genres',        source='*', dest='genres', before='push_current_state')
@@ -400,8 +385,6 @@ class ModeManager:
             self.config_menu.stop_mode()
         if self.clock_menu and self.clock_menu.is_active:
             self.clock_menu.stop_mode()
-        if self.remote_menu and self.remote_menu.is_active:
-            self.remote_menu.stop_mode()
         if self.library_manager and self.library_manager.is_active:
             self.library_manager.stop_mode()
         if self.streaming_manager and self.streaming_manager.is_active:
@@ -423,13 +406,11 @@ class ModeManager:
             self.webradio_screen.stop_mode()
         if self.airplay_screen and self.airplay_screen.is_active:
             self.airplay_screen.stop_mode()
-        if self.system_info_screen and self.system_info_screen.is_active:
-            self.system_info_screen.stop_mode()
         if self.system_update_menu and self.system_update_menu.is_active:
             self.system_update_menu.stop_mode()
             
     def start_menu_inactivity_timer(self):
-        if self.get_mode() in ["library", "usblibrary", "internal", "tidal", "qobuz", "spotify"]:
+        if self.get_mode() in ["library", "tidal", "qobuz", "spotify"]:
             self.logger.debug("ModeManager: Inactivity timer skipped for '%s' mode.", self.get_mode())
             return
 
@@ -545,19 +526,7 @@ class ModeManager:
             self.logger.warning("ModeManager: No airplay_screen set.")
         self.update_current_mode()
         self.cancel_menu_inactivity_timer()  # No timeout on clock
-
-    def enter_systeminfo(self, event):
-        self.logger.info("ModeManager: Entering 'systeminfo' mode.")
-        self.stop_all_screens()
-        if self.system_info_screen:
-            self.system_info_screen.start_mode()
-            self.logger.info("ModeManager: SystemInfoScreen started.")
-        else:
-            self.logger.warning("ModeManager: No system_info_screen set.")
-        self.reset_idle_timer()
-        self.start_menu_inactivity_timer()
-        self.update_current_mode()
-        
+      
     # --- Menu Managers ---
 
     def enter_configmenu(self, event):
@@ -643,8 +612,20 @@ class ModeManager:
     def enter_streaming(self, event):
         self.logger.info("ModeManager: Entering 'streaming' state.")
         self.stop_all_screens()
-        service_name = event.kwargs.get('service_name')
-        start_uri = event.kwargs.get('start_uri')
+
+        # Log and normalise inputs
+        self.logger.debug(f"enter_streaming kwargs: {getattr(event, 'kwargs', {})}")
+        service_name = (event.kwargs.get('service_name') or 'streaming').lower()
+        start_uri    = event.kwargs.get('start_uri') or f"{service_name}://"
+
+        # If we’re re-entering streaming, clean up the old instance
+        try:
+            if getattr(self, "streaming_manager", None):
+                self.streaming_manager.stop_mode()
+        except Exception:
+            self.logger.exception("Stopping previous StreamingManager failed (safe to ignore)")
+
+        # Spin up the manager
         self.streaming_manager = StreamingManager(
             self.display_manager,
             self.volumio_listener,
@@ -652,10 +633,13 @@ class ModeManager:
             service_name=service_name,
             root_uri=start_uri
         )
+
         self.streaming_manager.start_mode()
-        self.logger.info(f"ModeManager: StreamingManager started for {service_name}.")
+        self.logger.info(f"ModeManager: StreamingManager started for {service_name} (uri={start_uri}).")
+
         self.reset_idle_timer()
         self.update_current_mode()
+
 
     def enter_library(self, event):
         self.logger.info("ModeManager: Entering 'library' state.")
@@ -944,7 +928,6 @@ class ModeManager:
                 "screensavermenu": self.to_screensavermenu,
                 "displaymenu": self.to_displaymenu,
                 "clockmenu": self.to_clockmenu,
-                "remotemenu": self.to_remotemenu,
                 "configmenu": self.to_configmenu,
                 "original": self.to_original,
                 "modern": self.to_modern,
@@ -956,13 +939,10 @@ class ModeManager:
                 "playlists": self.to_playlists,
                 "library": self.to_library,
                 "streaming": self.to_streaming,
-                "internal": self.to_internal,
-                "usblibrary": self.to_usb_library,
                 "webradio": self.to_webradio,
                 "airplay": self.to_airplay,
                 "motherearthradio": self.to_motherearthradio,
                 "radioparadise": self.to_radioparadise,
-                "systeminfo": self.to_systeminfo,
                 "systemupdate": self.to_systemupdate,
                 "boot": self.to_boot
             }
