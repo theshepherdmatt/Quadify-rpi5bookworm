@@ -240,9 +240,9 @@ enable_gpio_ir() {
   echo "2) GPIO 20"
   echo "3) GPIO 21"
   echo "4) GPIO 23"
-  echo "5) GPIO 26 (Default)"
-  echo "6) GPIO 27"
-  read -p "Enter your choice (1-6) [Default 5]: " gpio_choice
+  echo "5) GPIO 26"
+  echo "6) GPIO 27 (Default)"
+  read -p "Enter your choice (1-6) [Default 6]: " gpio_choice
   case "$gpio_choice" in
     1) selected_gpio=19 ;; 2) selected_gpio=20 ;; 3) selected_gpio=21 ;;
     4) selected_gpio=23 ;; 6) selected_gpio=27 ;; *) selected_gpio=26 ;;
