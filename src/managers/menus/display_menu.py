@@ -116,6 +116,7 @@ class DisplayMenu(BaseManager):
         if menu_name == "main":
             return [
                 {"title": "Display Modes", "type": "submenu", "submenu": "display_modes"},
+                {"title": "Clock",         "type": "action",  "action": "open_clock"},
                 {"title": "Brightness",    "type": "submenu", "submenu": "brightness"},
                 {"title": "Screensaver",   "type": "submenu", "submenu": "screensaver"},
                 {"title": "Back",          "type": "back"},
@@ -224,6 +225,9 @@ class DisplayMenu(BaseManager):
             return
 
         if typ == "action":
+            if action == "open_clock":
+                self._open_clock_menu()
+            return
             if action == "toggle_spectrum":
                 self._toggle_spectrum()
             elif action == "set_display_mode":
@@ -268,6 +272,36 @@ class DisplayMenu(BaseManager):
     # ------------------------------------------------------------------
     # Actions (business logic)
     # ------------------------------------------------------------------
+
+    def _open_clock_menu(self):
+        """
+        Hand off to ClockMenu (clock_menu.py). Prefer ModeManager transition
+        if present; otherwise start the clock_menu instance directly.
+        """
+        self.logger.info("DisplayMenu: Opening Clock menu...")
+        # Stop ourselves for a clean handoff
+        self.stop_mode()
+
+        # Preferred: FSM transition if your ModeManager defines it
+        to_clock = getattr(self.mode_manager, "to_clockmenu", None)
+        if callable(to_clock):
+            try:
+                to_clock()
+                return
+            except Exception as e:
+                self.logger.exception("DisplayMenu: to_clockmenu() failed: %s", e)
+
+        # Fallback: call the instance directly if it exists
+        clock_menu = getattr(self.mode_manager, "clock_menu", None)
+        if clock_menu and hasattr(clock_menu, "start_mode"):
+            try:
+                clock_menu.start_mode()
+                return
+            except Exception as e:
+                self.logger.exception("DisplayMenu: clock_menu.start_mode() failed: %s", e)
+
+        self.logger.warning("DisplayMenu: ClockMenu not available on ModeManager.")
+
 
     def _toggle_spectrum(self):
         self.spectrum_enabled = not self.spectrum_enabled

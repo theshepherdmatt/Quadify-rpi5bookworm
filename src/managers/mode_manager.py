@@ -575,7 +575,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No config_menu set.")
         self.reset_idle_timer()
-        self.start_menu_inactivity_timer()
+        #self.start_menu_inactivity_timer()
         self.update_current_mode()
 
     def exit_screensaver(self):
@@ -616,7 +616,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No display_menu set.")
         self.reset_idle_timer()
-        self.start_menu_inactivity_timer()
+        #self.start_menu_inactivity_timer()
         self.update_current_mode()
 
     def enter_clockmenu(self, event):
@@ -627,18 +627,6 @@ class ModeManager:
             self.logger.info("ModeManager: Clock menu started.")
         else:
             self.logger.warning("ModeManager: No clock_menu set.")
-        self.reset_idle_timer()
-        self.start_menu_inactivity_timer()
-        self.update_current_mode()
-
-    def enter_remotemenu(self, event):
-        self.logger.info("ModeManager: Entering 'remotemenu' state.")
-        self.stop_all_screens()
-        if self.remote_menu:
-            self.remote_menu.start_mode()
-            self.logger.info("ModeManager: Remote menu started.")
-        else:
-            self.logger.warning("ModeManager: No remote_menu set.")
         self.reset_idle_timer()
         self.start_menu_inactivity_timer()
         self.update_current_mode()

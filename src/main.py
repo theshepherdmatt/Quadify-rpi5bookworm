@@ -181,7 +181,6 @@ def main():
 
             "playlists": lambda: mode_manager.playlist_manager.select_item(),
             "configmenu": lambda: mode_manager.config_menu.select_item(),
-            "remotemenu": lambda: mode_manager.remote_menu.select_item(),
             "displaymenu": lambda: mode_manager.display_menu.select_item(),
             "clockmenu": lambda: mode_manager.clock_menu.select_item(),
             "systemupdate": lambda: mode_manager.system_update_menu.select_item(),
@@ -195,7 +194,6 @@ def main():
                 "radio": lambda: mode_manager.radio_manager.scroll_selection(-1),
                 "streaming": lambda: mode_manager.streaming_manager.scroll_selection(-1),
                 "configmenu": lambda: mode_manager.config_menu.scroll_selection(-1),
-                "remotemenu": lambda: mode_manager.remote_menu.scroll_selection(-1),
                 "displaymenu": lambda: mode_manager.display_menu.scroll_selection(-1),
                 "clockmenu": lambda: mode_manager.clock_menu.scroll_selection(-1),
                 "systemupdate": lambda: mode_manager.system_update_menu.scroll_selection(-1),
@@ -207,7 +205,6 @@ def main():
                 "radio": lambda: mode_manager.radio_manager.scroll_selection(1),
                 "streaming": lambda: mode_manager.streaming_manager.scroll_selection(1),
                 "configmenu": lambda: mode_manager.config_menu.scroll_selection(1),
-                "remotemenu": lambda: mode_manager.remote_menu.scroll_selection(1),
                 "displaymenu": lambda: mode_manager.display_menu.scroll_selection(1),
                 "clockmenu": lambda: mode_manager.clock_menu.scroll_selection(1),
                 "systemupdate": lambda: mode_manager.system_update_menu.scroll_selection(1),
@@ -474,8 +471,6 @@ def main():
             mode_manager.exit_screensaver()
         elif current_mode == 'clockmenu':
             mode_manager.clock_menu.scroll_selection(direction)
-        elif current_mode == 'remotemenu':
-            mode_manager.remote_menu.scroll_selection(direction)
         elif current_mode == 'screensavermenu':
             mode_manager.screensaver_menu.scroll_selection(direction)
         elif current_mode == 'displaymenu':
@@ -521,7 +516,6 @@ def main():
             'systemupdate': mode_manager.system_update_menu.select_item,
             'screensavermenu': mode_manager.screensaver_menu.select_item,
             'clockmenu': mode_manager.clock_menu.select_item,
-            'remotemenu': mode_manager.remote_menu.select_item,
             'displaymenu': mode_manager.display_menu.select_item,
 
             'streaming': mode_manager.streaming_manager.select_item,

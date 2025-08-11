@@ -27,7 +27,6 @@ class ConfigMenu(BaseManager):
         # Define config menu items
         self.menu_items = [
             "Display",
-            "Clock",
             "System",
             "Update",
             "Back"
@@ -37,7 +36,6 @@ class ConfigMenu(BaseManager):
         # The keys for display_manager.icons should match your asset names.
         self.icons = {
             "Display": self.display_manager.icons.get("displaysettings"),
-            "Clock": self.display_manager.icons.get("clocksettings"),
             "System": self.display_manager.icons.get("systeminfo"),
             "Update": self.display_manager.icons.get("systemupdate"),
             "Back": self.display_manager.icons.get("back")  # Use an appropriate icon
@@ -162,14 +160,10 @@ class ConfigMenu(BaseManager):
         # Trigger the corresponding mode change
         if selected == "Display":
             self.mode_manager.to_displaymenu()
-        elif selected == "Clock":
-            self.mode_manager.to_clockmenu()
         elif selected == "System":
             self.mode_manager.to_systeminfo()
         elif selected == "Update":
             self.mode_manager.to_systemupdate()
-        elif selected == "IRremote":
-            self.mode_manager.to_remotemenu()
         elif selected == "Back":
             self.mode_manager.to_menu()
         else:
