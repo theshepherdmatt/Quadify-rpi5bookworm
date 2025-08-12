@@ -751,6 +751,49 @@ class ModeManager:
         self.reset_idle_timer()
         self.update_current_mode()
 
+    def enter_radioparadise(self, event):
+        self.logger.info("ModeManager: Entering 'radioparadise' state.")
+        self.stop_all_screens()
+        self.streaming_manager = StreamingManager(
+            self.display_manager,
+            self.volumio_listener,
+            self,
+            service_name='radioparadise',
+            root_uri='rparadise',
+            loading_timeout_s=15  # RP can be slow
+        )
+        self.streaming_manager.start_mode()
+        self.logger.info("ModeManager: StreamingManager started for Radio Paradise.")
+        self.reset_idle_timer()
+        self.update_current_mode()
+
+
+    def enter_motherearthradio(self, event):
+        self.logger.info("ModeManager: Entering 'motherearthradio' state.")
+        self.stop_all_screens()
+
+        # Clean up any previous streaming manager
+        try:
+            if getattr(self, "streaming_manager", None):
+                self.streaming_manager.stop_mode()
+        except Exception:
+            self.logger.exception("Stopping previous StreamingManager failed (safe to ignore)")
+
+        # Mother Earth Radio root is 'mer'
+        self.streaming_manager = StreamingManager(
+            self.display_manager,
+            self.volumio_listener,
+            self,
+            service_name="motherearthradio",
+            root_uri="mer",
+        )
+        self.streaming_manager.start_mode()
+        self.logger.info("ModeManager: StreamingManager started for Mother Earth Radio (uri=mer).")
+
+        self.reset_idle_timer()
+        self.update_current_mode()
+
+
 
     # --- Playback / Volumio State Handling ---
     def process_state_change(self, sender, state, **kwargs):

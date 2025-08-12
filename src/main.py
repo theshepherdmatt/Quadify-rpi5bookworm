@@ -167,7 +167,7 @@ def main():
     threading.Thread(target=rotary_control.start, daemon=True).start()
 
     def is_streaming_mode(mode: str) -> bool:
-        result = mode in ("streaming", "tidal", "qobuz", "spotify")
+        result = mode in ("streaming", "tidal", "qobuz", "spotify", "radioparadise", "motherearthradio")
         logger.debug(f"is_streaming_mode({mode}) -> {result}")
         return result
 
@@ -195,8 +195,7 @@ def main():
             mode_manager.radio_manager.scroll_selection(direction)
         elif current_mode in (
             'library', 'albums', 'artists', 'genres',
-            'last100', 'mediaservers', 'favourites', 'playlists',
-            'motherearthradio', 'radioparadise'
+            'last100', 'mediaservers', 'favourites', 'playlists'
         ):
             logger.debug("[IR] Scroll -> library manager")
             mode_manager.library_manager.scroll_selection(direction)
@@ -235,8 +234,7 @@ def main():
             return
         if current_mode in (
             'library', 'albums', 'artists', 'genres',
-            'last100', 'mediaservers', 'favourites', 'playlists',
-            'motherearthradio', 'radioparadise'
+            'last100', 'mediaservers', 'favourites', 'playlists'
         ):
             logger.debug("[IR] Select -> library manager")
             mode_manager.library_manager.select_item()

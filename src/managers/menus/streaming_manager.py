@@ -99,13 +99,43 @@ class StreamingManager(BaseManager):
         else:
             self._show_error_list("Connection Error", "Not connected to Volumio.")
 
+    def _service_aliases(self):
+        s = self.service_name
+        return {s, s.replace("_", ""), s.replace("_", "-")}
+
+    def _uri_looks_like_ours(self, uri: str) -> bool:
+        if not uri:
+            return False
+        root = self.root_uri.split("://", 1)[0] if "://" in self.root_uri else self.root_uri
+        root = (root or "").lower()
+        u = uri.lower()
+        return root and (u.startswith(root) or root in u)
+
     def handle_navigation(self, sender, navigation, service, uri, **kwargs):
         if not self.is_active:
             return
-        if str(service).lower() != self.service_name:
+
+        svc = (service or "").lower()
+        u = (uri or "")
+
+        is_ours = False
+        if svc:
+            is_ours = (svc in self._service_aliases())
+        else:
+            # Fallback when VolumioListener couldn’t identify service (e.g. radio_paradise)
+            is_ours = self._uri_looks_like_ours(u)
+
+        if not is_ours:
+            self.logger.debug(
+                f"Ignoring navigation for service='{service}' uri='{uri}' "
+                f"(expecting {self.service_name} / root '{self.root_uri}')"
+            )
             return
+
         self._cancel_timeout()
         self._update_menu_from_navigation(navigation)
+
+
 
     def _update_menu_from_navigation(self, navigation):
         lists = (navigation or {}).get("lists") or []
@@ -148,6 +178,7 @@ class StreamingManager(BaseManager):
     def _on_list_select(self, item: dict):
         typ = (item.get("type") or "").lower()
         uri = item.get("uri")
+        svc = (item.get("service") or self.service_name or "").lower()
 
         # Ignore purely informational rows
         if typ in ("info", "message"):
@@ -158,18 +189,28 @@ class StreamingManager(BaseManager):
             self.back()
             return
 
-        # Play actions
+        # --- PLAYABLE CASES ---
+        # Normal tracks
         if typ in ("song", "track") or (uri and uri.endswith("/play")):
-            self.play_song(uri)
+            self.play_song(uri, service_override=svc)
             return
 
-        # Drill down (folders/albums/playlists)
+        # Radio Paradise (mywebradio) & generic webradio
+        if typ in ("mywebradio", "webradio", "radio") or (uri and uri.startswith("webrp/")):
+            # RP plugin expects 'radio_paradise' as service key
+            if "radio_paradise" in svc or "radioparadise" in svc or (uri and uri.startswith("webrp/")):
+                self.play_song(uri, service_override="radio_paradise")
+            else:
+                self.play_song(uri, service_override=svc or self.service_name)
+            return
+
+        # --- NAVIGATION (folders/playlists/albums) ---
         if uri:
-            # Push current list for back navigation
             self.menu_stack.append({"items": self.current_menu_items.copy()})
             self._show_loading_list()
             self.fetch_navigation(uri)
             self._arm_timeout()
+
 
     def back(self):
         if self.menu_stack:
@@ -183,14 +224,15 @@ class StreamingManager(BaseManager):
 
     # ---------------- playback/state ----------------
 
-    def play_song(self, uri: Optional[str]):
+    def play_song(self, uri: Optional[str], service_override: Optional[str] = None):
         if not uri:
             return
         if self.volumio_listener.is_connected():
             try:
-                self.logger.info(f"{self.service_name.title()}Manager: replaceAndPlay {uri}")
+                service = (service_override or self.service_name or "").lower()
+                self.logger.info(f"{(service or self.service_name).title()}Manager: replaceAndPlay {uri}")
                 self.volumio_listener.socketIO.emit("replaceAndPlay", {
-                    "item": {"service": self.service_name, "uri": uri}
+                    "item": {"service": service, "uri": uri}
                 })
             except Exception as e:
                 self._show_error_list("Playback Error", str(e))
