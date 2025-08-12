@@ -12,6 +12,7 @@ class VolumioListener:
         Initialize the VolumioListener.
         """
         self.logger = logging.getLogger("VolumioListener")
+
         self.logger.setLevel(logging.DEBUG)  # Set to DEBUG for detailed logs
         self.logger.debug("[VolumioListener] Initializing...")
 
@@ -43,6 +44,7 @@ class VolumioListener:
         # Internal state
         self.current_state = {}
         self.state_lock = threading.Lock()
+        self.current_volume = None 
         self._running = True
         self._reconnect_attempt = 1
 
@@ -225,6 +227,10 @@ class VolumioListener:
         chosen_uri = tracked_uri or event_uri
         chosen_service = tracked_service or self.get_service_from_uri(chosen_uri)
 
+        if not chosen_service:
+            # Fallback: derive from payload items (helps dynamic/unknown plugins)
+            chosen_service = self._infer_service_from_navigation(navigation)
+
         self.logger.debug(f"[VolumioListener] Using URI: {chosen_uri}, Service: {chosen_service}")
 
         # Emit one generic navigation signal that includes what manager(s) need
@@ -283,12 +289,17 @@ class VolumioListener:
         if u.startswith("radio/"):
             return 'webradio'
 
-        # Radio Paradise (plugin folder is 'radio_paradise', browse root is typically 'rparadise')
+        # Radio Paradise
         if u in ("rparadise", "radio_paradise", "radio-paradise") or u.startswith("rparadise/"):
             return 'radioparadise'
+        if u.startswith("webrp/"):                
+            return 'radioparadise'                
 
-        if uri in ("mer", "motherearthradio", "mother_earth_radio"):
+        # Mother Earth Radio
+        if u in ("mer", "motherearthradio", "mother_earth_radio"): 
             return "motherearthradio"
+        if u.startswith("webmer/"):                
+            return "motherearthradio"             
 
         if u.startswith("playlists") or u.startswith("playlist://"):
             return 'playlists'
@@ -302,5 +313,21 @@ class VolumioListener:
         self.logger.warning(f"Unrecognized URI scheme: {uri}")
         return None
 
+    def _infer_service_from_navigation(self, navigation):
+        """Best-effort: read 'service' or 'plugin_name' off items in the list."""
+        try:
+            for lst in navigation.get('lists', []):
+                for it in lst.get('items', []):
+                    svc = (it.get('service') or it.get('plugin_name') or '').lower()
+                    if svc:
+                        # normalize a couple of common variants
+                        if svc in ('radio_paradise', 'radio-paradise', 'radioparadise'):
+                            return 'radioparadise'
+                        if svc in ('mother_earth_radio', 'motherearthradio', 'mother-earth-radio'):
+                            return 'motherearthradio'
+                        return svc
+        except Exception:
+            pass
+        return None
 
         

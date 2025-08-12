@@ -1,0 +1,25 @@
+{
+  "icons": {
+    "MUSIC_LIBRARY": {
+      "path": "/home/volumio/Quadify/src/assets/pngs/MUSIC_LIBRARY.png",
+      "source": "http://localhost:3000/albumart?sourceicon=music_service/mpd/musiclibraryicon.png"
+    },
+    "NAS": {
+      "path": "/home/volumio/Quadify/src/assets/pngs/NAS.png",
+      "source": "http://localhost:3000/albumart?cacheid=294&path=&icon=server&metadata=false"
+    },
+    "RADIO_PARADISE": {
+      "path": "/home/volumio/Quadify/src/assets/pngs/RADIO_PARADISE.png",
+      "source": "http://localhost:3000/albumart?sourceicon=music_service/radio_paradise/rp.svg"
+    },
+    "TIDAL": {
+      "path": "/home/volumio/Quadify/src/assets/pngs/TIDAL.png",
+      "source": "http://localhost:3000/albumart?sourceicon=music_service/tidal/icons/tidal-icon.png"
+    },
+    "WEB_RADIO": {
+      "path": "/home/volumio/Quadify/src/assets/pngs/WEB_RADIO.png",
+      "source": "http://localhost:3000/albumart?sourceicon=music_service/webradio/icon.png"
+    }
+  },
+  "size": 50
+}

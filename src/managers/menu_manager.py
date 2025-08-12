@@ -1,3 +1,5 @@
+# src/managers/menu_manager.py
+
 import logging
 import threading
 import time
@@ -14,9 +16,9 @@ class MenuManager:
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(logging.INFO)
 
-        # --- existing icon-row state ---
+        # --- icon-row (home) state ---
         self.menu_stack = []
-        self.current_menu_items = []
+        self.current_menu_items = []          # list[str] of labels
         self.current_selection_index = 0
         self.window_start_index = 0
         self.is_active = False
@@ -26,17 +28,22 @@ class MenuManager:
         self.bold_font_key = 'menu_font_bold'
         self.lock = threading.Lock()
 
-        # --- NEW: centralised list view state ---
-        self.active_view = "icon"  # "icon" | "list"
+        # NEW: discovered services metadata
+        # label -> { name, plugin, uri, albumart, icon_url, label }
+        self.services_by_label = {}
+        self.discovered_order = []            # preserve order from discovery
+
+        # --- centralised list view (for managers) ---
+        self.active_view = "icon"             # "icon" | "list"
         self.list_title = ""
-        self.list_items = []        # list of dicts: {"label","type","uri", ...}
-        self.list_index = 0         # absolute selection
-        self.list_offset = 0        # first visible row
-        self.list_page_size = 3     # tuned for small OLEDs
-        self.on_list_select = None  # callbacks set by feature managers
+        self.list_items = []                  # list[dict]: {"label","type","uri", ...}
+        self.list_index = 0
+        self.list_offset = 0
+        self.list_page_size = 3               # tuned for small OLEDs
+        self.on_list_select = None
         self.on_list_back = None
 
-        # Menu label mapping for display
+        # Display label mapping
         self.label_map = {
             "MUSIC_LIBRARY": "Library",
             "ARTISTS": "Artists",
@@ -52,20 +59,18 @@ class MenuManager:
             "PLAYLISTS": "Playlists",
             "SPOTIFY": "Spotify",
             "QOBUZ": "Qobuz",
-            "MOTHEREARTH": "Mother\nEarth",
+            "MOTHER_EARTH_RADIO": "Mother\nEarth",
             "FAVOURITES": "Favourites",
             "LAST_100": "Last 100",
             "MEDIA_SERVERS": "Media\nServers",
             "UPNP": "UPnP",
         }
 
-        # Static icon fallbacks
+        # Static icon fallbacks (keys here are labels)
         self.static_icons = {
             "STREAM": self.display_manager.icons.get("stream"),
             "LIBRARY": self.display_manager.icons.get("library"),
             "RADIO": self.display_manager.icons.get("webradio"),
-            "RADIO_PARADISE": self.display_manager.icons.get("radio_paradise"),
-            "MOTHEREARTH": self.display_manager.icons.get("motherearthradio"),
             "PLAYLISTS": self.display_manager.icons.get("playlists"),
             "TIDAL": self.display_manager.icons.get("tidal"),
             "QOBUZ": self.display_manager.icons.get("qobuz"),
@@ -76,12 +81,11 @@ class MenuManager:
             "CONFIG": self.display_manager.icons.get("config"),
             "ORIGINAL": self.display_manager.icons.get("display"),
             "MODERN": self.display_manager.icons.get("display"),
-            # "FAVOURITES": self.display_manager.icons.get("star"),
             "LAST_100": self.display_manager.icons.get("history"),
             "MEDIA_SERVERS": self.display_manager.icons.get("mediaservers"),
         }
 
-        # Load PNG icon cache
+        # Load cached PNG icons (produced by your icon fetcher)
         self.icon_cache = {}
         self.local_icon_dir = '/home/volumio/Quadify/src/assets/pngs'
         for icon_path in glob.glob(os.path.join(self.local_icon_dir, '*.png')):
@@ -93,7 +97,7 @@ class MenuManager:
             except Exception as e:
                 self.logger.warning(f"Failed to load local icon {icon_path}: {e}")
 
-        # Remap fallbacks
+        # Remap fallbacks to friendly keys
         if "LIBRARY" not in self.icon_cache and "MUSIC_LIBRARY" in self.icon_cache:
             self.icon_cache["LIBRARY"] = self.icon_cache["MUSIC_LIBRARY"]
         if "RADIO" not in self.icon_cache and "WEB_RADIO" in self.icon_cache:
@@ -115,10 +119,11 @@ class MenuManager:
 
     def start_mode(self, skip_initial_draw=False):
         self.is_active = True
-        self.active_view = "icon"  # ensure we start on the icon-row home
+        self.active_view = "icon"
         self.refresh_main_menu()
         if not skip_initial_draw:
-            threading.Thread(target=self.config_menu, daemon=True).start()
+            # draw once in a thread to avoid blocking signal thread
+            threading.Thread(target=self.display_menu, daemon=True).start()
 
     def stop_mode(self):
         if not self.is_active:
@@ -128,33 +133,54 @@ class MenuManager:
             self.display_manager.clear_screen()
         self.logger.info("MenuManager: Stopped menu mode and cleared display.")
 
-    # ---------------- main icon-row menu ----------------
+    # ---------------- discovery -> home menu ----------------
 
     def refresh_main_menu(self):
-        services = []
+        """
+        Rebuilds the home (icon row) from discovered services.
+        Fills self.services_by_label for dynamic routing on select.
+        """
+        services_labels = []
+        self.services_by_label = {}
+        self.discovered_order = []
+
         try:
-            raw_services = get_available_services()
+            raw_services = get_available_services()  # [{name, plugin, uri, icon_url, label, ...}]
             for svc in raw_services:
                 label = self._map_plugin_to_label(svc['name'], svc['plugin'])
-                if label not in services and label not in ("INTERNAL", "NAS", "LIBRARY"):
-                    services.append(label)
+                # Keep a canonical label for lookup/drawing
+                can_label = label.strip().upper()
+                # Skip pure library subentries on the home row
+                if can_label in ("INTERNAL", "NAS", "LIBRARY"):
+                    continue
+                if can_label not in self.services_by_label:
+                    self.services_by_label[can_label] = svc
+                    self.discovered_order.append(can_label)
+                    services_labels.append(can_label)
         except Exception as e:
             self.logger.error(f"Error getting available services: {e}")
-            services = ["WEB_RADIO", "PLAYLISTS"]
+            services_labels = ["WEB_RADIO", "PLAYLISTS"]
 
-        if any(label in ("MEDIA_SERVERS", "UPNP") for label in services):
-            if "MEDIA_SERVERS" not in services:
-                services.append("MEDIA_SERVERS")
-        if "CONFIG" not in services:
-            services.append("CONFIG")
+        # Ensure special groups appear if present
+        if any(lbl in ("MEDIA_SERVERS", "UPNP") for lbl in services_labels):
+            if "MEDIA_SERVERS" not in services_labels:
+                services_labels.append("MEDIA_SERVERS")
 
-        self.current_menu_items = services
+        # Always include config
+        if "CONFIG" not in services_labels:
+            services_labels.append("CONFIG")
+
+        self.current_menu_items = services_labels
         self.current_selection_index = 0
         self.window_start_index = 0
 
     def _map_plugin_to_label(self, name, plugin):
-        plugin = plugin.lower()
-        normalised_name = name.lower().replace(' ', '-')
+        """
+        Convert Volumio {name, plugin} to a stable label used for icons & routing.
+        """
+        plugin = (plugin or "").lower()
+        normalised_name = (name or "").lower().replace(' ', '-')
+
         if plugin == "mpd":
             mapping = {
                 "music-library": "MUSIC_LIBRARY",
@@ -164,21 +190,29 @@ class MenuManager:
                 "nas": "NAS",
                 "usb": "USB",
             }
-            return mapping.get(normalised_name, name.upper().replace(' ', '_'))
+            return mapping.get(normalised_name, (name or "UNKNOWN").upper().replace(' ', '_'))
+
         mapping = {
             "tidal": "TIDAL",
             "qobuz": "QOBUZ",
             "spop": "SPOTIFY",
             "webradio": "WEB_RADIO",
             "radio_paradise": "RADIO_PARADISE",
-            "motherearthradio": "MOTHEREARTH",
+            "motherearthradio": "MOTHER_EARTH_RADIO",
             "playlists": "PLAYLISTS",
             "favourites": "FAVOURITES",
+            "favorites": "FAVOURITES",
             "last_100": "LAST_100",
             "mediaservers": "MEDIA_SERVERS",
             "upnp": "UPNP",
         }
-        return mapping.get(plugin, name.upper().replace(' ', '_'))
+        # Default: use the name as a label (e.g., MIXCLOUD -> MIXCLOUD)
+        return mapping.get(plugin, (name or "UNKNOWN").upper().replace(' ', '_'))
+
+    # ---------------- drawing: home (icon row) ----------------
+
+    def display_menu(self):
+        self.draw_menu(offset_x=0)
 
     def draw_menu(self, offset_x=0):
         with self.lock:
@@ -229,9 +263,6 @@ class MenuManager:
             base_image = base_image.convert(self.display_manager.oled.mode)
             self.display_manager.oled.display(base_image)
 
-    def config_menu(self):
-        self.draw_menu(offset_x=0)
-
     def get_visible_window(self, items, window_size):
         half = window_size // 2
         self.window_start_index = self.current_selection_index - half
@@ -241,7 +272,7 @@ class MenuManager:
             self.window_start_index = max(len(items) - window_size, 0)
         return items[self.window_start_index: self.window_start_index + window_size]
 
-    # ---------------- NEW: centralised list view ----------------
+    # ---------------- central list view (used by feature managers) ----------------
 
     def show_list(self, title, items, on_select=None, on_back=None):
         self.active_view = "list"
@@ -276,90 +307,82 @@ class MenuManager:
             self.list_offset = self.list_index - 1
 
     def _render_list(self):
-        w, h = self.display_manager.oled.size
-        img = Image.new("RGB", (w, h), "black")
-        draw = ImageDraw.Draw(img)
-        font = self.display_manager.fonts.get(self.font_key, ImageFont.load_default())
-        font_bold = self.display_manager.fonts.get(self.bold_font_key, font)
-        th = self._list_theme()
+        with self.lock:
+            w, h = self.display_manager.oled.size
+            img = Image.new("RGB", (w, h), "black")
+            draw = ImageDraw.Draw(img)
+            font = self.display_manager.fonts.get(self.font_key, ImageFont.load_default())
+            font_bold = self.display_manager.fonts.get(self.bold_font_key, font)
+            th = self._list_theme()
 
-        margin = th["margin"]
-        y_offset = th.get("y_offset", 0)
+            margin = th["margin"]
+            y_offset = th.get("y_offset", 0)
 
-        # --- Title position (explicit) ---
-        title_y = max(0, margin + th.get("title_offset", 0) + y_offset)
+            # Title
+            title_y = max(0, margin + th.get("title_offset", 0) + y_offset)
+            title_h = 0
+            if self.list_title:
+                draw.text((margin, title_y), self.list_title, font=font_bold, fill=th["text"])
+                try:
+                    ascent, descent = font_bold.getmetrics()
+                    title_h = ascent + descent
+                except Exception:
+                    _, title_h = self._text_wh(draw, self.list_title, font_bold)
+                div_y = title_y + title_h
+                draw.line((margin, div_y, w - margin, div_y), fill=th["divider_colour"], width=1)
+                rows_y = div_y + th.get("header_gap", 0)
+            else:
+                rows_y = title_y
 
-        # Draw title and compute a reliable height (ascent + descent)
-        title_h = 0
-        if self.list_title:
-            draw.text((margin, title_y), self.list_title, font=font_bold, fill=th["text"])
-            try:
-                ascent, descent = font_bold.getmetrics()
-                title_h = ascent + descent
-            except Exception:
-                # Fallback for fonts without getmetrics
-                _, title_h = self._text_wh(draw, self.list_title, font_bold)
+            # Rows
+            total = len(self.list_items)
+            self._list_set_bounds()
+            start = self.list_offset
+            end = min(start + self.list_page_size, total)
+            visible = self.list_items[start:end]
 
-            # Divider directly under the title
-            div_y = title_y + title_h
-            draw.line((margin, div_y, w - margin, div_y), fill=th["divider_colour"], width=1)
+            if total <= self.list_page_size:
+                focus_row = self.list_index
+            elif self.list_offset == 0:
+                focus_row = min(self.list_index, 1)
+            elif self.list_offset == total - self.list_page_size:
+                focus_row = self.list_index - self.list_offset
+            else:
+                focus_row = 1
 
-            # Rows start AFTER title + divider + header_gap
-            rows_y = div_y + th.get("header_gap", 0)
-        else:
-            rows_y = title_y  # no title, rows start at top area
+            base_line_h = self._text_wh(draw, "A", font)[1]
+            line_h = base_line_h + th["row_gap"]
+            text_x = margin + 12
 
-        # --- the rest of your row rendering (unchanged) ---
-        total = len(self.list_items)
-        self._list_set_bounds()
-        start = self.list_offset
-        end = min(start + self.list_page_size, total)
-        visible = self.list_items[start:end]
+            for i, row in enumerate(visible):
+                row_y = rows_y + i * line_h
+                is_focus = (i == focus_row)
+                if is_focus:
+                    draw.rectangle((margin - 2, row_y - 1, w - margin + 2, row_y + line_h - 2),
+                                   fill=th["focus_bg"])
+                chev = th["chevron_focus"] if is_focus else th["chevron_dim"]
+                draw.text((margin, row_y), chev,
+                          font=font_bold if is_focus else font,
+                          fill=th["text"] if is_focus else th["text_dim"])
 
-        if total <= self.list_page_size:
-            focus_row = self.list_index
-        elif self.list_offset == 0:
-            focus_row = min(self.list_index, 1)
-        elif self.list_offset == total - self.list_page_size:
-            focus_row = self.list_index - self.list_offset
-        else:
-            focus_row = 1
+                label = row.get("label") or row.get("title") or "Untitled"
+                max_w = (w - margin) - text_x
+                label_draw = self._truncate_to_width(draw, label,
+                                                     font_bold if is_focus else font, max_w)
+                draw.text((text_x, row_y), label_draw,
+                          font=font_bold if is_focus else font,
+                          fill=th["text"] if is_focus else th["text_dim"])
 
-        base_line_h = self._text_wh(draw, "A", font)[1]
-        line_h = base_line_h + th["row_gap"]
-        text_x = margin + 12
+                if i < len(visible) - 1:
+                    dy = row_y + line_h - 1
+                    draw.line((margin, dy, w - margin, dy), fill=th["divider_colour"])
 
-        for i, row in enumerate(visible):
-            row_y = rows_y + i * line_h
-            is_focus = (i == focus_row)
-            if is_focus:
-                draw.rectangle((margin - 2, row_y - 1, w - margin + 2, row_y + line_h - 2),
-                            fill=th["focus_bg"])
+            if self.list_offset > 0:
+                draw.text((w - margin - 8, rows_y - 12), "^", font=font, fill=th["text_dim"])
+            if self.list_offset + self.list_page_size < total:
+                draw.text((w - margin - 8, h - margin - 12), "v", font=font, fill=th["text_dim"])
 
-            chev = th["chevron_focus"] if is_focus else th["chevron_dim"]
-            draw.text((margin, row_y), chev,
-                    font=font_bold if is_focus else font,
-                    fill=th["text"] if is_focus else th["text_dim"])
-
-            label = row.get("label") or row.get("title") or "Untitled"
-            max_w = (w - margin) - text_x
-            label_draw = self._truncate_to_width(draw, label,
-                                                font_bold if is_focus else font, max_w)
-            draw.text((text_x, row_y), label_draw,
-                    font=font_bold if is_focus else font,
-                    fill=th["text"] if is_focus else th["text_dim"])
-
-            if i < len(visible) - 1:
-                dy = row_y + line_h - 1
-                draw.line((margin, dy, w - margin, dy), fill=th["divider_colour"])
-
-        if self.list_offset > 0:
-            draw.text((w - margin - 8, rows_y - 12), "^", font=font, fill=th["text_dim"])
-        if self.list_offset + self.list_page_size < total:
-            draw.text((w - margin - 8, h - margin - 12), "v", font=font, fill=th["text_dim"])
-
-        self.display_manager.oled.display(img)
-
+            self.display_manager.oled.display(img)
 
     def _scroll_list(self, delta):
         if not self.list_items:
@@ -406,7 +429,7 @@ class MenuManager:
         next_index = max(0, min(next_index, len(self.current_menu_items) - 1))
         if self.current_menu_items[next_index] != "":
             self.current_selection_index = next_index
-        self.config_menu()
+        self.display_menu()
 
     def select_item(self):
         if not self.is_active:
@@ -421,45 +444,70 @@ class MenuManager:
         threading.Thread(target=self._handle_selection, args=(selected,), daemon=True).start()
 
     def _handle_selection(self, selected_item):
-        time.sleep(0.15)
+        time.sleep(0.15)  # tiny debounce / UX polish
         key = str(selected_item).strip().upper()
-        if key in ["MUSIC_LIBRARY", "LIBRARY"]:
-            self.mode_manager.to_library()
-        elif key == "WEB_RADIO":
-            self.mode_manager.to_radio()
-        elif key == "PLAYLISTS":
-            self.mode_manager.to_playlists()
-        elif key == "CONFIG":
-            self.mode_manager.to_configmenu()
-        elif key == "TIDAL":
-            self.mode_manager.trigger("to_streaming", service_name="tidal", start_uri="tidal://")
-        elif key == "QOBUZ":
-            self.mode_manager.trigger("to_streaming", service_name="qobuz", start_uri="qobuz://")
-        elif key == "SPOTIFY":
-            self.mode_manager.trigger("to_streaming", service_name="spotify", start_uri="spotify://")
-        elif key in ["RADIO_PARADISE", "RADIO-P"]:
-            self.mode_manager.to_radioparadise()
-        elif key in ["MOTHEREARTH", "MOTHER-E"]:
-            self.mode_manager.to_motherearthradio()
-        elif key == "ALBUMS":
-            self.mode_manager.to_albums()
-        elif key == "ARTISTS":
-            self.mode_manager.to_artists()
-        elif key == "GENRES":
-            self.mode_manager.to_genres()
-        elif key in ["FAVOURITES", "FAVORITES"]:
-            self.mode_manager.to_favourites()
-        elif key == "LAST_100":
-            self.mode_manager.to_last100()
-        elif key in ["MEDIA_SERVERS", "UPNP"]:
-            self.mode_manager.to_mediaservers()
-        else:
-            self.logger.warning(f"MenuManager: Unhandled menu selection key '{key}'")
 
-    # ---- list theme ----
+        # Known routes first (fast paths)
+        if key in ["MUSIC_LIBRARY", "LIBRARY"]:
+            self.mode_manager.to_library(); return
+        if key == "WEB_RADIO":
+            self.mode_manager.to_radio(); return
+        if key == "PLAYLISTS":
+            self.mode_manager.to_playlists(); return
+        if key == "CONFIG":
+            self.mode_manager.to_configmenu(); return
+        if key == "TIDAL":
+            self.mode_manager.trigger("to_streaming", service_name="tidal", start_uri="tidal://"); return
+        if key == "QOBUZ":
+            self.mode_manager.trigger("to_streaming", service_name="qobuz", start_uri="qobuz://"); return
+        if key == "SPOTIFY":
+            self.mode_manager.trigger("to_streaming", service_name="spotify", start_uri="spotify://"); return
+        if key in ["RADIO_PARADISE", "RADIO-P"]:
+            self.mode_manager.to_radioparadise(); return
+        if key in ["MOTHEREARTH", "MOTHER-E"]:
+            self.mode_manager.to_motherearthradio(); return
+        if key == "ALBUMS":
+            self.mode_manager.to_albums(); return
+        if key == "ARTISTS":
+            self.mode_manager.to_artists(); return
+        if key == "GENRES":
+            self.mode_manager.to_genres(); return
+        if key in ["FAVOURITES", "FAVORITES"]:
+            self.mode_manager.to_favourites(); return
+        if key == "LAST_100":
+            self.mode_manager.to_last100(); return
+        if key in ["MEDIA_SERVERS", "UPNP"]:
+            self.mode_manager.to_mediaservers(); return
+
+        # Dynamic fallback: open any discovered plugin
+        svc = self.services_by_label.get(key)
+        if not svc:
+            self.logger.warning(f"MenuManager: Unhandled menu selection key '{key}' and no discovered meta.")
+            return
+
+        plugin = (svc.get("plugin") or "").lower()
+        uri = (svc.get("uri") or "").strip()
+
+        # Route common non-streaming plugins
+        if plugin == "webradio":
+            self.mode_manager.to_radio(); return
+        if plugin in ("playlists", "playlist"):
+            self.mode_manager.to_playlists(); return
+        if plugin == "mpd":
+            # Library entries should be opened via the library manager
+            self.mode_manager.to_library(); return
+
+        # Everything else -> generic streaming manager
+        # Choose a sensible start URI:
+        start_uri = uri or f"{plugin}://"
+        self.logger.info(f"MenuManager: Opening dynamic streaming plugin '{plugin}' with start_uri='{start_uri}'")
+        self.mode_manager.trigger("to_streaming", service_name=plugin, start_uri=start_uri)
+
+    # ---- list theme & text helpers ----
+
     def _list_theme(self):
         return {
-            "y_offset": -12,  # shift everything up by 5px
+            "y_offset": -12,
             "margin": 2,
             "title_offset": 5,
             "header_gap": 5,
@@ -471,7 +519,6 @@ class MenuManager:
             "chevron_focus": "›",
             "chevron_dim": "›",
         }
-
 
     def _text_wh(self, draw, text, font):
         left, top, right, bottom = draw.textbbox((0, 0), text, font=font)

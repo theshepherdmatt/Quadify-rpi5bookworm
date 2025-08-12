@@ -122,26 +122,17 @@ display:
   cache_images: true  # Cache frequently used images for faster access
   preload_images:
     - "/home/volumio/Quadify/src/assets/images/menus/webradio.png"
-    - "/home/volumio/Quadify/src/assets/images/menus/radioparadise.png"
-    - "/home/volumio/Quadify/src/assets/images/menus/motherearth.png"
     - "/home/volumio/Quadify/src/assets/images/menus/mpd.png"
-    - "/home/volumio/Quadify/src/assets/images/menus/library.png"
     - "/home/volumio/Quadify/src/assets/images/menus/stream.png"
     - "/home/volumio/Quadify/src/assets/images/menus/tidal.png"
     - "/home/volumio/Quadify/src/assets/images/menus/qobuz.png"
     - "/home/volumio/Quadify/src/assets/images/menus/spop.png"      
-    - "/home/volumio/Quadify/src/assets/images/menus/playlists.png"
     - "/home/volumio/Quadify/src/assets/images/menus/default.png"
     - "/home/volumio/Quadify/src/assets/images/menus/nas.png"
     - "/home/volumio/Quadify/src/assets/images/menus/usb.png"
     - "/home/volumio/Quadify/src/assets/images/menus/volume.png"
     - "/home/volumio/Quadify/src/assets/images/menus/config.png"
     - "/home/volumio/Quadify/src/assets/images/menus/back.png"
-    - "/home/volumio/Quadify/src/assets/images/menus/clocksettings.png"
-    - "/home/volumio/Quadify/src/assets/images/menus/displaysettings.png"
-    - "/home/volumio/Quadify/src/assets/images/menus/systeminfo.png"
-    - "/home/volumio/Quadify/src/assets/images/menus/systemupdate.png"
-    - "/home/volumio/Quadify/src/assets/images/menus/screensaversettings.png"
     - "/home/volumio/Quadify/src/assets/images/menus/airplay.png"
 
 mcp23017_address: 0x20
