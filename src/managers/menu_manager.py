@@ -63,6 +63,7 @@ class MenuManager:
             "FAVOURITES": "Favourites",
             "LAST_100": "Last 100",
             "MEDIA_SERVERS": "Media\nServers",
+            "SOUNDCLOUD": "Sound\nCloud",
             "UPNP": "UPnP",
         }
 

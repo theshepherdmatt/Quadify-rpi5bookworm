@@ -12,6 +12,10 @@
       "path": "/home/volumio/Quadify/src/assets/pngs/RADIO_PARADISE.png",
       "source": "http://localhost:3000/albumart?sourceicon=music_service/radio_paradise/rp.svg"
     },
+    "SOUNDCLOUD": {
+      "path": "/home/volumio/Quadify/src/assets/pngs/SOUNDCLOUD.png",
+      "source": "http://localhost:3000/albumart?sourceicon=music_service/soundcloud/dist/assets/images/soundcloud.png"
+    },
     "TIDAL": {
       "path": "/home/volumio/Quadify/src/assets/pngs/TIDAL.png",
       "source": "http://localhost:3000/albumart?sourceicon=music_service/tidal/icons/tidal-icon.png"
