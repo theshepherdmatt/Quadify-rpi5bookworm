@@ -1,7 +1,3 @@
-Got it — here’s your README cleaned up so it’s **stable-release friendly** and without the update/rollback sections that came from Beta:
-
----
-
 # Quadify
 
 Quadify is a comprehensive toolkit and plugin for integrating advanced audio display and control hardware with your Raspberry Pi audio system. Designed for use with Volumio, Quadify brings new life to classic Quad FM4 tuners and other devices, adding modern features such as OLED displays, rotary encoders, buttons, and LEDs.
