@@ -1,3 +1,7 @@
+Got it — here’s your README cleaned up so it’s **stable-release friendly** and without the update/rollback sections that came from Beta:
+
+---
+
 # Quadify
 
 Quadify is a comprehensive toolkit and plugin for integrating advanced audio display and control hardware with your Raspberry Pi audio system. Designed for use with Volumio, Quadify brings new life to classic Quad FM4 tuners and other devices, adding modern features such as OLED displays, rotary encoders, buttons, and LEDs.
@@ -13,7 +17,7 @@ This repository contains everything you need to add display, button, and rotary 
 * Button and LED input/output
 * Rotary encoder support
 * Modular hardware configuration
-* Easy install scripts and update mechanism
+* Easy install scripts
 
 ## Supported Systems
 
@@ -29,7 +33,6 @@ Supported features include:
 ## Important Notes
 
 * **Stable Release:** This is the main Quadify repository. For the latest features or experimental work, check for a `beta` branch.
-* **Intended for new setups**, but should work for existing Volumio installs.
 * **Back up your data first!**
 * An **active internet connection** is required for installation (to fetch dependencies).
 * Standard Volumio settings are preserved, but you may need to use the Volumio Web UI for some system or audio settings.
@@ -38,9 +41,7 @@ Supported features include:
 
 ## Quick Start
 
-To update or install Quadify safely, follow these steps:
-
-**Download and install the new version**
+**Download and install:**
 
 ```bash
 git clone https://github.com/theshepherdmatt/Quadify.git
@@ -48,32 +49,7 @@ cd Quadify
 sudo bash install.sh
 ```
 
-Follow the on-screen prompts. A reboot may be required after installation (you will be notified if so).
-
----
-
-### After Installing
-
-* **If the new version works:**
-  You can safely remove the backup folder to free up space:
-
-  ```bash
-  sudo rm -rf ../Quadify-old
-  ```
-
-* **If you need to restore your backup:**
-  Stop Quadify (just in case), remove the new folder, and restore the old one:
-
-  ```bash
-  sudo systemctl stop quadify
-  cd ..
-  sudo rm -rf Quadify
-  sudo mv Quadify-old Quadify
-  sudo systemctl start quadify
-  ```
-
-**Tip:**
-Always stop the Quadify service before making changes, and start it again after you’ve finished.
+Follow the on-screen prompts. A reboot may be required after installation.
 
 ---
 
@@ -86,78 +62,39 @@ Always stop the Quadify service before making changes, and start it again after 
 
 ## Debugging and Service Management
 
-If Quadify isn’t working as expected, try the following steps to identify and resolve common issues:
+If Quadify isn’t working as expected, try these steps:
 
-### 1. Restart Quadify Services
-
-Most issues can be fixed by restarting the relevant service. From the terminal:
+**Restart Quadify service:**
 
 ```bash
 sudo systemctl restart quadify
 ```
 
-Or to stop and start manually:
-
-```bash
-sudo systemctl stop quadify
-sudo systemctl start quadify
-```
-
-### 2. Manually Run Quadify
-
-For more detailed error messages or debugging, run Quadify directly and watch the logs:
+**Run Quadify manually for logs:**
 
 ```bash
 cd Quadify/src
 python3 main.py
 ```
 
-Check the output for errors—this can help identify configuration or dependency issues.
-
-### 3. Check Quadify Service Logs
-
-To see the system logs for the Quadify service:
+**View Quadify logs:**
 
 ```bash
 journalctl -u quadify -f
 ```
 
-This will show live logs. For a broader look:
-
-```bash
-journalctl -u quadify
-```
-
-### 4. Check Volumio Logs
-
-Since Quadify integrates tightly with Volumio, check the main Volumio service logs for related errors:
+**View Volumio logs:**
 
 ```bash
 journalctl -u volumio -f
 ```
 
-### 5. Check CAVA Visualiser Service (if using VU Meter)
-
-Some display modes (e.g. the VU Meter) require the CAVA visualiser to be running. To check CAVA’s status:
+**Check CAVA status (for VU Meter mode):**
 
 ```bash
 sudo systemctl status cava
 ```
 
-If it’s not active, start it:
-
-```bash
-sudo systemctl start cava
-```
-
-You can also enable it to start at boot:
-
-```bash
-sudo systemctl enable cava
-```
-
 ---
 
-**If you encounter persistent issues, please open an [Issue](https://github.com/theshepherdmatt/Quadify/issues) with details of your setup and any error messages.**
-
----
+If you encounter persistent issues, please open an [Issue](https://github.com/theshepherdmatt/Quadify/issues) with details of your setup and any error messages.
