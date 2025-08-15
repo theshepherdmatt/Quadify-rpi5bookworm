@@ -1,0 +1,15 @@
+[Unit]
+Description=IR Listener Service for Quadify
+After=network.target
+
+[Service]
+Type=simple
+User=volumio
+WorkingDirectory=/home/volumio/Quadify/src/hardware
+ExecStart=/usr/bin/python3 /home/volumio/Quadify/src/hardware/ir_listener.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+
