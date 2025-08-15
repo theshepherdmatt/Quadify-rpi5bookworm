@@ -40,23 +40,10 @@ Supported features include:
 
 To update or install Quadify safely, follow these steps:
 
-**1. Stop the Quadify service**
+**Download and install the new version**
 
 ```bash
-sudo systemctl stop quadify
-```
-
-**2. (Optional) Back up your current Quadify folder**
-
-```bash
-[ -d Quadify ] && sudo mv Quadify Quadify-old
-```
-
-**3. Download and install the new version**
-
-```bash
-git clone https://github.com/theshepherdmatt/Quadify-Beta.git
-mv Quadify-Beta Quadify
+git clone https://github.com/theshepherdmatt/Quadify.git
 cd Quadify
 sudo bash install.sh
 ```
