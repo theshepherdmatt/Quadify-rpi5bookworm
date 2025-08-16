@@ -544,16 +544,38 @@ def main():
     except KeyboardInterrupt:
         logger.info("Shutting down Quadify via KeyboardInterrupt.")
     finally:
-        buttons_leds.stop()
-        rotary_control.stop()
+        if 'buttons_leds' in locals() and buttons_leds:
+            try:
+                buttons_leds.stop()
+            except Exception as e:
+                logger.warning(f"Error stopping buttons_leds: {e}")
+
+        if 'rotary_control' in locals() and rotary_control:
+            try:
+                rotary_control.stop()
+            except Exception as e:
+                logger.warning(f"Error stopping rotary_control: {e}")
+
         try:
             volumio_listener.stop_listener()
-        except Exception:
-            pass
-        clock.stop()
-        display_manager.clear_screen()
+        except Exception as e:
+            logger.warning(f"Error stopping volumio_listener: {e}")
+
+        if 'clock' in locals() and clock:
+            try:
+                clock.stop()
+            except Exception as e:
+                logger.warning(f"Error stopping clock: {e}")
+
+        if 'display_manager' in locals() and display_manager:
+            try:
+                display_manager.clear_screen()
+            except Exception as e:
+                logger.warning(f"Error clearing display: {e}")
+
         logger.info("Quadify shut down gracefully.")
 
 
 if __name__ == "__main__":
     main()
+
