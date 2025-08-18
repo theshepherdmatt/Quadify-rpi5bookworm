@@ -310,7 +310,9 @@ def main():
                         if command == "home":
                             mode_manager.trigger("to_clock")
                         elif command == "shutdown":
-                            shutdown_system(display_manager, None, mode_manager)
+                            # Use the same path as the On/Off SHIM (systemd poweroff)
+                            subprocess.run(["sudo", "/bin/systemctl", "poweroff", "--no-wall"], check=False)
+
                         elif command == "menu":
                             if current_mode == "clock":
                                 mode_manager.trigger("to_menu")
