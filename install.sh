@@ -236,16 +236,22 @@ enable_gpio_ir() {
   [ -f "$CONFIG_FILE" ] || run_command "touch \"$CONFIG_FILE\""
 
   echo -e "\nSelect the GPIO pin for the IR receiver:"
-  echo "1) GPIO 19"
-  echo "2) GPIO 20"
-  echo "3) GPIO 21"
-  echo "4) GPIO 23"
-  echo "5) GPIO 26"
-  echo "6) GPIO 27 (Default)"
-  read -p "Enter your choice (1-6) [Default 6]: " gpio_choice
-  case "$gpio_choice" in
-    1) selected_gpio=19 ;; 2) selected_gpio=20 ;; 3) selected_gpio=21 ;;
-    4) selected_gpio=23 ;; 6) selected_gpio=27 ;; *) selected_gpio=26 ;;
+  echo "1) GPIO 27 (Default)"
+  echo "2) GPIO 19"
+  echo "3) GPIO 20"
+  echo "4) GPIO 21"
+  echo "5) GPIO 23"
+  echo "6) GPIO 26"
+  read -p "Enter your choice (1-6) [Default 1]: " gpio_choice
+
+  case "${gpio_choice:-1}" in
+    1) selected_gpio=27 ;;
+    2) selected_gpio=19 ;;
+    3) selected_gpio=20 ;;
+    4) selected_gpio=21 ;;
+    5) selected_gpio=23 ;;
+    6) selected_gpio=26 ;;
+    *) selected_gpio=27 ;;  # fallback to default
   esac
 
   if grep -q "^dtoverlay=gpio-ir" "$CONFIG_FILE"; then
@@ -262,58 +268,63 @@ enable_gpio_ir() {
 # ============================
 detect_i2c_address() {
   log_progress "Detecting MCP23017 I²C address…"
-  local I2CDET=$(command -v i2cdetect || echo /usr/sbin/i2cdetect)
 
-  # Collect any hits in 0x20–0x27; prefer 0x20 (Pimoroni), else the first lowest found.
-  local ADDR_HEX
-  ADDR_HEX=$($I2CDET -y 1 | awk '
-    {
-      for (i=1;i<=NF;i++)
-        if ($i ~ /^[0-9a-f][0-9a-f]$/ && strtonum("0x"$i) >= 0x20 && strtonum("0x"$i) <= 0x27)
-          seen[$i]=1
-    }
-    END{
-      if (seen["20"]) { print "20"; exit }
-      for (n=0x20; n<=0x27; n++) {
-        h = sprintf("%02x", n)
-        if (seen[h]) { print h; exit }
-      }
-    }')
+  # Probe with smbus2: try 0x20..0x27 by doing a harmless register read.
+  # Prefer 0x20 (Pimoroni default) if found, else use the lowest found.
+  local ADDR_HEX=""
+  ADDR_HEX="$(python3 - <<'PY'
+from smbus2 import SMBus
+cands = [0x20,0x21,0x22,0x23,0x24,0x25,0x26,0x27]
+found = []
+try:
+    with SMBus(1) as bus:
+        for a in cands:
+            try:
+                bus.read_byte_data(a, 0x00)   # harmless read; catches present chips
+                found.append(a)
+            except Exception:
+                pass
+except FileNotFoundError:
+    pass
+if found:
+    addr = 0x20 if 0x20 in found else min(found)
+    print(f"{addr:02x}")
+PY
+)"
 
   if [ -z "$ADDR_HEX" ]; then
     log_message warning "No MCP23017 detected on i2c-1 (0x20–0x27)."
-    return
+    return 0  # don’t kill the installer under set -e
   fi
 
   log_message success "MCP23017 found at I²C: 0x$ADDR_HEX"
   update_config_i2c_address "$ADDR_HEX"
 }
 
+# --- add this function (place it above detect_i2c_address and main) ---
 update_config_i2c_address() {
   local HEX="$1"
-  local CONFIG_FILE="/home/volumio/Quadify/config.yaml"
-  log_progress "Writing MCP23017 address (0x$HEX) to $CONFIG_FILE…"
+  local CFG="/home/volumio/Quadify/config.yaml"
+  log_progress "Writing MCP23017 address (0x$HEX) to $CFG…"
 
   MCP_ADDR="0x$HEX" python3 - <<'PY'
 import os, pathlib, yaml
 cfg = pathlib.Path("/home/volumio/Quadify/config.yaml")
 data = {}
 if cfg.exists():
-    data = yaml.safe_load(cfg.read_text()) or {}
-
-addr = int(os.environ["MCP_ADDR"], 16)   # store as integer (e.g., 32 for 0x20)
+    try:
+        data = yaml.safe_load(cfg.read_text()) or {}
+    except Exception:
+        data = {}
+addr = int(os.environ["MCP_ADDR"], 16)   # store as int (e.g. 32 for 0x20)
 data["mcp23017_address"] = addr
-
-# If your config also nests it, keep them in sync:
-for key in ("buttons","hardware","peripherals","io"):
-    if isinstance(data.get(key), dict):
-        data[key]["mcp23017_address"] = addr
-
+# keep any nested copies in sync if you have them
+for k in ("buttons","hardware","peripherals","io"):
+    if isinstance(data.get(k), dict):
+        data[k]["mcp23017_address"] = addr
 cfg.write_text(yaml.safe_dump(data, sort_keys=False))
-print(f"Updated {cfg} to {hex(addr)}")
+print(f"Updated {cfg} -> {hex(addr)}")
 PY
-
-  log_message success "config.yaml updated."
 }
 
 # ============================

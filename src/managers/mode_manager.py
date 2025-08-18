@@ -31,7 +31,7 @@ class ModeManager:
         {'name': 'digitalvuscreen', 'on_enter': 'enter_digitalvuscreen'},
         {'name': 'configmenu',      'on_enter': 'enter_configmenu'},
         {'name': 'systemupdate',    'on_enter': 'enter_systemupdate'},
-        {'name': 'menu',            'on_enter': 'enter_menu'},
+        {'name': 'menu',            'on_enter': 'enter_menu', 'on_exit': 'cancel_menu_inactivity_timer'},
         {'name': 'remotemenu',      'on_enter': 'enter_remotemenu'},
         {'name': 'airplay',          'on_enter': 'enter_airplay'},
 
@@ -83,7 +83,7 @@ class ModeManager:
         for key in (
             "display_mode", "clock_font_key", "show_seconds", "show_date",
             "screensaver_enabled", "screensaver_type", "screensaver_timeout",
-            "oled_brightness", "cava_enabled", "modern_spectrum_mode"
+            "oled_brightness", "cava_enabled", "modern_spectrum_mode", "ignore_airplay"
         ):
             self.config[key] = preferences[key]
 
@@ -140,11 +140,7 @@ class ModeManager:
         
         self.menu_inactivity_timer = None
         self.menu_inactivity_timeout = 15  # seconds; change as needed
-        self.menu_modes = {
-            "menu", "playlists", "tidal", "qobuz", "library", "configmenu", "clockmenu", 
-            "radio", "motherearthradio", "radioparadise",
-            "systemupdate", "spotify", "webradio", "airplay"
-        }
+        self.menu_modes = {"menu"}
 
 
     # --- Callback to push the current state before a transition ---
@@ -213,6 +209,7 @@ class ModeManager:
             "screensaver_timeout": 120,
             "oled_brightness": 100,
             "cava_enabled": False,
+            "ignore_airplay": True,
         }
         if os.path.exists(self.preference_file_path):
             try:
@@ -225,6 +222,7 @@ class ModeManager:
         else:
             self.logger.info(f"No preference file found at {self.preference_file_path}. Using defaults.")
         return default_preferences
+    
 
     # --- Set References for Other Managers/Screen Objects ---
     def set_menu_manager(self, menu_manager):
@@ -422,25 +420,20 @@ class ModeManager:
             f"ModeManager: Started menu inactivity timer for {self.menu_inactivity_timeout} seconds.")
 
     def reset_menu_inactivity_timer(self):
-        if self.get_mode() in self.menu_modes:
+        if self.get_mode() == "menu":
             self.start_menu_inactivity_timer()
 
-    def cancel_menu_inactivity_timer(self):
+    def cancel_menu_inactivity_timer(self, *args, **kwargs):
         if self.menu_inactivity_timer:
             self.menu_inactivity_timer.cancel()
             self.menu_inactivity_timer = None
 
     def exit_menu_to_clock(self):
-        self.logger.info("ModeManager: Menu inactivity timeout reached. Returning to clock.")
-        self.to_clock()
+        if self.get_mode() == "menu":
+            self.logger.info("ModeManager: Menu inactivity timeout reached. Returning to clock.")
+            self.to_clock()
 
     # --- State Entry Methods ---
-    def to_airplay(self):
-        self.logger.info("ModeManager: Switching to AirPlay mode.")
-        # Set the mode to 'airplay' before starting the AirPlay screen.
-        self.machine.set_state("airplay")
-        self.current_screen = self.airplay_screen
-        self.airplay_screen.start_mode()
 
     def enter_boot(self, event):
         self.logger.info("ModeManager: Entering 'boot' state.")
@@ -515,18 +508,7 @@ class ModeManager:
             self.logger.warning("ModeManager: No digitalvu_screen set.")
         self.update_current_mode()
         self.cancel_menu_inactivity_timer()  # No timeout on clock
-
-    def enter_airplay(self, event):
-        self.logger.info("ModeManager: Entering 'airplay' state.")
-        self.stop_all_screens()
-        if self.airplay_screen:
-            self.airplay_screen.start_mode()
-            self.logger.info("ModeManager: AirPlayScreen started.")
-        else:
-            self.logger.warning("ModeManager: No airplay_screen set.")
-        self.update_current_mode()
-        self.cancel_menu_inactivity_timer()  # No timeout on clock
-      
+    
     # --- Menu Managers ---
 
     def enter_configmenu(self, event):
@@ -570,7 +552,6 @@ class ModeManager:
         self.start_menu_inactivity_timer()
         self.update_current_mode()
 
-
     def enter_clockmenu(self, event):
         self.logger.info("ModeManager: Entering 'clockmenu' state.")
         self.stop_all_screens()
@@ -604,7 +585,7 @@ class ModeManager:
         else:
             self.logger.warning("ModeManager: No menu_manager set.")
         self.reset_idle_timer()
-        #self.start_menu_inactivity_timer()
+        self.start_menu_inactivity_timer()
         self.update_current_mode()
 
     # --- Other Managers ---
@@ -767,7 +748,6 @@ class ModeManager:
         self.reset_idle_timer()
         self.update_current_mode()
 
-
     def enter_motherearthradio(self, event):
         self.logger.info("ModeManager: Entering 'motherearthradio' state.")
         self.stop_all_screens()
@@ -793,7 +773,17 @@ class ModeManager:
         self.reset_idle_timer()
         self.update_current_mode()
 
-
+    def to_airplay(self, *args, **kwargs):
+        if self.config.get("ignore_airplay", True):
+            self.logger.info("AirPlay transitions are disabled (ignore_airplay=True) — staying on clock.")
+            if self.get_mode() != "clock":
+                self.to_clock()
+            return
+        self.logger.info("ModeManager: Switching to AirPlay mode.")
+        self.machine.set_state("airplay")
+        self.current_screen = self.airplay_screen
+        if self.airplay_screen:
+            self.airplay_screen.start_mode()
 
     # --- Playback / Volumio State Handling ---
     def process_state_change(self, sender, state, **kwargs):

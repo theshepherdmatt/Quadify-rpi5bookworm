@@ -27,6 +27,8 @@ class MenuManager:
         self.font_key = 'menu_font'
         self.bold_font_key = 'menu_font_bold'
         self.lock = threading.Lock()
+        self.config = getattr(self.display_manager, "config", {}) or {}
+        self.icon = lambda k: (self.config.get("icon_urls", {}) or {}).get(k)
 
         # NEW: discovered services metadata
         # label -> { name, plugin, uri, albumart, icon_url, label }
@@ -69,21 +71,21 @@ class MenuManager:
 
         # Static icon fallbacks (keys here are labels)
         self.static_icons = {
-            "STREAM": self.display_manager.icons.get("stream"),
-            "LIBRARY": self.display_manager.icons.get("library"),
-            "RADIO": self.display_manager.icons.get("webradio"),
-            "PLAYLISTS": self.display_manager.icons.get("playlists"),
-            "TIDAL": self.display_manager.icons.get("tidal"),
-            "QOBUZ": self.display_manager.icons.get("qobuz"),
-            "SPOTIFY": self.display_manager.icons.get("spop"),
-            "INTERNAL": self.display_manager.icons.get("mpd"),
-            "NAS": self.display_manager.icons.get("nas"),
-            "USB": self.display_manager.icons.get("usb"),
-            "CONFIG": self.display_manager.icons.get("config"),
-            "ORIGINAL": self.display_manager.icons.get("display"),
-            "MODERN": self.display_manager.icons.get("display"),
-            "LAST_100": self.display_manager.icons.get("history"),
-            "MEDIA_SERVERS": self.display_manager.icons.get("mediaservers"),
+            "STREAM": self.icon("stream"),
+            "LIBRARY": self.icon("library"),
+            "RADIO": self.icon("webradio"),
+            "PLAYLISTS": self.icon("playlists"),
+            "TIDAL": self.icon("tidal"),
+            "QOBUZ": self.icon("qobuz"),
+            "SPOTIFY": self.icon("spop"),
+            "INTERNAL": self.icon("mpd"),
+            "NAS": self.icon("nas"),
+            "USB": self.icon("usb"),
+            "CONFIG": self.icon("config"),
+            "ORIGINAL": self.icon("display"),
+            "MODERN": self.icon("display"),
+            "LAST_100": self.icon("history"),
+            "MEDIA_SERVERS": self.icon("mediaservers"),
         }
 
         # Load cached PNG icons (produced by your icon fetcher)
