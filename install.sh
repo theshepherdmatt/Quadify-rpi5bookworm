@@ -611,20 +611,6 @@ ensure_sudoers_nopasswd() {
 # ============================
 #   run_update Wrapper
 # ============================
-setup_run_update_wrapper() {
-  log_progress "Installing run_update setuid wrapper (if present)…"
-  local SRC="/home/volumio/Quadify/scripts/run_update.c"
-  local BIN="/home/volumio/Quadify/scripts/run_update"
-  if [ -f "$SRC" ]; then
-    run_command "gcc -o \"$BIN\" \"$SRC\""
-    run_command "chown root:root \"$BIN\""
-    run_command "chmod 4755 \"$BIN\""
-    log_message success "run_update installed."
-  else
-    log_message warning "run_update.c not found; skipping."
-  fi
-  show_random_tip
-}
 
 # ============================
 #   MAIN
@@ -668,7 +654,6 @@ main() {
   setup_ir_listener_service
   update_lirc_options
   set_permissions
-  setup_run_update_wrapper
   install_updater_assets
 
   log_message success "Quadify installation complete! A reboot is required."

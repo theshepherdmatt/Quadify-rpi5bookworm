@@ -46,7 +46,6 @@ Thumbs.db
 *.bak
 *.tmp
 
-scripts/run_update
 install.log
 install.log
 install.log
@@ -64,6 +63,7 @@ install.log
 # Quadify updater backups & logs
 Quadify_backup_*/
 /var/log/quadify_update.log
+install.log
 install.log
 install.log
 install.log
