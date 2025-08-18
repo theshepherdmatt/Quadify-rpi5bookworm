@@ -263,57 +263,38 @@ enable_gpio_ir() {
 detect_i2c_address() {
   log_progress "Detecting MCP23017 I²C address…"
   local I2CDET=$(command -v i2cdetect || echo /usr/sbin/i2cdetect)
+  local i2c_output
+  i2c_output=$("$I2CDET" -y 1)
+  echo "$i2c_output" >> "$LOG_FILE"
+  echo "$i2c_output"
 
-  # Collect any hits in 0x20–0x27; prefer 0x20 (Pimoroni), else the first lowest found.
-  local ADDR_HEX
-  ADDR_HEX=$($I2CDET -y 1 | awk '
-    {
-      for (i=1;i<=NF;i++)
-        if ($i ~ /^[0-9a-f][0-9a-f]$/ && strtonum("0x"$i) >= 0x20 && strtonum("0x"$i) <= 0x27)
-          seen[$i]=1
-    }
-    END{
-      if (seen["20"]) { print "20"; exit }
-      for (n=0x20; n<=0x27; n++) {
-        h = sprintf("%02x", n)
-        if (seen[h]) { print h; exit }
-      }
-    }')
+  # Try to pick first hit in 0x20–0x27
+  local address
+  address=$(echo "$i2c_output" | grep -oE '\b(20|21|22|23|24|25|26|27)\b' | head -n1)
 
-  if [ -z "$ADDR_HEX" ]; then
+  if [[ -z "$address" ]]; then
     log_message warning "No MCP23017 detected on i2c-1 (0x20–0x27)."
-    return
+  else
+    log_message success "MCP23017 found at I²C: 0x$address."
+    update_config_i2c_address "$address"
   fi
-
-  log_message success "MCP23017 found at I²C: 0x$ADDR_HEX"
-  update_config_i2c_address "$ADDR_HEX"
+  show_random_tip
 }
 
 update_config_i2c_address() {
-  local HEX="$1"
+  local detected_address="$1"
   local CONFIG_FILE="/home/volumio/Quadify/config.yaml"
-  log_progress "Writing MCP23017 address (0x$HEX) to $CONFIG_FILE…"
-
-  MCP_ADDR="0x$HEX" python3 - <<'PY'
-import os, pathlib, yaml
-cfg = pathlib.Path("/home/volumio/Quadify/config.yaml")
-data = {}
-if cfg.exists():
-    data = yaml.safe_load(cfg.read_text()) or {}
-
-addr = int(os.environ["MCP_ADDR"], 16)   # store as integer (e.g., 32 for 0x20)
-data["mcp23017_address"] = addr
-
-# If your config also nests it, keep them in sync:
-for key in ("buttons","hardware","peripherals","io"):
-    if isinstance(data.get(key), dict):
-        data[key]["mcp23017_address"] = addr
-
-cfg.write_text(yaml.safe_dump(data, sort_keys=False))
-print(f"Updated {cfg} to {hex(addr)}")
-PY
-
-  log_message success "config.yaml updated."
+  if [[ -f "$CONFIG_FILE" ]]; then
+    if grep -q "^mcp23017_address:" "$CONFIG_FILE"; then
+      run_command "sed -i \"s/^mcp23017_address: .*/mcp23017_address: 0x$detected_address/\" \"$CONFIG_FILE\""
+    else
+      echo "mcp23017_address: 0x$detected_address" >> "$CONFIG_FILE"
+    fi
+    log_message success "Updated config.yaml mcp23017_address to 0x$detected_address."
+  else
+    log_message error "config.yaml not found at $CONFIG_FILE."
+    exit 1
+  fi
 }
 
 # ============================
