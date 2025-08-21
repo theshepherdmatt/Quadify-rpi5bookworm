@@ -41,6 +41,7 @@ Supported features include:
 
 ```bash
 git clone https://github.com/theshepherdmatt/Quadify-rpi5bookworm.git
+mv Quadify-rpi5bookworm Quadify
 cd Quadify
 sudo bash install.sh
 ```
