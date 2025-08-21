@@ -40,7 +40,7 @@ Supported features include:
 **Download and install:**
 
 ```bash
-git clone https://github.com/theshepherdmatt/Quadify.git
+git clone https://github.com/theshepherdmatt/Quadify-rpi5bookworm.git
 cd Quadify
 sudo bash install.sh
 ```
